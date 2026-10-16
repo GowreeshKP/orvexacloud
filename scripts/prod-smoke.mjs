@@ -4,7 +4,9 @@
  */
 const API = (process.env.API_BASE || 'http://localhost:5000').replace(/\/$/, '')
 const WEB = (process.env.WEB_BASE || '').replace(/\/$/, '')
-const EXPECTED = process.env.EXPECTED_SHA || process.env.GITHUB_SHA || ''
+const EXPECTED = process.env.SKIP_COMMIT_CHECK === '1'
+  ? ''
+  : (process.env.EXPECTED_SHA || process.env.GITHUB_SHA || '')
 
 const results = []
 
