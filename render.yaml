@@ -13,7 +13,8 @@ services:
     region: oregon
     rootDir: server
     autoDeploy: false
-    buildCommand: npm ci && npm run build
+    # NODE_ENV=production would skip typescript/@types; install them for the compile step only.
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
