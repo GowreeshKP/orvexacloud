@@ -1,0 +1,15 @@
+title = "Orvexa Cloud"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholders, published demo docs, and generated lockfiles"
+paths = [
+  '''(^|/)docs/''',
+  '''(^|/)\.env\.example$''',
+  '''(^|/)pnpm-lock\.yaml$''',
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)server/src/scripts/seedData\.ts$''',
+  '''(^|/)orvexa-cloud/''',
+]

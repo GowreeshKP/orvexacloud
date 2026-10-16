@@ -1,0 +1,11 @@
+{
+  "title": "Orvexa Cloud",
+  "description": "Orvexa Cloud: your own online store, with a flat monthly fee. Built for Indian merchants.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

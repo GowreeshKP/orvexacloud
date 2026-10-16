@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Orvexa Cloud Platform — Technical &amp; User Documentation</title>
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 16mm 20mm 16mm;
+    @bottom-left { content: "Orvexa Cloud Platform Documentation"; font-family: "Segoe UI", Arial, sans-serif; font-size: 8pt; color: #8a8fa3; }
+    @bottom-right { content: counter(page) " / " counter(pages); font-family: "Segoe UI", Arial, sans-serif; font-size: 8pt; color: #8a8fa3; }
+  }
+  @page :first { @bottom-left { content: none; } @bottom-right { content: none; } }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Inter, Arial, sans-serif; color: #1f2430; font-size: 10.5pt; line-height: 1.55; margin: 0; }
+  h1, h2, h3, h4 { color: #0b1020; line-height: 1.25; }
+  h1 { font-size: 22pt; margin: 0 0 6px; }
+  h2 { font-size: 16pt; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 2px solid #4f46e5; }
+  h3 { font-size: 12.5pt; margin: 20px 0 6px; color: #312e81; }
+  h4 { font-size: 11pt; margin: 14px 0 4px; }
+  p { margin: 6px 0; }
+  ul, ol { margin: 6px 0 6px 20px; padding: 0; }
+  li { margin: 2px 0; }
+  code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 9pt; background: #f1f2f8; padding: 1px 4px; border-radius: 3px; color: #3730a3; }
+  pre { font-family: Consolas, "Cascadia Mono", monospace; font-size: 8.8pt; background: #0f1222; color: #e6e8f5; padding: 10px 12px; border-radius: 6px; white-space: pre-wrap; page-break-inside: avoid; }
+  pre code { background: none; color: inherit; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.3pt; page-break-inside: auto; }
+  tr { page-break-inside: avoid; }
+  th { background: #eef0fb; color: #1e1b4b; text-align: left; font-weight: 600; }
+  th, td { border: 1px solid #d9dcea; padding: 5px 7px; vertical-align: top; }
+  td code { white-space: nowrap; }
+  .section { page-break-before: always; }
+  .figure { margin: 10px 0 14px; page-break-inside: avoid; text-align: center; }
+  .figure img { width: 84%; border: 1px solid #d9dcea; border-radius: 6px; }
+  .two .figure img { width: 100%; }
+  h2, h3, h4 { break-after: avoid; page-break-after: avoid; }
+  pre.diagram { white-space: pre; font-size: 7.4pt; line-height: 1.35; }
+  .figure .cap { font-size: 8.8pt; color: #5b6075; margin-top: 4px; font-style: italic; }
+  .note, .warn, .tip { border-left: 4px solid; padding: 8px 12px; margin: 10px 0; border-radius: 4px; page-break-inside: avoid; }
+  .note { border-color: #4f46e5; background: #f3f3fe; }
+  .warn { border-color: #d97706; background: #fff8eb; }
+  .tip { border-color: #059669; background: #ecfdf5; }
+  .cover { height: 250mm; display: flex; flex-direction: column; justify-content: space-between; padding: 30mm 6mm 0; }
+  .cover .brand { display: inline-flex; align-items: center; gap: 12px; }
+  .cover .logo { width: 52px; height: 52px; border-radius: 12px; background: #0b1020; color: #fff; font-weight: 700; font-size: 22pt; display: flex; align-items: center; justify-content: center; }
+  .cover h1 { font-size: 32pt; margin-top: 40px; }
+  .cover .sub { font-size: 14pt; color: #4b5068; }
+  .cover .meta { font-size: 10pt; color: #5b6075; border-top: 1px solid #d9dcea; padding-top: 10px; }
+  .cover .bar { height: 6px; width: 120px; background: linear-gradient(90deg, #4f46e5, #7c3aed); border-radius: 3px; margin: 18px 0; }
+  .toc ol { list-style: none; margin-left: 0; counter-reset: toc; }
+  .toc { font-size: 10pt; line-height: 1.4; }
+  .toc > ol > li { counter-increment: toc; font-weight: 600; margin-top: 6px; }
+  .toc ol ol li { display: inline; }
+  .toc ol ol li + li::before { content: " · "; color: #9aa0b8; }
+  .toc > ol > li::before { content: counter(toc) ". "; color: #4f46e5; }
+  .toc ol ol { margin-left: 22px; font-weight: 400; color: #4b5068; }
+  .toc a { color: inherit; text-decoration: none; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .pill { display: inline-block; font-size: 8pt; padding: 1px 6px; border-radius: 10px; background: #eef0fb; color: #3730a3; font-weight: 600; }
+  .muted { color: #5b6075; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<div class="cover">
+  <div>
+    <div class="brand"><div class="logo">O</div><div><strong style="font-size:14pt">Orvexa Tech</strong><br /><span class="muted">Orvexa Cloud Platform</span></div></div>
+    <h1>Platform Documentation</h1>
+    <div class="bar"></div>
+    <div class="sub">Super Admin Portal, Seller Dashboard, Customer Storefronts and Backend API</div>
+    <p class="muted" style="margin-top:18px; max-width:150mm">A complete technical and operational guide to the Orvexa multi-tenant D2C commerce platform: how it is structured, how each portal works, how to run and deploy it, and how its security, data and APIs are organized.</p>
+  </div>
+  <div class="meta">
+    Version 2.6 &nbsp;·&nbsp; 11 October 2026 &nbsp;·&nbsp; Prepared for Orvexa Tech Private Limited<br />
+    Stack: React 19 · Vite 8 · Tailwind CSS v4 · TypeScript 5.7 · Express 4 · MongoDB (Mongoose 8) · Supabase
+  </div>
+</div>
+
+<!-- ============ TOC ============ -->
+<div class="section toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#overview">Platform Overview</a>
+      <ol><li>What the platform does</li><li>The three application layers</li><li>Admin portal at launch</li><li>What changed in version 2.6</li></ol></li>
+    <li><a href="#quickstart">Quick Start</a>
+      <ol><li>Prerequisites</li><li>Running the frontend and backend</li><li>URLs and demo accounts</li></ol></li>
+    <li><a href="#architecture">System Architecture</a>
+      <ol><li>Layer and tenant resolution</li><li>Backend-first with offline fallback</li><li>Browser storage keys</li><li>Multi-tenant data isolation</li></ol></li>
+    <li><a href="#admin">Super Admin Portal</a>
+      <ol><li>Sign-in and lockout</li><li>Platform Overview</li><li>Merchant Applications</li><li>Client Acquisition CRM</li><li>Tenant Stores and credentials</li><li>Subscriptions &amp; Billing</li><li>Domains &amp; Routing</li><li>Security &amp; Audit Trail</li></ol></li>
+    <li><a href="#provisioning">Store Provisioning Workflow</a></li>
+    <li><a href="#dashboard">Seller Dashboard</a>
+      <ol><li>Seller sign-in</li><li>Dashboard tabs</li><li>Product editor</li><li>Storefront &amp; Homepage editor</li></ol></li>
+    <li><a href="#storefront">Customer Storefront</a>
+      <ol><li>Storefront features</li><li>Per-store frontend folders</li></ol></li>
+    <li><a href="#niches">Store Niches &amp; Blank Templates</a></li>
+    <li><a href="#api">Backend API Reference</a></li>
+    <li><a href="#models">Data Models</a></li>
+    <li><a href="#env">Environment Variables</a></li>
+    <li><a href="#structure">Project Structure</a></li>
+    <li><a href="#deploy">Build &amp; Deployment</a>
+      <ol><li>Scripts</li><li>Vercel</li><li>Recommended production domains</li><li>Email with Resend</li><li>Connecting a store to its own database</li></ol></li>
+    <li><a href="#security">Security Notes &amp; Production Checklist</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+  </ol>
+</div>
+
+<!-- ============ 1. OVERVIEW ============ -->
+<div class="section" id="overview">
+  <h2>1. Platform Overview</h2>
+
+  <h3>1.1 What the platform does</h3>
+  <p>Orvexa Cloud is a multi-tenant software-as-a-service platform for direct-to-consumer (D2C) brands. One codebase serves many independent online stores. Each store ("tenant") has its own branding, catalog, orders, customers and an isolated database, while Orvexa Tech operates all of them from a single super admin console.</p>
+  <p>The platform covers the whole merchant lifecycle:</p>
+  <ul>
+    <li><strong>Onboarding:</strong> merchant applications and leads are reviewed by the super admin, who approves them and provisions a new store.</li>
+    <li><strong>Operations:</strong> each store owner manages products, orders, customer messages, homepage content and settings in the seller dashboard.</li>
+    <li><strong>Selling:</strong> shoppers browse a branded storefront, add products to a cart, check out and track their orders.</li>
+    <li><strong>Governance:</strong> subscriptions, domains, credentials and a full security audit trail are controlled centrally.</li>
+  </ul>
+
+  <h3>1.2 The three application layers</h3>
+  <p>The single React application renders one of three "layers" depending on the URL. They share code, types and the API layer but present completely different interfaces.</p>
+  <table>
+    <tr><th style="width:20%">Layer</th><th style="width:22%">Audience</th><th>Purpose</th><th style="width:24%">Entry component</th></tr>
+    <tr><td><strong>Super Admin Portal</strong></td><td>Orvexa Tech (single administrator)</td><td>Approve merchants, provision stores, manage credentials, billing, domains and audit logs.</td><td><code>src/layers/AdminApp.tsx</code></td></tr>
+    <tr><td><strong>Seller Dashboard</strong></td><td>Store owners and staff</td><td>Run one store: catalog, orders, inbox, homepage editor, database and settings.</td><td><code>src/layers/DashboardApp.tsx</code></td></tr>
+    <tr><td><strong>Customer Storefront</strong></td><td>Shoppers</td><td>The branded public shop: browse, cart, checkout, reviews, order tracking.</td><td><code>src/App.tsx</code> via <code>StorefrontApp.tsx</code></td></tr>
+  </table>
+
+  <h3>1.3 Admin portal at launch</h3>
+  <p>The Orvexa marketing website (formerly <code>PlatformWebsite.tsx</code>) has been removed from this application because it will be hosted on a separate platform. Opening the application root now shows only the <strong>admin sign-in screen</strong>; after successful authentication the administrator lands directly in the Super Admin Portal.</p>
+  <ul>
+    <li>The marketing site, its "Client-Facing Website" toggles and the "Apply as Merchant" storefront footer link were removed.</li>
+    <li>Only the super admin account can sign in on this screen; seller credentials are rejected.</li>
+    <li>Storefronts and seller dashboards are unchanged and remain reachable through their own URLs.</li>
+  </ul>
+  <div class="note"><strong>Note.</strong> Merchant applications now arrive from the externally hosted marketing website through the signed signup endpoint described in Section 9.5.</div>
+
+  <h3>1.4 What changed in version 2.6</h3>
+  <table>
+    <tr><th style="width:28%">Area</th><th>Change</th></tr>
+    <tr><td>Per-store frontend folders</td><td>Every store has its own folder, <code>src/tenants/&lt;slug&gt;/</code>, holding all of its visual customisations: theme, styles, replacement components and extra homepage sections. Creating a store creates the folder (Section 7.2).</td></tr>
+    <tr><td>Store lifecycle</td><td>New <code>read_only</code> and <code>cancelled</code> store states. A read-only store keeps its catalogue and owner access but takes no new orders.</td></tr>
+    <tr><td>Plans</td><td>The Starter limit of 100 products is enforced. Yearly billing is recorded and priced at 90% of the monthly price.</td></tr>
+    <tr><td>Applications</td><td>New "needs more information" decision, early-access country notification and an optional team alert for new signups.</td></tr>
+    <tr><td>Email</td><td>Resend emails carry idempotency keys, so a retry can never send a second copy.</td></tr>
+    <tr><td>Security hardening</td><td>A full audit was completed: tenant isolation, token handling, rate limits, CORS, password-reset links and checkout prices were tightened, and 46 automated tests now cover them.</td></tr>
+    <tr><td>Accuracy</td><td>Unverified claims (AES-256, TLS 1.3, DDoS protection, Mumbai hosting) were removed from the product, and the seller dashboard no longer fakes a database connection test.</td></tr>
+    <tr><td>Database per store</td><td>A custom database URL without a database name now uses <code>orvexa_tenant_&lt;slug&gt;</code>, and <code>npm run tenant:set-db</code> links a store to its own cluster (Section 13.5).</td></tr>
+  </table>
+</div>
+
+<!-- ============ 2. QUICK START ============ -->
+<div class="section" id="quickstart">
+  <h2>2. Quick Start</h2>
+
+  <h3>2.1 Prerequisites</h3>
+  <table>
+    <tr><th>Tool</th><th>Version</th><th>Notes</th></tr>
+    <tr><td>Node.js</td><td>22 (pinned in <code>.mise.toml</code>)</td><td>Node 24 also works for local development.</td></tr>
+    <tr><td>pnpm</td><td>10.x</td><td>Used by the Vercel build; <code>npm</code> works locally.</td></tr>
+    <tr><td>MongoDB</td><td>Atlas or local</td><td>Optional. Without it the app runs in offline/demo mode.</td></tr>
+    <tr><td>Supabase project</td><td>—</td><td>Optional master database integration.</td></tr>
+  </table>
+
+  <h3>2.2 Running the frontend and backend</h3>
+  <pre><code># 1. Install frontend dependencies (project root)
+npm install
+
+# 2. Start the Vite dev server (http://localhost:8443)
+npx vite --port 8443 --host
+
+# 3. (Optional) Install and start the Express backend (http://localhost:5000)
+npm run server:install
+cp .env.example server/.env      # then fill in real values
+npm run server:dev
+
+# 4. (Optional) Seed the master database with demo tenants and the admin user
+cd server &amp;&amp; npm run seed
+
+# 5. (Optional) Run the backend test suite against a throwaway MongoDB
+cd server &amp;&amp; MONGOD_BINARY=/path/to/mongod npm test</code></pre>
+  <div class="tip"><strong>Offline demo mode.</strong> Every API call is attempted against the backend first. In local development (or when <code>VITE_DEMO_MODE=true</code>) the frontend falls back to a browser-side mock store if the backend is not running, so the platform can be demonstrated without a server. Production builds have no fallback.</div>
+
+  <h3>2.3 URLs and demo accounts</h3>
+  <table>
+    <tr><th style="width:38%">URL (development)</th><th>Opens</th></tr>
+    <tr><td><code>http://localhost:8443/</code></td><td>Admin sign-in, then the Super Admin Portal</td></tr>
+    <tr><td><code>/?tenant=lunar</code></td><td>Customer storefront for "The Lunar Clothing"</td></tr>
+    <tr><td><code>/?panel=dashboard&amp;tenant=lunar</code></td><td>Seller dashboard sign-in for that store</td></tr>
+    <tr><td><code>/?tenant=lunar&amp;reset_token=…</code></td><td>Store-owner password reset link</td></tr>
+  </table>
+  <table>
+    <tr><th>Role</th><th>Login ID</th><th>Password</th><th>Store</th></tr>
+    <tr><td>Super Admin</td><td><code>admin@orvexatech.com</code></td><td><code>admin@password</code></td><td>—</td></tr>
+    <tr><td>Store Owner</td><td><code>gowreesh@thelunarclothing.com</code></td><td><code>lunar@password</code></td><td>The Lunar Clothing (<code>lunar</code>)</td></tr>
+    <tr><td>Store Owner</td><td><code>kavya@silkhaus.in</code></td><td><code>silk@password</code></td><td>Silk Haus (<code>silkhaus</code>)</td></tr>
+    <tr><td>Store Owner</td><td><code>arjun@khadistudio.co</code></td><td><code>khadi@password</code></td><td>Khadi Studio (<code>khadistudio</code>)</td></tr>
+    <tr><td>Store Owner</td><td><code>kavita@bloomweave.in</code></td><td><code>bloom@password</code></td><td>Bloom &amp; Weave (<code>bloomweave</code>)</td></tr>
+  </table>
+  <p class="muted">Sellers can also sign in with the store slug (e.g. <code>lunar</code>) as the login ID. Newly provisioned stores default to <code>&lt;slug&gt;@password</code> until the owner sets their own password.</p>
+  <div class="warn"><strong>Change these before production.</strong> The demo credentials are defined in <code>src/api/auth.ts</code> (<code>DEMO_ADMIN_CREDENTIAL</code>, <code>DEFAULT_DEMO_SELLER_CREDENTIALS</code>) and only work in demo mode; the seed script creates the same admin account in the database. See Section 14.</div>
+</div>
+
+<!-- ============ 3. ARCHITECTURE ============ -->
+<div class="section" id="architecture">
+  <h2>3. System Architecture</h2>
+  <pre class="diagram"><code>                 ┌────────────────────────── Browser (React 19 + Vite) ──────────────────────────┐
+                 │  tenant-resolver.ts → 'admin' | 'dashboard' | 'storefront'                      │
+                 │      AdminApp.tsx          DashboardApp.tsx          App.tsx (storefront)       │
+                 │           └─────────────── src/api (auth, hooks, client) ───────────┘          │
+                 │                         │  backend first      │ fallback                       │
+                 └─────────────────────────┼─────────────────────┼────────────────────────────────┘
+                                           ▼                     ▼
+              Express API (/api/auth, /api/admin, /api/stores/:slug)   mock-store.ts + localStorage
+                     │ JWT + rate limits + tenantResolver
+           ┌─────────┴──────────────┐
+   Master DB (orvexatech_master)   Per-tenant DBs (orvexa_tenant_&lt;slug&gt;) / BYODB
+   Tenants · Applications ·        Products · Orders · Reviews
+   AdminUsers · AuditLogs · Tokens</code></pre>
+
+  <h3>3.1 Layer and tenant resolution</h3>
+  <p><code>src/lib/tenant-resolver.ts</code> decides which layer to render (<code>resolveApplicationLayer</code>) and which store to load (<code>resolveTenantSlug</code>). Rules are checked in this order:</p>
+  <table>
+    <tr><th style="width:6%">#</th><th style="width:40%">Condition</th><th>Result</th></tr>
+    <tr><td>1</td><td><code>?panel=admin</code> or <code>?admin=true</code></td><td>Admin layer</td></tr>
+    <tr><td>2</td><td><code>?panel=dashboard|seller</code> or <code>?seller=true</code></td><td>Seller dashboard</td></tr>
+    <tr><td>3</td><td><code>?panel=storefront|store</code></td><td>Storefront</td></tr>
+    <tr><td>4</td><td>Path <code>/admin</code>, <code>/dashboard</code>, <code>/seller</code>, <code>/store/…</code></td><td>Matching layer</td></tr>
+    <tr><td>5</td><td><code>?tenant=</code> or <code>?store=</code> present</td><td>Storefront</td></tr>
+    <tr><td>6</td><td>Subdomain (production only): <code>admin.</code> / <code>app.</code>, <code>seller.</code>, <code>merchant.</code> / any other</td><td>Admin / Dashboard / Storefront for that slug</td></tr>
+    <tr><td>7</td><td>Anything else (root URL)</td><td><strong>Admin layer</strong> (sign-in screen)</td></tr>
+  </table>
+  <p>Subdomain detection is skipped on preview hosts (<code>vercel.app</code>, <code>netlify.app</code>, <code>github.io</code>, <code>pages.dev</code>). Reserved subdomains are <code>admin, app, api, www, mail, staging</code>. On localhost the tenant defaults to <code>lunar</code>; on custom domains the full hostname is used as the lookup key.</p>
+
+  <h3>3.2 Backend-first with offline fallback</h3>
+  <p>The API modules in <code>src/api/</code> call the Express backend first. In demo mode only (<code>import.meta.env.DEV</code> or <code>VITE_DEMO_MODE=true</code>), a failed request falls back to <code>mock-store.ts</code>, which keeps tenants, applications, products, orders and credentials in <code>localStorage</code>. Outside demo mode no passwords are kept in the browser and sign-in always goes to the backend.</p>
+  <table>
+    <tr><th>Module</th><th>Responsibility</th></tr>
+    <tr><td><code>auth.ts</code></td><td>Admin, seller and staff login; sessions; password change, reset and revocation; store credentials.</td></tr>
+    <tr><td><code>hooks.ts</code></td><td>React hooks for platform stats, tenants, applications, products, orders and dashboard data.</td></tr>
+    <tr><td><code>client.ts</code> / <code>apiClient.ts</code></td><td>HTTP clients with token handling and base-URL configuration.</td></tr>
+    <tr><td><code>mock-store.ts</code></td><td>Offline platform store: tenants, applications, provisioning, billing.</td></tr>
+    <tr><td><code>audit-logger.ts</code></td><td>Writes and reads audit events (platform-wide and per store).</td></tr>
+    <tr><td><code>shopper-accounts.ts</code></td><td>Per-store shopper registration, sign-in and sessions.</td></tr>
+    <tr><td><code>store-messages.ts</code></td><td>Per-store customer-care inbox and newsletter subscribers.</td></tr>
+  </table>
+
+  <h3>3.3 Browser storage keys</h3>
+  <table>
+    <tr><th style="width:36%">Key</th><th>Contents</th></tr>
+    <tr><td><code>lunar_admin_session</code> / <code>lunar_admin_token</code></td><td>Super admin session and access token (keeps the admin signed in across refreshes).</td></tr>
+    <tr><td><code>lunar_seller_session</code> / <code>lunar_seller_token</code></td><td>Seller session and access token.</td></tr>
+    <tr><td><code>orvexa_refresh_token</code></td><td>JWT refresh token from the backend.</td></tr>
+    <tr><td><code>orvexa_tenant_&lt;slug&gt;</code></td><td>Published storefront customizations for a store.</td></tr>
+    <tr><td><code>orvexa_admin_login_lock</code> (sessionStorage)</td><td>Failed admin sign-in counter and lockout expiry.</td></tr>
+  </table>
+
+  <h3>3.4 Multi-tenant data isolation</h3>
+  <ul>
+    <li><strong>Master database</strong> (<code>orvexatech_master</code>): tenants, applications, admin users, audit logs, refresh tokens, platform metrics.</li>
+    <li><strong>Database per store</strong>: each tenant gets <code>orvexa_tenant_&lt;slug&gt;</code>, built from <code>MONGODB_TENANT_BASE_URI</code> + slug, holding products, orders and reviews.</li>
+    <li><strong>Bring Your Own Database (BYODB)</strong>: a store can be pointed at its own MongoDB cluster (<code>mongodb+srv://</code> only). Owners can do this from the dashboard when <code>ALLOW_CUSTOM_DATABASES=true</code>; operators can use <code>npm run tenant:set-db</code> (Section 13.5). The backend <code>tenantResolver</code> middleware routes that store's queries to it. A URL without a database name uses <code>orvexa_tenant_&lt;slug&gt;</code>.</li>
+    <li>The store is taken from the URL path only; an unknown store is a 404 and never falls back to another store.</li>
+    <li><code>requireTenantAccess</code> middleware ensures a seller or staff token can only act on its own store. Cross-tenant access is covered by automated tests.</li>
+  </ul>
+</div>
+
+<!-- ============ 4. ADMIN ============ -->
+<div class="section" id="admin">
+  <h2>4. Super Admin Portal</h2>
+  <p>The Super Admin Portal is the control centre for Orvexa Tech. It is the first and only screen at the application root and requires authentication.</p>
+
+  <h3>4.1 Sign-in and lockout</h3>
+  <div class="figure"><img src="img/admin-login.png" /><div class="cap">Figure 4.1 — Admin sign-in shown at application launch</div></div>
+  <ul>
+    <li>Implemented in <code>src/components/auth/AdminLogin.tsx</code>; page title "Sign In | Orvexa Admin Portal".</li>
+    <li>Calls <code>authService.loginAdmin()</code> and accepts the result only if the role is <code>super_admin</code>. Seller and staff credentials are refused.</li>
+    <li><strong>Lockout:</strong> after 5 failed attempts sign-in is locked for 60 seconds, even for correct credentials. The remaining attempts are shown after each failure.</li>
+    <li>No demo credentials or hints are displayed. A Show/Hide toggle reveals the password.</li>
+    <li>Every success and failure is written to the audit trail as <code>ADMIN_LOGIN_SUCCESS</code> / <code>ADMIN_LOGIN_FAILED</code>.</li>
+    <li>The session persists across page refreshes. <strong>Sign Out</strong> (bottom of the sidebar) clears it and returns to the sign-in screen.</li>
+    <li>Store-owner password reset links (<code>?reset_token=</code>) still open the reset dialog while signed out.</li>
+  </ul>
+
+  <h3>4.2 Platform Overview</h3>
+  <div class="figure"><img src="img/admin-overview.png" /><div class="cap">Figure 4.2 — Platform Command Center</div></div>
+  <p>The landing view after sign-in. It shows:</p>
+  <ul>
+    <li><strong>Command Center banner:</strong> master DB status, API latency, number of isolated databases, and quick actions (Provision Store, Review Apps, Client CRM).</li>
+    <li><strong>KPI cards with trend sparklines:</strong> Gross Merchandise Value, Active Merchant Stores, Monthly Recurring Revenue, Client Inbound Leads and Consumer Reach.</li>
+    <li><strong>Active Tenant Infrastructure:</strong> each store with its subdomain, database name, plan price and an Open Store link.</li>
+    <li><strong>Pending Approvals:</strong> a queue preview with a shortcut to the full application queue.</li>
+    <li><strong>Cluster Status</strong> (sidebar): region and master database provider.</li>
+  </ul>
+</div>
+
+<div>
+  <h3>4.3 Merchant Applications</h3>
+  <div class="figure"><img src="img/admin-applications.png" /><div class="cap">Figure 4.3 — Merchant application queue</div></div>
+  <p>Lists every application with brand, owner, contact, niche, requested subdomain and message. Applications from the marketing website (Section 9.5) also show the chosen plan, billing cycle and quoted price, country, any migration request (for example from Shopify), consent evidence (terms version and acceptance date, marketing opt-in) and campaign source. The admin can <strong>Approve</strong> (which provisions the store — see Section 5) or <strong>Reject</strong>; the owner receives the decision by email. Status changes are persisted through <code>PUT /api/admin/applications/:id/status</code> and audit-logged.</p>
+  <ul>
+    <li><strong>Address clashes:</strong> if the requested address is reserved or already taken, the card shows a warning and a field for a new address. Approval stays disabled until one is entered. Applications are never dropped because of a clash.</li>
+    <li><strong>Early-Access Waitlist tab:</strong> signups from countries that have not launched yet. These record interest only — they cannot be approved, no store is created and nobody is charged.</li>
+    <li><strong>Needs more information:</strong> instead of approving or rejecting, the admin can send the applicant a question (<code>status: needs_info</code> with <code>reviewNotes</code>). The application stays in review and can be approved later.</li>
+    <li><strong>Country launch:</strong> when a new country is added to the website's <code>LAUNCHED_COUNTRIES</code>, <code>POST /api/admin/waitlist/notify</code> with <code>{ "country": "AE" }</code> emails everyone on that country's list once, inviting them to sign up.</li>
+  </ul>
+  <p class="muted">"Needs more information" is on each application still in review. The Early-Access Waitlist tab emails a country once, after that country is added to the website launch list.</p>
+
+  <h3>4.4 Client Acquisition CRM</h3>
+  <div class="figure"><img src="img/admin-crm.png" /><div class="cap">Figure 4.4 — Inbound merchant inquiries &amp; leads</div></div>
+  <p>A lead-management view of inbound merchant inquiries. Leads can be reviewed, followed up and converted into stores, with a shortcut back to the application queue.</p>
+</div>
+
+<div>
+  <h3>4.5 Tenant Stores and credentials</h3>
+  <div class="figure"><img src="img/admin-stores.png" /><div class="cap">Figure 4.5 — Store authentication &amp; credentials management</div></div>
+  <p>The master list of provisioned stores. For each store the admin can:</p>
+  <table>
+    <tr><th style="width:24%">Action</th><th>What it does</th></tr>
+    <tr><td><strong>Plan tier</strong></td><td>Switch between Starter, Growth Pro and Enterprise Plus directly from the table.</td></tr>
+    <tr><td><strong>Credentials</strong></td><td>Opens <code>StoreCredentialsModal</code>: set a custom login ID and password, generate an onboarding access pass, manage staff accounts, or dispatch a password-reset email. Dispatching a reset immediately revokes the old password.</td></tr>
+    <tr><td><strong>.env</strong></td><td>Shows the generated environment configuration (database URI, slug) for that store.</td></tr>
+    <tr><td><strong>Visit</strong></td><td>Opens the live storefront.</td></tr>
+    <tr><td><strong>Suspend / Reactivate</strong></td><td>Changes the store status (see the table below). Moving a store to a state without sign-in also ends all of its sessions.</td></tr>
+    <tr><td><strong>Provision New Store</strong></td><td>Creates a store directly without an application (Section 5).</td></tr>
+  </table>
+  <p>A search box filters stores by brand, slug or owner.</p>
+  <table>
+    <tr><th style="width:18%">Status</th><th style="width:20%">Storefront</th><th style="width:20%">Owner &amp; staff sign-in</th><th>Use</th></tr>
+    <tr><td><code>active</code></td><td>Open</td><td>Yes</td><td>Normal trading, including the 30-day trial.</td></tr>
+    <tr><td><code>read_only</code></td><td>Products visible, new orders refused</td><td>Yes</td><td>For example after a failed payment (the 7-day grace period), so the owner can fix billing without losing data.</td></tr>
+    <tr><td><code>suspended</code></td><td>Closed</td><td>No</td><td>Platform action, e.g. a policy breach or retries exhausted.</td></tr>
+    <tr><td><code>pending</code></td><td>Closed</td><td>No</td><td>Created but not yet live.</td></tr>
+    <tr><td><code>cancelled</code></td><td>Closed</td><td>No</td><td>The owner has closed the store.</td></tr>
+  </table>
+  <p class="muted">Status changes are manual today. Automatic moves (trial end, failed payment, grace period) arrive with the Razorpay billing integration.</p>
+</div>
+
+<div>
+  <h3>4.6 Subscriptions &amp; Billing</h3>
+  <div class="figure"><img src="img/admin-billing.png" /><div class="cap">Figure 4.6 — Store subscriptions</div></div>
+  <p>Shows each store's plan, monthly price, subscription status (<code>active</code>, <code>trial</code>, <code>past_due</code>, <code>cancelled</code>), next billing date, payment method (Razorpay, Stripe or manual) and invoice history.</p>
+  <table>
+    <tr><th>Plan</th><th>Price / month</th><th>Highlights</th></tr>
+    <tr><td>Starter</td><td>₹1,460</td><td>Up to 100 products</td></tr>
+    <tr><td>Growth Pro</td><td>₹3,660</td><td>Custom domain + SSL</td></tr>
+    <tr><td>Enterprise Plus</td><td>Custom</td><td>Dedicated clusters</td></tr>
+  </table>
+  <p>Prices match the marketing website's India list prices and exclude 18% GST. Every new store starts on a 30-day free trial. The plan catalog is defined once in <code>src/data/plans.ts</code> and mirrored in <code>server/src/config/plans.ts</code>; the website's <code>growth</code> plan id maps to the internal <code>pro</code> id.</p>
+  <ul>
+    <li><strong>Yearly billing</strong> is 10% off: 12 months at 90% of the monthly price (Growth Pro yearly = ₹3,294 a month). The cycle chosen on the website is stored on the subscription.</li>
+    <li><strong>Prices are always recomputed</strong> from the server catalog; the amounts in a signup are never used for billing.</li>
+    <li><strong>Starter limit:</strong> a Starter store can hold up to 100 products. Adding the 101st returns an "upgrade to Growth Pro" error (<code>upgradeRequired: true</code>).</li>
+  </ul>
+
+  <h3>4.7 Domains &amp; Routing</h3>
+  <div class="figure"><img src="img/admin-domains.png" /><div class="cap">Figure 4.7 — Subdomains &amp; custom domains</div></div>
+  <p>Lists each store's <code>&lt;slug&gt;.orvexacloud.in</code> subdomain and any custom domain, with DNS/SSL status and the records a merchant must configure.</p>
+</div>
+
+<div>
+  <h3>4.8 Security &amp; Audit Trail</h3>
+  <div class="figure"><img src="img/admin-audit.png" /><div class="cap">Figure 4.8 — Platform security &amp; audit logs</div></div>
+  <p>A forensic, platform-wide event stream (<code>PlatformAuditLogs.tsx</code>). Every sensitive action — sign-ins, provisioning, credential and password changes, database access, product and branding edits — is recorded with timestamp, actor, role, target store, IP and metadata.</p>
+  <ul>
+    <li><strong>Summary cards:</strong> total events, password and credential resets, authenticated logins, stores monitored.</li>
+    <li><strong>Filters:</strong> free-text search, store, category (auth, security, products, orders, branding, billing, provisioning, database, settings) and severity (info, warning, security, critical), plus quick filters.</li>
+    <li><strong>Inspect</strong> expands an event's full metadata.</li>
+    <li><strong>Export CSV / Export JSON</strong> downloads the filtered log; <strong>Refresh Stream</strong> reloads it.</li>
+  </ul>
+  <p>Store owners see the same data scoped to their own store in the dashboard's Security &amp; Audit Log tab (<code>StoreAuditLogs.tsx</code>).</p>
+</div>
+
+<!-- ============ 5. PROVISIONING ============ -->
+<div class="section" id="provisioning">
+  <h2>5. Store Provisioning Workflow</h2>
+  <div class="figure"><img src="img/admin-provision.png" /><div class="cap">Figure 5.1 — Provision New Store dialog</div></div>
+  <p>A store can be provisioned from an approved application or directly from <strong>Provision Store</strong>. The dialog (<code>ProvisionStoreModal.tsx</code>) collects:</p>
+  <ul>
+    <li>Store / brand name and subdomain slug (<code>&lt;slug&gt;.orvexacloud.in</code>).</li>
+    <li>Owner full name, owner account email and WhatsApp / phone.</li>
+    <li><strong>What will you sell?</strong> — a niche from the store-type picker (Section 8), which pre-fills suggested categories.</li>
+    <li><strong>Store categories</strong> — editable chips; add or remove any category.</li>
+    <li>Subscription plan: Starter, Growth Pro or Enterprise Plus.</li>
+  </ul>
+  <h4>What happens on submit</h4>
+  <ol>
+    <li>A tenant record is created in the master database with status, plan and subscription details. The subscription starts as a 30-day trial priced from the plan catalog.</li>
+    <li>An isolated database name <code>orvexa_tenant_&lt;slug&gt;</code> is assigned (<code>server/src/services/tenantProvisioner.ts</code>).</li>
+    <li>An initial merchant password is generated and stored as a bcrypt hash.</li>
+    <li>When running locally, the store's frontend folder <code>src/tenants/&lt;slug&gt;/</code> is created from the template (Section 7.2), together with a <code>tenant.env</code> that contains no passwords or secrets. In production (read-only filesystem, <code>NODE_ENV=production</code>, Vercel, or <code>TENANT_SCAFFOLDING=off</code>) this step is skipped: all configuration lives in MongoDB, and a developer creates the folder with <code>npm run store:create</code> before the next deploy.</li>
+    <li>A secure password-reset link is sent to the owner email ("zero-knowledge handover"), so the admin never needs to know the owner's final password.</li>
+    <li>The event is written to the audit trail as <code>STORE_PROVISIONED</code>.</li>
+  </ol>
+  <div class="note">New stores start <strong>blank</strong>: they use the shared storefront design but contain no products, photos or demo content — only the chosen categories and niche-appropriate default text, which the owner can then customize.</div>
+</div>
+
+<!-- ============ 6. DASHBOARD ============ -->
+<div class="section" id="dashboard">
+  <h2>6. Seller Dashboard</h2>
+
+  <h3>6.1 Seller sign-in</h3>
+  <p>Open <code>/?panel=dashboard&amp;tenant=&lt;slug&gt;</code> (or <code>app.orvexacloud.in</code> in production). Sign in with the owner email or the store slug and the store password (<code>SellerLogin.tsx</code>). Owners can change their password from settings (the current password is verified first) or use a reset link sent by the admin. Staff accounts created by the owner or admin sign in through the staff login.</p>
+
+  <div class="figure"><img src="img/dashboard-overview.png" /><div class="cap">Figure 6.1 — Seller dashboard home</div></div>
+
+  <h3>6.2 Dashboard tabs</h3>
+  <table>
+    <tr><th style="width:24%">Tab</th><th>Features</th></tr>
+    <tr><td><strong>Dashboard</strong></td><td>Welcome banner with Add Product and Edit Homepage shortcuts; revenue, orders, average order value and customer KPIs; 7-day revenue trend; recent orders; top products by revenue.</td></tr>
+    <tr><td><strong>Products &amp; Inventory</strong></td><td>Search, add, edit, duplicate and delete products; stock levels; bestseller and visibility flags; full product editor (6.3).</td></tr>
+    <tr><td><strong>Orders &amp; Shipments</strong></td><td>All customer orders with items, totals, payment method and address; update status through Processing → In Transit → Out for Delivery → Delivered.</td></tr>
+    <tr><td><strong>Inbox &amp; Subscribers</strong></td><td>Messages sent from the storefront's Contact Customer Care form (mark read/unread, delete, reply by email) and the newsletter subscriber list (unsubscribe, export).</td></tr>
+    <tr><td><strong>Storefront &amp; Homepage</strong></td><td>The live homepage customizer (6.4) with a side-by-side preview and Save &amp; Publish.</td></tr>
+    <tr><td><strong>Database &amp; MongoDB</strong></td><td>Connection status for the isolated store database, collections overview, and the BYODB custom MongoDB URI. <strong>Check Format</strong> validates the connection string; the server connects for real on <strong>Save</strong> and refuses to switch if it cannot reach the database.</td></tr>
+    <tr><td><strong>Security &amp; Audit Log</strong></td><td>Store-scoped audit events (logins, edits, password changes).</td></tr>
+    <tr><td><strong>Store Settings &amp; Plan</strong></td><td>Brand identity and logo upload, store domain and account details, password change, subscription and plan tier.</td></tr>
+  </table>
+
+  <div class="two">
+    <div class="figure"><img src="img/dashboard-products.png" /><div class="cap">Figure 6.2 — Products &amp; Inventory</div></div>
+    <div class="figure"><img src="img/dashboard-orders.png" /><div class="cap">Figure 6.3 — Orders &amp; Shipments</div></div>
+  </div>
+  <div class="two">
+    <div class="figure"><img src="img/dashboard-inbox.png" /><div class="cap">Figure 6.4 — Inbox &amp; Subscribers</div></div>
+    <div class="figure"><img src="img/dashboard-settings.png" /><div class="cap">Figure 6.5 — Store Settings &amp; Plan</div></div>
+  </div>
+</div>
+
+<div>
+  <h3>6.3 Product editor</h3>
+  <p>Adding or editing a product opens a four-step editor:</p>
+  <table>
+    <tr><th style="width:28%">Step</th><th>Fields</th></tr>
+    <tr><td>1. Basic Info &amp; Price</td><td>Name, category, price, compare-at (original) price, description, stock, bestseller / new flags.</td></tr>
+    <tr><td>2. Photos &amp; Gallery</td><td>Primary display picture and gallery images (upload or URL), reorder and remove.</td></tr>
+    <tr><td>3. Colors &amp; Sizes / Options</td><td>Color swatches and size or option variants.</td></tr>
+    <tr><td>4. Fabric &amp; Details</td><td>Material, care instructions, fit and other product details shown on the product page. Blank-template stores see a generic "Details" step.</td></tr>
+  </table>
+
+  <h3>6.4 Storefront &amp; Homepage editor</h3>
+  <div class="figure"><img src="img/dashboard-storefront.png" /><div class="cap">Figure 6.6 — Storefront &amp; Homepage Customizer with live preview</div></div>
+  <p>Changes are previewed instantly on the right and go live after <strong>Save &amp; Publish Changes</strong>. Blank text fields fall back to the niche's default copy.</p>
+  <table>
+    <tr><th style="width:24%">Editor tab</th><th>What can be edited</th></tr>
+    <tr><td>Branding &amp; Hero</td><td>Hero banner picture (upload, URL or preset), hero headline, subheading, CTA labels, brand colors, fonts and announcement bar messages.</td></tr>
+    <tr><td>Headlines &amp; Text</td><td>Hero badge, collection and featured section eyebrows and titles, mission headline and body, About page title, badge, tagline, bio and pillars, catalog tagline and intro, empty-bag and search hints.</td></tr>
+    <tr><td>Homepage Layout</td><td>Show, hide and reorder sections: trust bar, bestsellers, categories, featured, triptych, mission.</td></tr>
+    <tr><td>Product Page</td><td>Toggle image zoom, guarantee box, details, shipping info and related products; edit guarantee, details and fit titles and text.</td></tr>
+    <tr><td>Shipping &amp; Offers</td><td>Free-shipping threshold, shipping fee, discount code and percentage, trust-bar items.</td></tr>
+    <tr><td>Footer &amp; Social</td><td>Footer tagline, trust strip, newsletter block and text, care and explore links, Instagram, WhatsApp, Pinterest and Facebook links.</td></tr>
+  </table>
+</div>
+
+<!-- ============ 7. STOREFRONT ============ -->
+<div class="section" id="storefront">
+  <h2>7. Customer Storefront</h2>
+  <div class="figure"><img src="img/storefront.png" /><div class="cap">Figure 7.1 — The Lunar Clothing storefront</div></div>
+  <h3>7.1 Storefront features</h3>
+  <p>Each tenant's public shop is rendered by the shared <code>src/App.tsx</code> using that tenant's theme, copy, categories and products, plus anything in the store's own folder (7.2). Key features:</p>
+  <table>
+    <tr><th style="width:26%">Area</th><th>Features</th></tr>
+    <tr><td>Header &amp; navigation</td><td>Scrolling announcement bar, logo, Shop Collections menu by category, About, Contact, search, wishlist, cart and account log-in.</td></tr>
+    <tr><td>Homepage</td><td>Hero banner and CTAs, trust bar, bestsellers, category tiles, featured collection, triptych and mission sections — all controlled from the seller's editor.</td></tr>
+    <tr><td>Catalog</td><td>Category filtering, sorting and search.</td></tr>
+    <tr><td>Product page</td><td>Gallery with zoom, color and size selection, quantity, add to cart, guarantee and details panels, shipping info, related products, customer ratings and reviews with verified badges, and "Write a Product Review".</td></tr>
+    <tr><td>Cart &amp; checkout</td><td>Slide-out bag, discount code, free-shipping progress, delivery details, payment by UPI or Cash on Delivery, order confirmation.</td></tr>
+    <tr><td>Shopper accounts</td><td>Register and sign in per store, account profile and saved delivery address.</td></tr>
+    <tr><td>Order tracking</td><td>"Direct Courier &amp; Order Lookup" by order ID, showing shipment progress.</td></tr>
+    <tr><td>Customer care</td><td>Contact form delivered to the seller's Inbox, store information dialog, WhatsApp button, newsletter sign-up.</td></tr>
+    <tr><td>Footer</td><td>Trust strip, care and explore links, social links, Brand Partnerships and Portal &amp; Console Login.</td></tr>
+  </table>
+  <p>A store in the <code>read_only</code> state still shows its catalogue but refuses new orders; <code>suspended</code>, <code>pending</code> and <code>cancelled</code> stores are closed (Section 4.5).</p>
+</div>
+
+<div>
+  <h3>7.2 Per-store frontend folders</h3>
+  <p>Every store has its own folder for frontend work, so a developer changing one store's look never has to search the shared code. The storefront discovers these folders automatically; nothing has to be registered.</p>
+  <pre><code>src/tenants/&lt;slug&gt;/
+  store.tsx       main file: switches overrides and custom sections on
+  theme.ts        colours, fonts, hero text and image
+  styles.css      CSS that only affects this store
+  components/     replacements for built-in parts (Hero.tsx example included)
+  sections/       extra homepage sections (PromoBanner.tsx example included)
+  assets/         this store's images and fonts
+  README.md       developer guide for the folder</code></pre>
+  <table>
+    <tr><th style="width:26%">What you can change</th><th>How</th></tr>
+    <tr><td>Theme</td><td>Set fields in <code>theme.ts</code>. Any field set here <strong>overrides</strong> the owner's dashboard value; leave it commented out to let the owner control it.</td></tr>
+    <tr><td>Built-in parts</td><td>Replace <code>AnnouncementBar</code>, <code>Navigation</code>, <code>Hero</code>, <code>ProductCard</code> or <code>Footer</code> in <code>store.tsx</code>. A replacement receives the same props plus <code>Default</code> (the built-in version), so it can wrap it or replace it completely.</td></tr>
+    <tr><td>Homepage sections</td><td>Add entries to <code>sections</code> with a position: <code>after: 'hero'</code>, after any built-in section, or <code>'end'</code>.</td></tr>
+    <tr><td>Styles</td><td>Write CSS under <code>[data-store='&lt;slug&gt;']</code> in <code>styles.css</code>, so it never affects another store.</td></tr>
+  </table>
+  <h4>How a folder is created</h4>
+  <ul>
+    <li><strong>Local development:</strong> provisioning or approving a store in the admin portal creates the folder automatically (Vite dev endpoint and the backend provisioner).</li>
+    <li><strong>By hand:</strong> <code>npm run store:create -- &lt;slug&gt; --name "Brand Name"</code>. Existing files are never overwritten.</li>
+    <li><strong>Production:</strong> the live server cannot write source files. Create the folder with the command above, make the changes, and deploy.</li>
+  </ul>
+  <p>The template lives in <code>src/tenants/_template/</code>. Each store's code is built as its own small file and loads only on that store. Folder discovery and the slot types are in <code>src/tenants/loader.ts</code> and <code>src/tenants/store-module.ts</code>.</p>
+</div>
+
+<!-- ============ 8. NICHES ============ -->
+<div class="section" id="niches">
+  <h2>8. Store Niches &amp; Blank Templates</h2>
+  <p>Defined in <code>src/data/store-niches.ts</code> and offered by <code>StoreTypePicker.tsx</code> during provisioning. Each niche supplies suggested categories and default storefront copy so a new, empty store reads correctly for its market.</p>
+  <table>
+    <tr><th>Niche ID</th><th>Label</th><th>Niche ID</th><th>Label</th></tr>
+    <tr><td><code>fashion</code></td><td>Fashion &amp; Apparel</td><td><code>food</code></td><td>Food &amp; Wellness</td></tr>
+    <tr><td><code>toys</code></td><td>Toys &amp; Games</td><td><code>handloom</code></td><td>Handloom &amp; Traditional</td></tr>
+    <tr><td><code>jewelry</code></td><td>Jewelry &amp; Accessories</td><td><code>books</code></td><td>Books &amp; Stationery</td></tr>
+    <tr><td><code>beauty</code></td><td>Cosmetics &amp; Skincare</td><td><code>sports</code></td><td>Sports &amp; Fitness</td></tr>
+    <tr><td><code>home</code></td><td>Home &amp; Decor</td><td><code>pets</code></td><td>Pet Supplies</td></tr>
+    <tr><td><code>electronics</code></td><td>Electronics &amp; Gadgets</td><td><code>other</code></td><td>Other (Custom)</td></tr>
+  </table>
+  <p>The niche ID is stored on the tenant as <code>storeType</code>. Legacy demo stores (Lunar, Silk Haus, Khadi Studio, Bloom &amp; Weave) do not set <code>storeType</code>. Their folders still contain the older <code>config.ts</code>, which the app does not import; their customisations go in <code>store.tsx</code> like any other store (Section 7.2).</p>
+</div>
+
+<!-- ============ 9. API ============ -->
+<div class="section" id="api">
+  <h2>9. Backend API Reference</h2>
+  <p>The Express app (<code>server/src/app.ts</code>) mounts four routers. Bodies are JSON (5 MB limit, enough for inline product images), except the signed website signup routes, which read the raw body. Rate limits: 300 requests per 15 minutes globally, 10 per 15 minutes on credential endpoints (login, forgot/reset/change password, bootstrap), 60 per minute on <code>/api/public</code>, plus a checkout limiter on orders and reviews. Errors never expose internal details; unknown <code>/api</code> paths return 404 and oversized bodies 413.</p>
+  <p><code>GET /api/health</code> reports <code>signupIntake</code> and <code>decisionEmail</code> as <code>on</code> or <code>off</code>, so you can confirm the signing secret and Resend are configured.</p>
+  <p><span class="pill">Admin</span> requires a super admin JWT (<code>requireAdmin</code>). <span class="pill">Seller</span> requires a seller JWT for the same store (<code>requireSeller</code> + <code>requireTenantAccess</code>).</p>
+
+  <h3>9.1 Authentication — <code>/api/auth</code></h3>
+  <table>
+    <tr><th style="width:9%">Method</th><th style="width:34%">Path</th><th>Description</th></tr>
+    <tr><td>POST</td><td><code>/login</code></td><td>Unified login (detects role).</td></tr>
+    <tr><td>POST</td><td><code>/admin/login</code></td><td>Super admin login; returns access and refresh tokens.</td></tr>
+    <tr><td>POST</td><td><code>/seller/login</code></td><td>Store owner login.</td></tr>
+    <tr><td>POST</td><td><code>/staff/login</code></td><td>Store staff login.</td></tr>
+    <tr><td>POST</td><td><code>/refresh</code></td><td>Exchange a single-use refresh token for a new pair. The account is re-checked, so suspended stores, removed staff and reset passwords lose access.</td></tr>
+    <tr><td>POST</td><td><code>/logout</code></td><td>Revoke the refresh token.</td></tr>
+    <tr><td>POST</td><td><code>/seller/forgot-password</code></td><td>Email a single-use 30-minute reset link to the owner. The response is identical whether or not the account exists and never contains the token.</td></tr>
+    <tr><td>POST</td><td><code>/seller/reset-password</code></td><td>Set a new password using a reset token (minimum 8 characters). Ends all existing sessions.</td></tr>
+    <tr><td>POST</td><td><code>/seller/set-password</code> <span class="pill">Admin</span></td><td>A super admin sets a store owner's password.</td></tr>
+    <tr><td>POST</td><td><code>/seller/change-password</code></td><td>Change password (current password required). Ends all existing sessions.</td></tr>
+    <tr><td>POST</td><td><code>/admin/bootstrap</code></td><td>One-time creation of the first super admin, only while no admin exists. Requires <code>ADMIN_BOOTSTRAP_KEY</code> of at least 16 characters; the old published default key is refused.</td></tr>
+  </table>
+
+  <h3>9.2 Platform administration — <code>/api/admin</code></h3>
+  <p>Every route in this router requires a super admin JWT, applied router-wide, except <code>POST /audit-logs</code>.</p>
+  <table>
+    <tr><th style="width:9%">Method</th><th style="width:40%">Path</th><th>Description</th></tr>
+    <tr><td>GET</td><td><code>/overview</code></td><td>Platform KPIs (GMV, MRR, active stores, pending applications).</td></tr>
+    <tr><td>GET</td><td><code>/tenants</code></td><td>List all stores.</td></tr>
+    <tr><td>POST</td><td><code>/tenants</code> <span class="pill">Admin</span></td><td>Provision a new store.</td></tr>
+    <tr><td>PUT</td><td><code>/tenants/:id/status</code> <span class="pill">Admin</span></td><td>Set <code>active</code>, <code>read_only</code>, <code>suspended</code>, <code>pending</code> or <code>cancelled</code> (Section 4.5). States without sign-in revoke the store's refresh tokens.</td></tr>
+    <tr><td>GET</td><td><code>/tenants/:slug/env</code></td><td>Generated environment config for a store.</td></tr>
+    <tr><td>GET / PUT</td><td><code>/tenants/:slug/credentials</code></td><td>Read or set a store's login credentials.</td></tr>
+    <tr><td>POST</td><td><code>/tenants/:slug/trigger-password-reset</code></td><td>Revoke the password and email a reset link.</td></tr>
+    <tr><td>GET / POST</td><td><code>/tenants/:slug/staff</code></td><td>List or add staff accounts.</td></tr>
+    <tr><td>DELETE</td><td><code>/tenants/:slug/staff/:staffId</code></td><td>Remove a staff account.</td></tr>
+    <tr><td>GET</td><td><code>/applications</code></td><td>List merchant applications.</td></tr>
+    <tr><td>PUT</td><td><code>/applications/:id/status</code> <span class="pill">Admin</span></td><td><code>{status, slug?, reviewNotes?}</code> with status <code>approved</code>, <code>rejected</code> or <code>needs_info</code> (which requires <code>reviewNotes</code>, emailed as the question). Approval creates the store on the requested plan and billing cycle with a 30-day trial, issues a 7-day set-password link and emails the owner. Approval is atomic, so a double click cannot create two stores. Returns 409 for waitlist entries, an already-approved application or a taken address.</td></tr>
+    <tr><td>POST</td><td><code>/waitlist/notify</code> <span class="pill">Admin</span></td><td><code>{country}</code> (two-letter code). Emails each early-access entry for that country once that signups are open; returns <code>{notified, failed, hasMore}</code> and works in batches of 500.</td></tr>
+    <tr><td>GET / POST</td><td><code>/audit-logs</code></td><td>Read or append audit events.</td></tr>
+  </table>
+</div>
+
+<div>
+  <h3>9.3 Store data — <code>/api/stores/:tenantSlug</code></h3>
+  <p>The <code>tenantResolver</code> middleware attaches the correct store database (dedicated or BYODB) to each request.</p>
+  <table>
+    <tr><th style="width:12%">Method</th><th style="width:34%">Path</th><th>Description</th></tr>
+    <tr><td>GET</td><td><code>/products</code></td><td>List products.</td></tr>
+    <tr><td>GET</td><td><code>/products/:id</code></td><td>Get one product.</td></tr>
+    <tr><td>POST / PUT / DELETE</td><td><code>/products[/:id]</code> <span class="pill">Seller</span></td><td>Create, update or delete a product. Creating returns 403 with <code>upgradeRequired</code> when a Starter store already has 100 products.</td></tr>
+    <tr><td>GET</td><td><code>/theme</code></td><td>Storefront theme and copy.</td></tr>
+    <tr><td>PUT</td><td><code>/theme</code> <span class="pill">Seller</span></td><td>Publish storefront customizations.</td></tr>
+    <tr><td>GET / POST</td><td><code>/orders</code></td><td>List orders (staff) / place an order (checkout). The client sends only product IDs, quantities, options and the address; prices, discount, shipping and totals are computed on the server and stock is reserved atomically. Returns 403 with <code>readOnly</code> when the store is read-only.</td></tr>
+    <tr><td>PUT</td><td><code>/orders/:id/status</code> <span class="pill">Seller</span></td><td>Update fulfilment status.</td></tr>
+    <tr><td>GET / POST</td><td><code>/reviews</code></td><td>List or submit product reviews.</td></tr>
+    <tr><td>GET</td><td><code>/database-status</code></td><td>Health of the store database connection.</td></tr>
+    <tr><td>PUT</td><td><code>/database-config</code> <span class="pill">Seller</span></td><td>Set a custom (BYODB) <code>mongodb+srv://</code> URI. Only when <code>ALLOW_CUSTOM_DATABASES=true</code>; the server tests the connection before switching.</td></tr>
+    <tr><td>GET / POST / DELETE</td><td><code>/staff[/:staffId]</code> <span class="pill">Seller</span></td><td>Owner-managed staff accounts.</td></tr>
+  </table>
+
+  <h3>9.4 Tokens</h3>
+  <ul>
+    <li>Access tokens: JWT (HS256) signed with <code>JWT_SECRET</code>, lifetime <code>ACCESS_TOKEN_TTL</code> (default 1 hour), carrying user ID, role and tenant. Tokens issued before an owner's last password change are rejected.</li>
+    <li>Refresh tokens: signed with <code>JWT_REFRESH_SECRET</code>, 30 days, single use, stored server-side only as a SHA-256 hash in the <code>RefreshToken</code> collection with a TTL index that auto-deletes expired tokens.</li>
+    <li>In production the server refuses to start unless both secrets are at least 32 characters and different from each other.</li>
+    <li>Passwords are hashed with bcrypt; failed logins take the same time whether or not the account exists, and return the same message.</li>
+  </ul>
+</div>
+
+<div>
+  <h3>9.5 Website signup intake — <code>/api/public</code></h3>
+  <p>The marketing website forwards each store signup to this backend (contract: <code>SUPER_ADMIN_API.md</code> in the developer handoff). These routes need no admin login; instead each request is signed with a shared secret. They are mounted before the JSON body parser so the signature is checked against the exact raw bytes, and are rate-limited to 60 requests per minute.</p>
+  <table>
+    <tr><th style="width:9%">Method</th><th style="width:28%">Path</th><th>Description</th></tr>
+    <tr><td>POST</td><td><code>/signups</code></td><td>Receive a signup. Stores the plan, launch country, migration request, consent evidence and attribution. Early-access signups become waitlist entries; live ones become pending applications.</td></tr>
+    <tr><td>GET</td><td><code>/slug-available?slug=</code></td><td>Optional live check used by the signup form. Returns <code>{available}</code>.</td></tr>
+  </table>
+  <h4>Request signing</h4>
+  <ul>
+    <li>Headers: <code>X-Orvexa-Timestamp</code> (Unix seconds), <code>X-Orvexa-Signature: sha256=&lt;hex&gt;</code> and <code>Idempotency-Key</code>.</li>
+    <li>The signature is HMAC-SHA256 over <code>"&lt;timestamp&gt;.&lt;raw body&gt;"</code> (an empty body for the GET). It is compared in constant time, and requests older than 5 minutes are rejected.</li>
+    <li><code>SIGNUP_SIGNING_SECRETS</code> accepts a comma-separated list, so a new secret can be added before the old one is removed.</li>
+  </ul>
+  <h4>Responses</h4>
+  <table>
+    <tr><th style="width:16%">Code</th><th>Meaning</th></tr>
+    <tr><td>201</td><td>Accepted: <code>{applicationId, status}</code> where status is <code>pending_review</code> or <code>early_access</code>.</td></tr>
+    <tr><td>409</td><td>Same <code>Idempotency-Key</code> already received; returns the original <code>applicationId</code>. No duplicate row is created.</td></tr>
+    <tr><td>400 / 422</td><td>Unreadable JSON or a missing required field. Final — the website does not retry.</td></tr>
+    <tr><td>401</td><td>Bad or expired signature.</td></tr>
+    <tr><td>503</td><td>Intake not configured or the database is unavailable. The website retries.</td></tr>
+  </table>
+  <p>A requested address that is reserved (for example <code>admin</code>, <code>shop</code>, <code>help</code>) or already taken is kept and flagged for the admin, and the owner is emailed to pick another. Prices in the payload are informational only; the store is always billed from the server's plan catalog. The website sends the receipt email; this backend sends only the decision emails (approved, needs more information, rejected), the address-clash email and the early-access launch email, via Resend when <code>RESEND_API_KEY</code> and <code>MAIL_FROM</code> are set (otherwise they are logged). Each one-time email carries a Resend idempotency key, so a retry never sends a second copy.</p>
+  <p>If <code>SIGNUP_NOTIFY_EMAIL</code> is set, the team receives a short alert for each new signup (reference, plan, country, store address and any migration request). It deliberately contains no owner contact details; staff open the application in the portal.</p>
+</div>
+
+<!-- ============ 10. MODELS ============ -->
+<div class="section" id="models">
+  <h2>10. Data Models</h2>
+  <h3>10.1 Master database (<code>server/src/models/master</code>)</h3>
+  <table>
+    <tr><th style="width:18%">Model</th><th>Key fields</th></tr>
+    <tr><td><code>Tenant</code></td><td>id, slug, brand name, owner name/email/phone, theme, status (active, read_only, suspended, pending, cancelled), plan, custom domain, storeType, categories, subscription (plan, cycle, monthly-equivalent price, status, trial end, next billing, payment method, invoices), custom database URI (never returned by the API), hashed credentials, passwordChangedAt, staff members.</td></tr>
+    <tr><td><code>Application</code></td><td>id, brandName, ownerName, ownerEmail, ownerPhone, category, storeType, categories[], description, requestedSubdomain, status (pending, needs_info, approved, rejected, waitlist), submittedAt, reviewedAt, reviewNotes. Website signups add channel, idempotencyKey (unique), requestedPlan (including cycle), launch, migration, consents, attribution, billing and slugCheck. Early-access entries also record launchNotifiedAt.</td></tr>
+    <tr><td><code>AdminUser</code></td><td>id, name, email (unique), passwordHash, role (super_admin, admin, support), lastLogin. The same file defines <code>PlatformMetrics</code> snapshots (GMV, revenue, active stores, MRR, orders).</td></tr>
+    <tr><td><code>AuditLog</code></td><td>id, timestamp, actorId, actorName, actorRole (super_admin, seller, staff, system), tenantSlug, tenantName, action, category, severity (info, warning, security, critical), details, ipAddress, userAgent, metadata.</td></tr>
+    <tr><td><code>RefreshToken</code></td><td>tokenHash (SHA-256), userId, role, tenantId, tenantSlug, expiresAt (TTL), createdAt.</td></tr>
+  </table>
+  <h3>10.2 Per-tenant database (<code>server/src/models/tenant</code>)</h3>
+  <table>
+    <tr><th style="width:18%">Model</th><th>Key fields</th></tr>
+    <tr><td><code>Product</code></td><td>Name, category, price, original price, images, colors, sizes, stock, description, fabric/details, bestseller and visibility flags.</td></tr>
+    <tr><td><code>Order</code></td><td>Order ID, customer details and address, line items, totals, discount, payment method (UPI or COD), status (Processing, In Transit, Out for Delivery, Delivered), timestamps.</td></tr>
+    <tr><td><code>Review</code></td><td>Product ID, author, rating, title, comment, verified flag, date.</td></tr>
+  </table>
+  <h3>10.3 Frontend types</h3>
+  <p><code>src/types/tenant.ts</code> defines <code>TenantConfig</code>, <code>ThemeConfig</code> (colors, fonts, hero, copy overrides, home sections, product page options, footer options, social links, shipping), <code>SubscriptionInfo</code>, <code>Invoice</code>, <code>TenantApplication</code>, <code>PlatformStats</code> and <code>DashboardStats</code>. <code>src/types/index.ts</code> defines products, cart items, orders and user accounts.</p>
+</div>
+
+<!-- ============ 11. ENV ============ -->
+<div class="section" id="env">
+  <h2>11. Environment Variables</h2>
+  <p>Copy <code>.env.example</code> to <code>.env</code> (and <code>server/.env</code> for the backend). In production, set the same values in the hosting dashboard. <code>.env*</code> files are git-ignored.</p>
+  <table>
+    <tr><th style="width:32%">Variable</th><th style="width:12%">Used by</th><th>Purpose</th></tr>
+    <tr><td><code>VITE_API_BASE_URL</code></td><td>Frontend</td><td>Base path for auth calls (default <code>/api</code>).</td></tr>
+    <tr><td><code>VITE_API_URL</code></td><td>Frontend</td><td>Backend origin for data clients. Leave empty to use the same origin (the dev server proxies <code>/api</code> to port 5000).</td></tr>
+    <tr><td><code>VITE_DEMO_MODE</code></td><td>Frontend</td><td><code>true</code> enables the offline demo fallbacks outside development. Never enable for real merchants.</td></tr>
+    <tr><td><code>VITE_SUPABASE_URL</code>, <code>VITE_SUPABASE_ANON_KEY</code></td><td>Frontend</td><td>Supabase project URL and public anon key.</td></tr>
+    <tr><td><code>SUPABASE_URL</code>, <code>SUPABASE_ANON_KEY</code></td><td>Backend</td><td>Supabase project access.</td></tr>
+    <tr><td><code>SUPABASE_SERVICE_ROLE_KEY</code></td><td>Backend</td><td>Privileged Supabase key — server only, never expose.</td></tr>
+    <tr><td><code>MONGODB_MASTER_URI</code></td><td>Backend</td><td>Master database connection (<code>orvexatech_master</code>).</td></tr>
+    <tr><td><code>MONGODB_TENANT_BASE_URI</code></td><td>Backend</td><td>Prefix for per-store databases; the slug is appended.</td></tr>
+    <tr><td><code>JWT_SECRET</code>, <code>JWT_REFRESH_SECRET</code></td><td>Backend</td><td>Two different token signing secrets, 32+ random characters each (e.g. <code>openssl rand -hex 32</code>). Required in production.</td></tr>
+    <tr><td><code>ACCESS_TOKEN_TTL</code></td><td>Backend</td><td>Access-token lifetime (default <code>1h</code>).</td></tr>
+    <tr><td><code>CORS_ORIGIN</code></td><td>Backend</td><td>Comma-separated allowed frontend origins (exact match; other origins get 403).</td></tr>
+    <tr><td><code>CORS_ALLOW_VERCEL_PREVIEWS</code></td><td>Backend</td><td><code>true</code> also allows <code>*.vercel.app</code> previews. Keep off in production.</td></tr>
+    <tr><td><code>TRUST_PROXY</code></td><td>Backend</td><td>Number of reverse-proxy hops in front of the API, so rate limits use the real client IP.</td></tr>
+    <tr><td><code>ADMIN_BOOTSTRAP_KEY</code></td><td>Backend</td><td>One-time key (16+ characters) to create the first super admin. If unset, bootstrap is disabled.</td></tr>
+    <tr><td><code>ALLOW_CUSTOM_DATABASES</code></td><td>Backend</td><td><code>true</code> lets owners connect their own <code>mongodb+srv://</code> database from the dashboard. Off by default.</td></tr>
+    <tr><td><code>TENANT_SCAFFOLDING</code></td><td>Backend</td><td><code>off</code> stops the provisioner writing store folders (always off in production and on Vercel).</td></tr>
+    <tr><td><code>DNS_SERVERS</code></td><td>Backend</td><td>DNS servers used to resolve Atlas <code>mongodb+srv</code> addresses. Defaults to public DNS in development only.</td></tr>
+    <tr><td><code>SIGNUP_SIGNING_SECRETS</code></td><td>Backend</td><td>Shared secret(s) for website signups, comma-separated for rotation. Keep in a secret manager. If unset, signup intake returns 503.</td></tr>
+    <tr><td><code>PLATFORM_ROOT_DOMAIN</code></td><td>Backend</td><td>Root domain for store addresses (default <code>orvexacloud.in</code>).</td></tr>
+    <tr><td><code>PUBLIC_APP_URL</code></td><td>Backend</td><td>Base URL used in emailed set-password and reset links. Required in production; links are never built from request headers.</td></tr>
+    <tr><td><code>RESEND_API_KEY</code>, <code>MAIL_FROM</code>, <code>MAIL_REPLY_TO</code></td><td>Backend</td><td>Platform emails through Resend (Section 13.4). <code>MAIL_FROM</code> must be on the domain verified in Resend. Without them, emails are only logged.</td></tr>
+    <tr><td><code>SIGNUP_NOTIFY_EMAIL</code></td><td>Backend</td><td>Optional team inbox told about each new website signup.</td></tr>
+    <tr><td><code>PORT</code></td><td>Backend</td><td>Local server port (default 5000).</td></tr>
+    <tr><td><code>NODE_ENV</code>, <code>VERCEL</code></td><td>Backend</td><td>Runtime mode; <code>VERCEL</code> disables filesystem scaffolding.</td></tr>
+  </table>
+</div>
+
+<!-- ============ 12. STRUCTURE ============ -->
+<div class="section" id="structure">
+  <h2>12. Project Structure</h2>
+  <pre><code>lunar final/
+├── index.html, vite.config.ts, package.json, vercel.json, .mise.toml, .env.example
+├── api/index.ts                    Vercel serverless entry (wraps the Express app)
+├── src/
+│   ├── main.tsx, index.css         React entry and Tailwind v4 import
+│   ├── App.tsx                     Customer storefront (home, catalog, PDP, cart, checkout…)
+│   ├── layers/
+│   │   ├── AdminApp.tsx            Super Admin Portal (sign-in gate + 7 views)
+│   │   ├── DashboardApp.tsx        Seller dashboard (8 tabs)
+│   │   └── StorefrontApp.tsx       Storefront wrapper with tenant context
+│   ├── components/
+│   │   ├── auth/                   AdminLogin, SellerLogin, ResetPasswordModal,
+│   │   │                           StoreCredentialsModal, CommonLoginModal …
+│   │   ├── platform/               ProvisionStoreModal, StoreTypePicker, PlatformAuditLogs
+│   │   ├── store/                  StorefrontContentEditor, StoreAuditLogs
+│   │   └── compliance/             LegalComplianceModal (privacy, terms, refunds)
+│   ├── api/                        auth, hooks, client, mock-store, audit-logger,
+│   │                               shopper-accounts, store-messages
+│   ├── context/                    TenantContext, AuthContext
+│   ├── data/                       mock-tenants, products, store-niches, plans
+│   ├── lib/                        tenant-resolver, supabase
+│   ├── tenants/                    One folder per store (Section 7.2)
+│   │   ├── _template/              Copied for every new store
+│   │   ├── lunar/, silkhaus/ …     store.tsx, theme.ts, styles.css, components/, sections/
+│   │   ├── loader.ts               Auto-discovers store folders
+│   │   └── store-module.ts         defineStore() and slot types
+│   └── types/                      tenant, index, supabase
+├── scripts/create-store.mjs        npm run store:create -- &lt;slug&gt; --name "Brand"
+└── server/src/
+    ├── app.ts, index.ts            Express app (CORS, rate limits, routers) and server start
+    ├── config/                     db.ts (master + tenant connections), supabase.ts, plans.ts
+    ├── middleware/                 authMiddleware (JWT, role guards), tenantResolver
+    ├── models/master | tenant/     Mongoose schemas (Section 10)
+    ├── routes/                     authRoutes, masterRoutes, storeRoutes, publicRoutes
+    ├── services/                   tenantProvisioner, mailer, ownerPasswordLink
+    ├── lib/validate.ts             Input validation helpers
+    ├── scripts/                    seed.ts, seedData.ts, setTenantDb.ts
+    └── ../tests/                   harness.ts, platform.test.ts (46 integration tests)</code></pre>
+  <p class="muted">The <code>orvexa-cloud/</code> folder is an older standalone copy of the platform and is not used by the current build.</p>
+</div>
+
+<!-- ============ 13. DEPLOY ============ -->
+<div class="section" id="deploy">
+  <h2>13. Build &amp; Deployment</h2>
+  <p>Production hosting is MongoDB Atlas + Render (API) + Cloudflare (edge, Pages, R2) with GitHub Actions. Auto-deploy on Render is disabled. The step-by-step runbook is <code>docs/PRODUCTION_DEPLOYMENT.md</code>.</p>
+  <h3>13.1 Scripts</h3>
+  <table>
+    <tr><th style="width:30%">Command</th><th>Effect</th></tr>
+    <tr><td><code>npm run dev</code></td><td>Vite dev server on all interfaces.</td></tr>
+    <tr><td><code>npm run build</code></td><td>Production build into <code>dist/</code>.</td></tr>
+    <tr><td><code>npm run preview</code></td><td>Serve the production build locally.</td></tr>
+    <tr><td><code>npm run format</code></td><td>Format with oxfmt.</td></tr>
+    <tr><td><code>npm run server:dev</code></td><td>Backend with hot reload (tsx watch).</td></tr>
+    <tr><td><code>cd server &amp;&amp; npm run seed</code></td><td>Seed demo tenants and admin.</td></tr>
+    <tr><td><code>cd server &amp;&amp; npm test</code></td><td>Backend integration tests (needs <code>MONGOD_BINARY</code> pointing at a <code>mongod</code> executable).</td></tr>
+    <tr><td><code>npm run store:create -- &lt;slug&gt; --name "Brand"</code></td><td>Create a store's frontend folder from the template (Section 7.2).</td></tr>
+    <tr><td><code>cd server &amp;&amp; npm run tenant:set-db -- &lt;slug&gt;</code></td><td>Link a store to its own MongoDB cluster (Section 13.5).</td></tr>
+    <tr><td><code>npx tsc --noEmit -p .</code></td><td>Type-check (run in the root and in <code>server/</code>).</td></tr>
+  </table>
+
+  <h3>13.2 Vercel</h3>
+  <p><code>vercel.json</code> builds the frontend with pnpm into <code>dist/</code> and routes <code>/api/*</code> to the serverless function <code>api/index.ts</code> (1 GB memory, 30 s timeout), which reuses the Express app and a cached MongoDB connection. All other paths fall back to <code>index.html</code> so the client-side resolver can pick the layer.</p>
+
+  <h3>13.3 Recommended production domains</h3>
+  <table>
+    <tr><th>Domain</th><th>Serves</th></tr>
+    <tr><td><code>admin.orvexacloud.in</code></td><td>Super Admin Portal</td></tr>
+    <tr><td><code>app.orvexacloud.in</code></td><td>Seller dashboard</td></tr>
+    <tr><td><code>&lt;slug&gt;.orvexacloud.in</code></td><td>Each store's storefront (wildcard DNS)</td></tr>
+    <tr><td>Custom domain</td><td>A store's own domain, mapped from Domains &amp; Routing</td></tr>
+    <tr><td><code>orvexacloud.in</code> / <code>www.</code></td><td>Marketing website, hosted separately</td></tr>
+  </table>
+  <div class="note">The root domain of this deployment opens the admin sign-in. Because the marketing website lives on the bare <code>orvexacloud.in</code>, deploy this application on <code>admin.</code>, <code>app.</code> and the store subdomains only. On Vercel, make sure the <code>/api/public/signups</code> function receives the raw request body, or signature checks will fail.</div>
+
+  <h3>13.4 Email with Resend</h3>
+  <p>The platform sends decision, address-clash and early-access launch emails through Resend (free plan: 3,000 emails a month, 100 a day at the time of writing). Setup takes about 30 minutes, once:</p>
+  <ol>
+    <li>Create a Resend account with a company email address (no card needed).</li>
+    <li>Add the sending domain <code>mail.orvexacloud.in</code> (a subdomain keeps email reputation away from the website's domain).</li>
+    <li>Add the three DNS records Resend shows (MX and SPF TXT on <code>send.mail</code>, DKIM TXT on <code>resend._domainkey.mail</code>) in Cloudflare, with the proxy set to <strong>DNS only</strong>, or let Resend add them with "Sign in to Cloudflare". Then click Verify.</li>
+    <li>Add a DMARC TXT record: name <code>_dmarc</code>, value <code>v=DMARC1; p=none;</code>.</li>
+    <li>Create an API key with <strong>Sending access</strong>, limited to <code>mail.orvexacloud.in</code>. It is shown once; keep it in a secret manager.</li>
+    <li>Set <code>RESEND_API_KEY</code>, <code>MAIL_FROM="Orvexa Cloud &lt;hello@mail.orvexacloud.in&gt;"</code> and <code>MAIL_REPLY_TO</code> as secret settings on the backend host, never in the repository.</li>
+    <li>Confirm <code>RESEND_API_KEY</code> and <code>MAIL_FROM</code> are set on the host, then approve a test application addressed to yourself. <code>GET /api/health</code> only reports <code>ok</code> and the running commit — it does not expose mail or billing flags.</li>
+  </ol>
+  <div class="note">The marketing website's connector uses its own Resend settings for the "we received your application" receipt. The same domain and a separate key can be used for both.</div>
+
+  <h3>13.5 Connecting a store to its own database</h3>
+  <p>To move a store onto a dedicated MongoDB Atlas cluster without putting the password in the repository:</p>
+  <pre><code>cd server
+$env:TENANT_MONGO_URI="mongodb+srv://&lt;user&gt;:&lt;password&gt;@&lt;cluster&gt;.mongodb.net/?appName=&lt;name&gt;"
+npm run tenant:set-db -- lunar
+Remove-Item Env:TENANT_MONGO_URI</code></pre>
+  <p>The script connects to the cluster first and only then saves the URI on the store's record in the master database. If the URI names no database, <code>orvexa_tenant_&lt;slug&gt;</code> is used. The master database (<code>MONGODB_MASTER_URI</code>) must be reachable. A new database starts empty.</p>
+</div>
+
+<!-- ============ 14. SECURITY ============ -->
+<div class="section" id="security">
+  <h2>14. Security Notes &amp; Production Checklist</h2>
+  <h3>14.1 Controls already in place</h3>
+  <ul>
+    <li>Admin-only sign-in gate at launch with a 5-attempt / 60-second lockout.</li>
+    <li>Short-lived access tokens (1 hour) and single-use refresh tokens stored hashed with automatic expiry; sessions end on password change, suspension or staff removal.</li>
+    <li>bcrypt password hashing, uniform login errors and timing.</li>
+    <li>Role guards (<code>requireAdmin</code>, <code>requireSeller</code>, <code>requireStaff</code>) and tenant isolation (<code>requireTenantAccess</code>); the store always comes from the URL and is checked against the token.</li>
+    <li>Checkout ignores client prices: totals, discounts and shipping are computed on the server and stock is reserved atomically.</li>
+    <li>Rate limiting on credential endpoints, the public signup API, checkout and globally.</li>
+    <li>Password-reset links are single use and time limited, are only ever emailed, and are built from <code>PUBLIC_APP_URL</code>, never from request headers.</li>
+    <li>Website signups are accepted only with a valid, recent HMAC signature, and repeats are de-duplicated by idempotency key.</li>
+    <li>Security headers on every response, exact-origin CORS, request size limits and generic error messages.</li>
+    <li>Credentials, password hashes and database URIs are never written to disk or returned by the API.</li>
+    <li>A complete audit trail of logins, provisioning, credential and content changes.</li>
+    <li>46 automated integration tests, including the cross-tenant access tests.</li>
+  </ul>
+
+  <h3>14.2 Before going live</h3>
+  <div class="warn"><strong>Not production-ready yet.</strong> Parts of the dashboard and storefront still read and write browser-side demo data, and Razorpay billing is not integrated. Keep <code>VITE_DEMO_MODE</code> unset in production builds so the demo fallbacks stay off.</div>
+  <ol>
+    <li>Leave <code>VITE_DEMO_MODE</code> unset (production builds then never use the browser-side credential fallback).</li>
+    <li>Create the real super admin with <code>/api/auth/admin/bootstrap</code> and a strong, unique password; then remove <code>ADMIN_BOOTSTRAP_KEY</code>.</li>
+    <li>Set two different random <code>JWT_SECRET</code> and <code>JWT_REFRESH_SECRET</code> values of 32+ characters (the server refuses to start in production otherwise).</li>
+    <li>Keep <code>SUPABASE_SERVICE_ROLE_KEY</code> and MongoDB URIs server-side only.</li>
+    <li>Enforce the admin lockout on the server as well (the current lockout is in the browser and can be reset by clearing session storage); consider adding two-factor authentication.</li>
+    <li>Consider rate-limiting or signing <code>POST /api/admin/audit-logs</code>, which is open so storefronts can record events.</li>
+    <li>Restrict <code>CORS_ORIGIN</code> to the real production domains.</li>
+    <li>Change all demo store passwords or remove the demo stores.</li>
+    <li>Generate the signup signing secret, store it in a secret manager and share it with the website's connector through that manager — never by chat or email.</li>
+    <li>Verify a sending domain in Resend and set <code>RESEND_API_KEY</code>, <code>MAIL_FROM</code> and <code>PUBLIC_APP_URL</code> so owners receive working approval links.</li>
+    <li>Confirm where customer data is actually hosted before stating any data-residency region in the legal pages.</li>
+    <li>Build the remaining handoff promises: Razorpay subscriptions and webhooks, automatic trial / grace-period / read-only transitions, GST invoices, data export after cancellation, and the Growth Pro feature gating (custom domain, analytics and coupons, WhatsApp updates, Magic AI).</li>
+    <li>Rotate any database password that has been shared in chat or email.</li>
+  </ol>
+</div>
+
+<!-- ============ 15. TROUBLESHOOTING ============ -->
+<div class="section" id="troubleshooting">
+  <h2>15. Troubleshooting</h2>
+  <table>
+    <tr><th style="width:34%">Symptom</th><th>Cause and fix</th></tr>
+    <tr><td>Browser shows "connection refused" on port 8443</td><td>The dev server is not running. Start it with <code>npx vite --port 8443 --host</code>.</td></tr>
+    <tr><td>"Too many failed attempts. Try again in Ns."</td><td>Five wrong admin passwords. Wait for the countdown; the lock clears automatically after 60 seconds.</td></tr>
+    <tr><td>Seller credentials rejected on the root page</td><td>Expected — the root page accepts only the super admin. Sellers sign in at <code>/?panel=dashboard&amp;tenant=&lt;slug&gt;</code>.</td></tr>
+    <tr><td>Storefront edits not visible to shoppers</td><td>Click <strong>Save &amp; Publish Changes</strong> in the Storefront &amp; Homepage tab, then reload the storefront.</td></tr>
+    <tr><td>Data differs between browsers</td><td>The backend is offline, so each browser uses its own local mock store. Run the backend for shared data.</td></tr>
+    <tr><td>Backend logs "Master DB connection failed"</td><td>Check <code>MONGODB_MASTER_URI</code> and that the Atlas IP allow-list includes the server.</td></tr>
+    <tr><td><code>querySrv ENOTFOUND _mongodb._tcp.&lt;cluster&gt;</code></td><td>The cluster address does not exist (deleted cluster or a typo). Copy the connection string again from Atlas: Connect, then Drivers.</td></tr>
+    <tr><td><code>querySrv ECONNREFUSED</code></td><td>The local DNS resolver refuses SRV lookups. Set <code>DNS_SERVERS=8.8.8.8,1.1.1.1</code> (the default in development).</td></tr>
+    <tr><td>Resend logs HTTP 403 / 401</td><td>403: <code>MAIL_FROM</code> is not on the domain verified in Resend. 401: the API key is wrong or deleted; create a new one.</td></tr>
+    <tr><td>"The Starter plan includes up to 100 products"</td><td>Expected plan limit. Upgrade the store to Growth Pro in Tenant Stores.</td></tr>
+    <tr><td>Checkout says "not taking new orders"</td><td>The store is <code>read_only</code>. Set it back to <code>active</code> once billing is resolved.</td></tr>
+    <tr><td>A store's custom component or theme does not appear</td><td>Check that it is enabled in <code>src/tenants/&lt;slug&gt;/store.tsx</code>, that the folder name matches the store slug, and (in production) that the change was deployed.</td></tr>
+    <tr><td>CORS errors in the browser console</td><td>Add the frontend origin to <code>CORS_ORIGIN</code> and restart the backend.</td></tr>
+    <tr><td>Store owner forgot their password</td><td>Admin → Tenant Stores → Credentials → dispatch password reset; the owner receives a <code>reset_token</code> link.</td></tr>
+    <tr><td>New merchant applications never appear</td><td>The website's connector is not reaching <code>POST /api/public/signups</code>. Confirm <code>SIGNUP_SIGNING_SECRETS</code> is set on the host and that both sides use the same signing secret. <code>/api/health</code> only reports database reachability and the running commit.</td></tr>
+  </table>
+  <p class="muted" style="margin-top:30px; text-align:center">© 2026 Orvexa Tech Private Limited · Orvexa Cloud Platform Documentation v2.6</p>
+</div>
+
+</body>
+</html>

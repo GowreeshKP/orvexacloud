@@ -1,0 +1,8 @@
+# Required reviewers for every change. Create the GitHub Team "platform" on the
+# Orvexa organization (Team plan) and add it as a required reviewer on staging and main.
+*                       @orvexa/platform
+/.github/               @orvexa/platform
+/infra/                 @orvexa/platform
+/render.yaml            @orvexa/platform
+/server/src/config/     @orvexa/platform
+/server/src/middleware/ @orvexa/platform

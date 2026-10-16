@@ -1,0 +1,72 @@
+name: Check & Audit
+
+on:
+  pull_request:
+    branches: [staging, main]
+  push:
+    branches: [staging, main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mongo:
+        image: mongo:8
+        ports:
+          - 27017:27017
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+
+      - name: Install frontend
+        run: npm ci
+
+      - name: Install backend
+        working-directory: server
+        run: npm ci
+
+      - name: Typecheck frontend
+        run: npx tsc --noEmit -p .
+
+      - name: Typecheck backend
+        working-directory: server
+        run: npx tsc --noEmit -p .
+
+      - name: Build frontend
+        run: npm run build
+        env:
+          VITE_DEMO_MODE: "false"
+          VITE_API_URL: https://api.staging.orvexacloud.in
+
+      - name: Build backend
+        working-directory: server
+        run: npm run build
+
+      - name: Backend tests
+        working-directory: server
+        env:
+          MONGODB_TEST_URI: mongodb://127.0.0.1:27017
+        run: npm test
+
+      - name: Dependency audit (frontend)
+        run: npm audit --audit-level=high
+
+      - name: Dependency audit (backend)
+        working-directory: server
+        run: npm audit --audit-level=high

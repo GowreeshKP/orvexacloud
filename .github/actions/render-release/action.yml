@@ -1,0 +1,45 @@
+name: Render release
+description: Trigger a Render deploy hook for a specific git SHA, wait for /api/health, then smoke-test.
+
+inputs:
+  deploy-hook:
+    required: true
+  api-base:
+    required: true
+  web-base:
+    required: true
+  sha:
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Trigger Render deploy hook
+      shell: bash
+      env:
+        HOOK: ${{ inputs.deploy-hook }}
+        SHA: ${{ inputs.sha }}
+      run: |
+        set -euo pipefail
+        if [[ "$HOOK" == *"?"* ]]; then
+          URL="${HOOK}&ref=${SHA}"
+        else
+          URL="${HOOK}?ref=${SHA}"
+        fi
+        echo "Deploying ref=${SHA}"
+        curl -fsS -X POST "$URL"
+
+    - name: Wait until /api/health reports this commit
+      shell: bash
+      env:
+        API_BASE: ${{ inputs.api-base }}
+        EXPECTED_SHA: ${{ inputs.sha }}
+      run: node scripts/wait-for-commit.mjs
+
+    - name: Smoke test
+      shell: bash
+      env:
+        API_BASE: ${{ inputs.api-base }}
+        WEB_BASE: ${{ inputs.web-base }}
+        EXPECTED_SHA: ${{ inputs.sha }}
+      run: node scripts/prod-smoke.mjs

@@ -1,0 +1,75 @@
+name: Deploy staging
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  check:
+    uses: ./.github/workflows/check.yml
+
+  secret-scan:
+    uses: ./.github/workflows/secret-scan.yml
+
+  deploy:
+    needs: [check, secret-scan]
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install and build portals
+        run: npm ci && npm run build
+        env:
+          VITE_DEMO_MODE: "false"
+          VITE_API_URL: https://api.staging.orvexacloud.in
+
+      - name: Deploy admin portal
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name orvexa-admin-staging --branch staging --commit-hash ${{ github.sha }}
+
+      - name: Deploy seller portal
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name orvexa-app-staging --branch staging --commit-hash ${{ github.sha }}
+
+      - name: Deploy shop portal
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name orvexa-shop-staging --branch staging --commit-hash ${{ github.sha }}
+
+      - name: Deploy shop router worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: infra/cloudflare
+          command: deploy --env staging
+
+      - uses: ./.github/actions/render-release
+        with:
+          deploy-hook: ${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}
+          api-base: ${{ vars.STAGING_API_URL || 'https://api.staging.orvexacloud.in' }}
+          web-base: ${{ vars.STAGING_WEB_URL || 'https://admin.staging.orvexacloud.in' }}
+          sha: ${{ github.sha }}

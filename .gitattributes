@@ -1,0 +1,3 @@
+# Git LFS is not used. The original export only contained LFS pointer
+# files (no objects), which blocked git push. Restore binaries as
+# normal files when you have the real assets.

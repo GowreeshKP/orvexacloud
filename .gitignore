@@ -1,0 +1,27 @@
+node_modules/
+dist/
+build/
+.cache/
+.env
+.env.*
+!.env.example
+*.env
+!*.env.example
+server/.env
+server/dist/
+src/tenants/**/*.env
+
+.vite/
+vite.config.*.timestamp-*
+*.tsbuildinfo
+*-debug.log*
+logs/
+*.log
+.claude-replay.*
+.tmp-*
+
+
+# a file named just "env" (no dot) was being committed
+env
+server/env
+*.7z

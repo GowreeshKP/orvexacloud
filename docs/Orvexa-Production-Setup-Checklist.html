@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Orvexa Cloud — What You Need To Do (Step by Step)</title>
+<style>
+  @page {
+    size: A4;
+    margin: 16mm 15mm 18mm 15mm;
+    @bottom-left { content: "Orvexa Cloud · Operator setup checklist"; font-family: "Segoe UI", Arial, sans-serif; font-size: 8pt; color: #8a8fa3; }
+    @bottom-right { content: counter(page) " / " counter(pages); font-family: "Segoe UI", Arial, sans-serif; font-size: 8pt; color: #8a8fa3; }
+  }
+  @page :first { @bottom-left { content: none; } @bottom-right { content: none; } }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Inter, Arial, sans-serif; color: #1f2430; font-size: 10.4pt; line-height: 1.5; margin: 0; }
+  h1, h2, h3, h4 { color: #0b1020; line-height: 1.25; }
+  h1 { font-size: 24pt; margin: 0 0 8px; }
+  h2 { font-size: 15pt; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 2px solid #4f46e5; }
+  h3 { font-size: 12pt; margin: 16px 0 6px; color: #312e81; }
+  h4 { font-size: 10.5pt; margin: 12px 0 4px; }
+  p { margin: 6px 0; }
+  ul, ol { margin: 6px 0 8px 20px; padding: 0; }
+  li { margin: 3px 0; }
+  ol.steps { margin-left: 22px; }
+  ol.steps > li { margin: 7px 0; }
+  code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 8.8pt; background: #f1f2f8; padding: 1px 4px; border-radius: 3px; color: #3730a3; }
+  pre { font-family: Consolas, "Cascadia Mono", monospace; font-size: 8.4pt; background: #0f1222; color: #e6e8f5; padding: 10px 12px; border-radius: 6px; white-space: pre-wrap; page-break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9pt; }
+  th { background: #eef0fb; color: #1e1b4b; text-align: left; font-weight: 600; }
+  th, td { border: 1px solid #d9dcea; padding: 5px 7px; vertical-align: top; }
+  .section { page-break-before: always; }
+  .cover { min-height: 250mm; display: flex; flex-direction: column; justify-content: space-between; padding: 28mm 4mm 0; }
+  .cover .logo { width: 52px; height: 52px; border-radius: 12px; background: #0b1020; color: #fff; font-weight: 700; font-size: 22pt; display: flex; align-items: center; justify-content: center; }
+  .cover .bar { height: 6px; width: 120px; background: linear-gradient(90deg, #4f46e5, #7c3aed); border-radius: 3px; margin: 16px 0; }
+  .cover .sub { font-size: 13pt; color: #4b5068; }
+  .cover .meta { font-size: 10pt; color: #5b6075; border-top: 1px solid #d9dcea; padding-top: 10px; }
+  .muted { color: #5b6075; }
+  .note, .warn, .stop, .ok { border-left: 4px solid; padding: 8px 12px; margin: 10px 0; border-radius: 4px; page-break-inside: avoid; }
+  .note { border-color: #4f46e5; background: #f3f3fe; }
+  .warn { border-color: #d97706; background: #fff8eb; }
+  .stop { border-color: #dc2626; background: #fef2f2; }
+  .ok { border-color: #059669; background: #ecfdf5; }
+  .box { border: 1px solid #d9dcea; border-radius: 6px; padding: 10px 12px; margin: 8px 0 12px; page-break-inside: avoid; }
+  .check { list-style: none; margin-left: 0; }
+  .check li { margin: 5px 0; padding-left: 22px; position: relative; }
+  .check li::before { content: "☐"; position: absolute; left: 0; color: #4f46e5; font-size: 12pt; }
+  .phase { display: inline-block; background: #4f46e5; color: #fff; font-size: 8pt; font-weight: 700; letter-spacing: .04em; padding: 2px 8px; border-radius: 10px; margin-right: 6px; vertical-align: middle; }
+  .toc ol { list-style: none; margin-left: 0; counter-reset: toc; }
+  .toc > ol > li { counter-increment: toc; font-weight: 600; margin-top: 5px; }
+  .toc > ol > li::before { content: counter(toc) ". "; color: #4f46e5; }
+  .toc ol ol { margin-left: 20px; font-weight: 400; color: #4b5068; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  pre.diagram { white-space: pre; font-size: 7.2pt; line-height: 1.35; }
+  .keep { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="logo">O</div>
+      <div><strong style="font-size:14pt">Orvexa Tech</strong><br /><span class="muted">Orvexa Cloud Platform</span></div>
+    </div>
+    <h1>What You Need To Do</h1>
+    <div class="bar"></div>
+    <div class="sub">Step-by-step operator checklist to take Orvexa Cloud live</div>
+    <p class="muted" style="max-width:155mm;margin-top:16px">A click-by-click guide for GitHub, MongoDB Atlas, Render and Cloudflare. Finish every staging step and the failure drills before you touch production. Do the phases in order — later phases need values created earlier.</p>
+    <div class="stop" style="margin-top:22px"><strong>Hard rule.</strong> Staging first. Production second. Never open Atlas to <code>0.0.0.0/0</code>. Never put JWT, Razorpay or Resend keys in GitHub Actions. Never seed the production database.</div>
+  </div>
+  <div class="meta">
+    Version 1.0 &nbsp;·&nbsp; 15 October 2026 &nbsp;·&nbsp; Companion to <code>docs/PRODUCTION_DEPLOYMENT.md</code><br />
+    Audience: platform owner / operator &nbsp;·&nbsp; Time: staging 1–2 days · production cutover ~2 hours with the owner present<br />
+    Baseline cost after launch: about $70–80 / month (Atlas M10 + Render Starter + Cloudflare Workers Paid), plus seat fees
+  </div>
+</div>
+
+<div class="section toc">
+  <h2>Contents</h2>
+  <ol>
+    <li>How to use this document</li>
+    <li>Accounts, cards and access you must have first</li>
+    <li>Phase 0 — Prepare secrets and the git repo</li>
+    <li>Phase 1 — GitHub organisation, branches and rules</li>
+    <li>Phase 2 — MongoDB Atlas (staging project)</li>
+    <li>Phase 3 — Render API (staging service)</li>
+    <li>Phase 4 — Cloudflare edge (staging hostnames)</li>
+    <li>Phase 5 — Connect GitHub Actions and do the first staging deploy</li>
+    <li>Phase 6 — Staging failure and rollback drills (mandatory)</li>
+    <li>Phase 7 — Production Atlas, Render and Cloudflare</li>
+    <li>Phase 8 — Launch-day cutover (owner present)</li>
+    <li>Appendix — Secret worksheet, DNS table, rollbacks, troubleshooting</li>
+  </ol>
+</div>
+
+<div class="section">
+  <h2>1. How to use this document</h2>
+  <p>Print this PDF or keep it open beside the four dashboards. Tick every box before you move on. If a verification at the end of a phase fails, stop and fix that phase — do not skip ahead.</p>
+  <ul>
+    <li><strong>You</strong> click through GitHub, Atlas, Render and Cloudflare. The repository already contains the code, <code>render.yaml</code>, Workers, and GitHub Actions.</li>
+    <li><strong>Staging</strong> uses <code>*.staging.orvexacloud.in</code> and the free Atlas M0 cluster.</li>
+    <li><strong>Production</strong> uses <code>*.orvexacloud.in</code> and a dedicated Atlas M10 in AWS Singapore.</li>
+    <li>Text in <code>monospace</code> is a value to type, a hostname, or a file in this repo.</li>
+  </ul>
+  <div class="note"><strong>Chicken-and-egg (Atlas ↔ Render).</strong> Atlas must not allow the whole internet. Render will not become healthy until Atlas allows Render’s Singapore outbound IPs. Create the cluster and users first with <em>no</em> open world access, create the Render service (it will fail health once), copy the outbound IPs into Atlas, then wait for health. That sequence is written into Phases 2 and 3.</div>
+  <h3>What “done” looks like</h3>
+  <ul>
+    <li><code>https://api.orvexacloud.in/api/health</code> returns <code>{"ok":true,"commit":"&lt;the git sha you just deployed&gt;"}</code></li>
+    <li><code>https://admin.orvexacloud.in</code> asks for a Cloudflare email PIN, then the Orvexa admin sign-in</li>
+    <li><code>https://app.orvexacloud.in</code> is the seller portal</li>
+    <li><code>https://lunar.orvexacloud.in</code> (after you provision a real store) is a storefront</li>
+    <li>Product photos load from <code>https://media.orvexacloud.in</code></li>
+    <li>There is exactly one super admin, created with the bootstrap key, and that key has been deleted</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>2. Accounts, cards and access you must have first</h2>
+  <p>Create these before Phase 0. Use a company email, not a personal Gmail, for every owner login.</p>
+  <table>
+    <tr><th style="width:22%">Service</th><th style="width:28%">Plan / product</th><th>Why</th></tr>
+    <tr><td>GitHub</td><td>Organization on the <strong>Team</strong> plan (required for environment reviewers on a private repo)</td><td>Branch rules, CODEOWNERS, deploy approvals</td></tr>
+    <tr><td>MongoDB Atlas</td><td>Ability to create two <strong>projects</strong></td><td>Isolated staging vs production</td></tr>
+    <tr><td>Render</td><td>Workspace that can run a Singapore <strong>Starter</strong> web service</td><td>Express API</td></tr>
+    <tr><td>Cloudflare</td><td>Domain <code>orvexacloud.in</code> on Cloudflare DNS + <strong>Workers Paid</strong></td><td>Edge, shop router, R2, Access</td></tr>
+    <tr><td>Resend</td><td>Sending domain <code>mail.orvexacloud.in</code></td><td>Owner emails</td></tr>
+    <tr><td>Razorpay</td><td>Live account (India) when you are ready to charge</td><td>Subscriptions</td></tr>
+  </table>
+  <div class="warn"><strong>Cards.</strong> Atlas M10 and Render Starter need a payment method. Workers Paid is a few dollars a month. Do not start production cutover on trial credits that expire that week.</div>
+  <h3>People</h3>
+  <ul>
+    <li>At least two GitHub users in team <code>@orvexa/platform</code> so production deploys cannot be a single-person push.</li>
+    <li>The business owner available for Phase 8 (about two hours).</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2><span class="phase">PHASE 0</span> Prepare secrets and the git repo</h2>
+  <p>Do this on your laptop. Store every generated value in a password manager (1Password / Bitwarden), not in chat, not in a spreadsheet in Drive, not in this PDF.</p>
+
+  <h3>0.1 Confirm you are in the right folder</h3>
+  <pre>cd C:\Users\Black\Downloads\orvexacloud-production-hardened\orvexacloud
+dir render.yaml
+dir .github\workflows
+dir infra\cloudflare</pre>
+  <p>You should see <code>render.yaml</code>, the five workflow files, and the shop-router Worker. If any are missing, stop — you are in the wrong copy of the project.</p>
+
+  <h3>0.2 Generate secrets (run each line once per environment)</h3>
+  <p>You need two independent sets: one labelled <strong>STAGING</strong>, one labelled <strong>PRODUCTION</strong>. Never reuse a production secret on staging.</p>
+  <pre>node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</pre>
+  <p>Run it until you have filled the worksheet in the appendix. Minimum set:</p>
+  <table>
+    <tr><th>Name</th><th>How</th><th>Where it will live</th></tr>
+    <tr><td><code>JWT_SECRET</code></td><td>32+ hex chars (command above)</td><td>Render only</td></tr>
+    <tr><td><code>JWT_REFRESH_SECRET</code></td><td>A <em>different</em> 32+ hex value</td><td>Render only</td></tr>
+    <tr><td><code>ADMIN_BOOTSTRAP_KEY</code></td><td>Another 32+ hex value (≥ 16 chars)</td><td>Render only, deleted after first admin</td></tr>
+    <tr><td><code>SIGNUP_SIGNING_SECRETS</code></td><td>Another 32+ hex value</td><td>Render + marketing-site connector</td></tr>
+  </table>
+  <div class="stop"><strong>Do not use</strong> the placeholder strings from <code>.env.example</code>. The server refuses those in production.</div>
+
+  <h3>0.3 Push this repo to the GitHub organization</h3>
+  <ol class="steps">
+    <li>On GitHub.com click <strong>New organization</strong> (or open the existing Orvexa org). Team plan.</li>
+    <li>Create a <strong>private</strong> repository, for example <code>orvexa/orvexacloud</code>.</li>
+    <li>From this folder:
+      <pre>git remote add origin https://github.com/orvexa/orvexacloud.git
+git branch -M main
+git push -u origin main</pre>
+    </li>
+    <li>Create the <code>staging</code> branch from <code>main</code> and push it:
+      <pre>git checkout -b staging
+git push -u origin staging</pre>
+    </li>
+  </ol>
+  <ul class="check">
+    <li>Repo is private under the org</li>
+    <li>Branches <code>main</code> and <code>staging</code> both exist on GitHub</li>
+    <li>Secrets worksheet started (appendix)</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2><span class="phase">PHASE 1</span> GitHub organisation, branches and rules</h2>
+  <p>Open the repository on GitHub.com. Complete every step in this phase before Atlas.</p>
+
+  <h3>1.1 Create the review team</h3>
+  <ol class="steps">
+    <li>Org → <strong>Teams</strong> → <strong>New team</strong>.</li>
+    <li>Name: <code>platform</code>. Visibility: Visible.</li>
+    <li>Add at least two people (you + a second engineer or the owner’s technical deputy).</li>
+    <li>Repo → <strong>Settings</strong> → <strong>Collaborators and teams</strong> → Add team <code>platform</code> with <strong>Write</strong> (or Maintain).</li>
+  </ol>
+  <p>This matches <code>.github/CODEOWNERS</code>, which requires <code>@orvexa/platform</code> on every change. If your org handle is not <code>orvexa</code>, edit CODEOWNERS to <code>@YOURORG/platform</code> in a PR before locking the branch.</p>
+
+  <h3>1.2 Branch rulesets (do this twice: <code>staging</code> and <code>main</code>)</h3>
+  <ol class="steps">
+    <li>Repo → <strong>Settings</strong> → <strong>Rules</strong> → <strong>Rulesets</strong> → <strong>New ruleset</strong> → <strong>New branch ruleset</strong>.</li>
+    <li>Name: <code>protect-staging</code> (then later <code>protect-main</code>).</li>
+    <li>Enforcement: <strong>Active</strong>.</li>
+    <li>Target branches: add the branch name (<code>staging</code> or <code>main</code>).</li>
+    <li>Tick:
+      <ul>
+        <li>Restrict deletions</li>
+        <li>Block force pushes</li>
+        <li>Require a pull request before merging — at least <strong>1</strong> approval</li>
+        <li>Require review from Code Owners</li>
+        <li>Require conversation resolution before merging</li>
+        <li>Require status checks to pass — after the first workflow run, add <code>check</code> and <code>scan</code></li>
+      </ul>
+    </li>
+    <li>Do <em>not</em> allow the bypass list except org admins, and only for a written incident.</li>
+    <li>Save. Repeat for <code>main</code>.</li>
+  </ol>
+  <div class="warn">Status checks cannot be selected until they have run once. Come back to this screen after Phase 5’s first pull request and attach <code>Check &amp; Audit / check</code> and <code>Secret Scan / scan</code>.</div>
+
+  <h3>1.3 Environments</h3>
+  <ol class="steps">
+    <li>Repo → <strong>Settings</strong> → <strong>Environments</strong> → <strong>New environment</strong> → name <code>staging</code>. Save (reviewers optional).</li>
+    <li><strong>New environment</strong> → name <code>production</code>.</li>
+    <li>On <code>production</code>: enable <strong>Required reviewers</strong> → add team <code>platform</code>. Deployment branches: only <code>main</code>.</li>
+  </ol>
+  <p>Do not add application secrets here yet. That is Phase 5 (hooks and Cloudflare tokens only).</p>
+
+  <ul class="check">
+    <li>Team <code>platform</code> exists with two members</li>
+    <li>Rulesets active on <code>staging</code> and <code>main</code></li>
+    <li>Environments <code>staging</code> and <code>production</code> exist; production has a required reviewer</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2><span class="phase">PHASE 2</span> MongoDB Atlas — staging project</h2>
+  <p>Use a <strong>new Atlas project</strong>. Do not put staging data in a cluster you later promote to production.</p>
+
+  <h3>2.1 Create the project and cluster</h3>
+  <ol class="steps">
+    <li>cloud.mongodb.com → <strong>New Project</strong> → name <code>orvexa-staging</code>.</li>
+    <li><strong>Build a Database</strong> → <strong>M0</strong> Free → provider AWS (any region is fine for staging) → name the cluster <code>orvexa-staging</code>.</li>
+    <li>Skip the “create a user + allow 0.0.0.0/0” shortcut if Atlas offers it. You will create users yourself and you will <strong>not</strong> allow the world.</li>
+  </ol>
+
+  <h3>2.2 Database users (least privilege)</h3>
+  <ol class="steps">
+    <li><strong>Database Access</strong> → <strong>Add New Database User</strong>.</li>
+    <li>User <code>orvexa_master</code>. Authentication: Password. Generate a long password; save it in the password manager as <code>STAGING_MONGO_MASTER_PASSWORD</code>.</li>
+    <li>Privileges: <strong>Specific privileges</strong> → <code>readWrite</code> on database <code>orvexatech_master</code>. Add user.</li>
+    <li><strong>Add New Database User</strong> again. User <code>orvexa_tenant</code>. New password → <code>STAGING_MONGO_TENANT_PASSWORD</code>.</li>
+    <li>Privileges: <code>readWrite</code> on database name <code>orvexa_tenant_*</code> if Atlas offers a wildcard, otherwise <code>readWriteAnyDatabase</code> only if wildcard is unavailable — tighten later. Prefer a custom role limited to the <code>orvexa_tenant_</code> prefix.</li>
+  </ol>
+
+  <h3>2.3 Network access — leave it closed for now</h3>
+  <ol class="steps">
+    <li><strong>Network Access</strong>. If Atlas created <code>0.0.0.0/0</code>, <strong>delete it immediately</strong>.</li>
+    <li>Leave the list empty, or add only your own office IP so you can use Compass if you need it. You will add Render IPs in Phase 3.3.</li>
+  </ol>
+
+  <h3>2.4 Copy the connection strings</h3>
+  <ol class="steps">
+    <li>Cluster → <strong>Connect</strong> → <strong>Drivers</strong> → Node.js.</li>
+    <li>Copy the SRV host, for example <code>orvexa-staging.xxxxx.mongodb.net</code>.</li>
+    <li>Build these two URIs (passwords URL-encoded if they contain <code>@</code> <code>/</code> <code>#</code>):</li>
+  </ol>
+  <pre>MONGODB_MASTER_URI=
+mongodb+srv://orvexa_master:PASSWORD@HOST/orvexatech_master?retryWrites=true&amp;w=majority
+
+MONGODB_TENANT_BASE_URI=
+mongodb+srv://orvexa_tenant:PASSWORD@HOST/orvexa_tenant_</pre>
+  <div class="note">The tenant URI must end with the database <em>prefix</em> <code>orvexa_tenant_</code>. The API appends the store slug and calls <code>useDb('orvexa_tenant_' + slug, { useCache: true })</code>.</div>
+
+  <ul class="check">
+    <li>Project <code>orvexa-staging</code> + M0 cluster exist</li>
+    <li>Users <code>orvexa_master</code> and <code>orvexa_tenant</code> created; passwords stored</li>
+    <li>No <code>0.0.0.0/0</code> entry</li>
+    <li>Both URIs written on the staging secret worksheet</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2><span class="phase">PHASE 3</span> Render — staging API</h2>
+
+  <h3>3.1 Create the Blueprint</h3>
+  <ol class="steps">
+    <li>dashboard.render.com → <strong>New</strong> → <strong>Blueprint</strong>.</li>
+    <li>Connect the GitHub org and the <code>orvexacloud</code> repo (read access is enough; Render must <em>not</em> auto-deploy).</li>
+    <li>Render reads <code>render.yaml</code>. You will see <code>orvexa-api-staging</code> and <code>orvexa-api-production</code>.</li>
+    <li>Apply <strong>only</strong> <code>orvexa-api-staging</code> now. Leave production for Phase 7.</li>
+    <li>Region must be <strong>Singapore</strong>. Plan <strong>Starter</strong>.</li>
+  </ol>
+  <div class="stop"><strong>Auto-Deploy must be No / off.</strong> Open the new service → Settings → Build &amp; Deploy → Auto-Deploy → <strong>No</strong>. The repo already sets <code>autoDeploy: false</code>; confirm the UI matches.</div>
+
+  <h3>3.2 Bind staging secrets</h3>
+  <p>Service → <strong>Environment</strong>. Values already set by the blueprint stay. Fill every blank (<code>sync: false</code>) from the staging worksheet:</p>
+  <table>
+    <tr><th>Key</th><th>Value</th></tr>
+    <tr><td><code>MONGODB_MASTER_URI</code></td><td>Staging master URI from Phase 2.4</td></tr>
+    <tr><td><code>MONGODB_TENANT_BASE_URI</code></td><td>Staging tenant prefix URI</td></tr>
+    <tr><td><code>JWT_SECRET</code></td><td>Staging JWT</td></tr>
+    <tr><td><code>JWT_REFRESH_SECRET</code></td><td>Different staging refresh JWT</td></tr>
+    <tr><td><code>ADMIN_BOOTSTRAP_KEY</code></td><td>Staging bootstrap key</td></tr>
+    <tr><td><code>SIGNUP_SIGNING_SECRETS</code></td><td>Staging signup HMAC</td></tr>
+    <tr><td><code>RESEND_API_KEY</code> / <code>MAIL_FROM</code> / <code>MAIL_REPLY_TO</code></td><td>Staging Resend (or leave empty until mail is verified)</td></tr>
+    <tr><td><code>RAZORPAY_*</code></td><td>Leave empty on staging unless you have test keys</td></tr>
+  </table>
+  <p>Confirm these are already <code>production</code> / correct (blueprint):</p>
+  <ul>
+    <li><code>NODE_ENV=production</code> (yes — even on staging; this is “run the real server”, not “this is the live shop”)</li>
+    <li><code>TRUST_PROXY=1</code></li>
+    <li><code>PLATFORM_ROOT_DOMAIN=staging.orvexacloud.in</code></li>
+    <li><code>PUBLIC_APP_URL=https://admin.staging.orvexacloud.in</code></li>
+    <li><code>VITE_DEMO_MODE=false</code></li>
+  </ul>
+
+  <h3>3.3 Copy Render outbound IPs into Atlas</h3>
+  <ol class="steps">
+    <li>Render service → look for <strong>Outbound</strong> / networking / “static outbound IP”. Singapore Starter publishes the <code>render-prod-sg</code> (or current Singapore) egress list.</li>
+    <li>Copy every IPv4 CIDR shown.</li>
+    <li>Atlas project <code>orvexa-staging</code> → <strong>Network Access</strong> → <strong>Add IP Address</strong> → paste each CIDR → comment <code>render-prod-sg</code>.</li>
+    <li>Still no <code>0.0.0.0/0</code>.</li>
+  </ol>
+
+  <h3>3.4 Health check path and first manual deploy</h3>
+  <ol class="steps">
+    <li>Settings → Health Check Path = <code>/api/health</code>.</li>
+    <li>Manual <strong>Deploy latest commit</strong> once so the instance exists. It may flap until Atlas has the IPs (step 3.3).</li>
+    <li>When the service is Live, open <code>https://&lt;render-hostname&gt;.onrender.com/api/health</code>.</li>
+    <li>You want HTTP 200 and a JSON body like <code>{"ok":true,"commit":"…"}</code>. If you get 503, Atlas still cannot see Render — re-check IPs.</li>
+  </ol>
+
+  <h3>3.5 Create the staging deploy hook</h3>
+  <ol class="steps">
+    <li>Service → <strong>Settings</strong> → <strong>Deploy Hook</strong> → create one. Copy the URL (looks like <code>https://api.render.com/deploy/srv-…?key=…</code>).</li>
+    <li>Save it as <code>RENDER_STAGING_DEPLOY_HOOK</code> in the password manager. GitHub gets this in Phase 5 — nothing else.</li>
+  </ol>
+  <p>Write down the Render service hostname (for the Cloudflare <code>api</code> CNAME), for example <code>orvexa-api-staging.onrender.com</code>.</p>
+
+  <ul class="check">
+    <li>Service <code>orvexa-api-staging</code> in Singapore, Auto-Deploy <strong>No</strong></li>
+    <li>All secrets bound; JWT pair are different</li>
+    <li>Atlas allow-list = Render Singapore IPs only</li>
+    <li><code>/api/health</code> returns <code>ok: true</code> on the Render URL</li>
+    <li>Deploy hook URL stored</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2><span class="phase">PHASE 4</span> Cloudflare — staging hostnames</h2>
+  <p>This phase assumes <code>orvexacloud.in</code> is already on Cloudflare DNS. Staging lives on the <code>staging.orvexacloud.in</code> zone <em>or</em> as names under it. The simplest pattern: treat <code>staging.orvexacloud.in</code> as the staging root and put <code>api.</code>, <code>admin.</code>, <code>app.</code>, <code>shop.</code>, <code>media.</code> in front of it.</p>
+
+  <h3>4.1 SSL / TLS</h3>
+  <ol class="steps">
+    <li>Cloudflare dashboard → domain → <strong>SSL/TLS</strong> → Overview → <strong>Full (strict)</strong>.</li>
+    <li><strong>Edge Certificates</strong> → Minimum TLS Version → <strong>1.2</strong>.</li>
+    <li>Always Use HTTPS: On.</li>
+  </ol>
+
+  <h3>4.2 Create Cloudflare Pages projects (empty, then CI fills them)</h3>
+  <ol class="steps">
+    <li><strong>Workers &amp; Pages</strong> → <strong>Create</strong> → <strong>Pages</strong> → <strong>Direct Upload</strong> (CI will deploy; you only need the project names).</li>
+    <li>Create three staging projects with <em>exactly</em> these names (the workflow uses them):
+      <ul>
+        <li><code>orvexa-admin-staging</code></li>
+        <li><code>orvexa-app-staging</code></li>
+        <li><code>orvexa-shop-staging</code></li>
+      </ul>
+    </li>
+    <li>Each project → Custom domains:
+      <ul>
+        <li>admin project → <code>admin.staging.orvexacloud.in</code></li>
+        <li>app project → <code>app.staging.orvexacloud.in</code></li>
+        <li>shop project → <code>shop.staging.orvexacloud.in</code></li>
+      </ul>
+    </li>
+  </ol>
+
+  <h3>4.3 DNS records</h3>
+  <table>
+    <tr><th>Name</th><th>Type</th><th>Content</th><th>Proxy</th><th>Worker</th></tr>
+    <tr><td><code>api.staging</code></td><td>CNAME</td><td>Render hostname from 3.5</td><td>Proxied (orange)</td><td><strong>None</strong></td></tr>
+    <tr><td><code>admin.staging</code></td><td>CNAME</td><td>Pages admin target Cloudflare shows</td><td>Proxied</td><td><strong>None</strong></td></tr>
+    <tr><td><code>app.staging</code></td><td>CNAME</td><td>Pages app target</td><td>Proxied</td><td><strong>None</strong></td></tr>
+    <tr><td><code>shop.staging</code></td><td>CNAME</td><td>Pages shop target</td><td>Proxied</td><td><strong>None</strong></td></tr>
+    <tr><td><code>media.staging</code></td><td>CNAME</td><td>R2 custom-domain target (4.5)</td><td>Proxied</td><td><strong>None</strong></td></tr>
+    <tr><td><code>*.staging</code></td><td>AAAA</td><td><code>100::</code></td><td>Proxied</td><td><code>orvexa-shop-router-staging</code></td></tr>
+  </table>
+  <div class="warn">Orange-cloud (proxied) on every record above. The AAAA <code>100::</code> is a placeholder so the Worker can answer storefront hosts. Nothing sits behind it.</div>
+
+  <h3>4.4 Worker routes — bypass system hosts</h3>
+  <ol class="steps">
+    <li>Workers &amp; Pages → the shop-router will be published by GitHub in Phase 5. After the first deploy, open it → <strong>Triggers</strong> / Routes.</li>
+    <li>Attach the Worker to <code>*.staging.orvexacloud.in/*</code>.</li>
+    <li>Add <strong>Worker: None</strong> routes (or do not attach the Worker) for:
+      <code>api.staging.orvexacloud.in/*</code>,
+      <code>admin.staging.orvexacloud.in/*</code>,
+      <code>app.staging.orvexacloud.in/*</code>,
+      <code>media.staging.orvexacloud.in/*</code>,
+      <code>www.staging.orvexacloud.in/*</code>,
+      <code>mail.orvexacloud.in/*</code>.</li>
+  </ol>
+
+  <h3>4.5 R2 bucket (staging)</h3>
+  <ol class="steps">
+    <li><strong>R2</strong> → <strong>Create bucket</strong> → name <code>orvexa-media-staging</code>.</li>
+    <li>Settings → <strong>CORS policy</strong> → paste <code>infra/cloudflare/r2-cors.json</code>, then change origins to the staging hosts (<code>https://app.staging.orvexacloud.in</code> for PUT).</li>
+    <li>Connect a custom domain <code>media.staging.orvexacloud.in</code>.</li>
+    <li>Public read: on. Client PUT: only the seller origin in CORS. No public write.</li>
+  </ol>
+
+  <h3>4.6 Zero Trust Access on staging admin (rehearsal for production)</h3>
+  <ol class="steps">
+    <li>Cloudflare One / Zero Trust → <strong>Access</strong> → <strong>Applications</strong> → <strong>Add an application</strong> → Self-hosted.</li>
+    <li>Application domain: <code>admin.staging.orvexacloud.in</code>, path <code>/</code> (the whole site).</li>
+    <li>Identity: One-time PIN (email).</li>
+    <li>Policy: Allow emails in your staff list.</li>
+    <li>Session duration: <strong>8 hours</strong>.</li>
+  </ol>
+
+  <h3>4.7 WAF and rate limit (can wait until production if you want a cleaner rehearsal, but do it on staging if the zone is shared)</h3>
+  <ol class="steps">
+    <li>Security → WAF → Managed rules: on. Bot Fight Mode: on.</li>
+    <li>Security → WAF → Rate limiting rules → create:
+      <ul>
+        <li>If incoming request URI path starts with <code>/api/auth/</code> <em>and</em> hostname is <code>api.staging.orvexacloud.in</code> (and later <code>api.orvexacloud.in</code>)</li>
+        <li>Count: <strong>10 requests per 1 minute</strong> per IP</li>
+        <li>Action: Block for <strong>1 hour</strong></li>
+      </ul>
+    </li>
+  </ol>
+
+  <h3>4.8 Cloudflare API token for GitHub</h3>
+  <ol class="steps">
+    <li>My Profile → <strong>API Tokens</strong> → <strong>Create Token</strong>.</li>
+    <li>Use a custom token: Account → Cloudflare Pages (Edit), Account → Workers Scripts (Edit), Account → Account Settings (Read), Zone → Zone (Read) + DNS (Edit) if you want Wrangler to touch DNS.</li>
+    <li>Include this account only.</li>
+    <li>Copy the token once. Save as <code>CLOUDFLARE_API_TOKEN</code>.</li>
+    <li>Workers &amp; Pages overview → copy <strong>Account ID</strong> → <code>CLOUDFLARE_ACCOUNT_ID</code>.</li>
+  </ol>
+
+  <ul class="check">
+    <li>Full (strict) + TLS 1.2+</li>
+    <li>Three Pages project names match the workflow</li>
+    <li>DNS table applied; system hosts have Worker: None</li>
+    <li>R2 bucket + CORS + media hostname</li>
+    <li>Access PIN on staging admin, 8-hour session</li>
+    <li>API token and account ID stored (for GitHub, not for the app)</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2><span class="phase">PHASE 5</span> Connect GitHub Actions and first staging deploy</h2>
+
+  <h3>5.1 Put only hooks and edge credentials in GitHub</h3>
+  <ol class="steps">
+    <li>Repo → <strong>Settings</strong> → <strong>Environments</strong> → <code>staging</code> → <strong>Add secret</strong>:</li>
+  </ol>
+  <table>
+    <tr><th>Secret</th><th>Value</th></tr>
+    <tr><td><code>RENDER_STAGING_DEPLOY_HOOK</code></td><td>Hook from Phase 3.5</td></tr>
+    <tr><td><code>CLOUDFLARE_API_TOKEN</code></td><td>Token from Phase 4.8</td></tr>
+    <tr><td><code>CLOUDFLARE_ACCOUNT_ID</code></td><td>Account ID from Phase 4.8</td></tr>
+  </table>
+  <p>Optional variables (same environment → Variables):</p>
+  <table>
+    <tr><th>Variable</th><th>Value</th></tr>
+    <tr><td><code>STAGING_API_URL</code></td><td><code>https://api.staging.orvexacloud.in</code></td></tr>
+    <tr><td><code>STAGING_WEB_URL</code></td><td><code>https://admin.staging.orvexacloud.in</code></td></tr>
+  </table>
+  <div class="stop">If you are about to paste <code>JWT_SECRET</code> or <code>MONGODB_MASTER_URI</code> into GitHub, you are in the wrong dashboard. Those stay on Render.</div>
+
+  <h3>5.2 Open a pull request into <code>staging</code></h3>
+  <ol class="steps">
+    <li>Create a tiny branch (docs-only is fine) and open a PR <strong>into <code>staging</code></strong>.</li>
+    <li>Wait for <strong>Check &amp; Audit</strong> and <strong>Secret Scan</strong> to go green.</li>
+    <li>Go back to the branch ruleset and attach those two checks if you could not in Phase 1.</li>
+    <li>Get a <code>platform</code> team approval. Merge.</li>
+  </ol>
+
+  <h3>5.3 Watch the staging deploy</h3>
+  <ol class="steps">
+    <li>Actions tab → workflow <strong>Deploy staging</strong>.</li>
+    <li>It must run: Check → Secret Scan → Pages (admin/app/shop) → shop-router → Render hook with <code>ref=&lt;sha&gt;</code> → wait-for-commit → smoke.</li>
+    <li>If it asks to use the <code>staging</code> environment, approve it.</li>
+  </ol>
+
+  <h3>5.4 Verify by hand</h3>
+  <pre>curl -sS -D- https://api.staging.orvexacloud.in/api/health</pre>
+  <p>Expect:</p>
+  <ul>
+    <li>HTTP 200</li>
+    <li>Header <code>Cache-Control: no-store</code></li>
+    <li>Body <code>{"ok":true,"commit":"&lt;the merged SHA&gt;"}</code> — the SHA must match the merge commit on <code>staging</code></li>
+  </ul>
+  <pre>curl -sS -o NUL -w "%{http_code}" https://api.staging.orvexacloud.in/api/admin/overview</pre>
+  <p>Expect <code>401</code> (not 200). Then open <code>https://admin.staging.orvexacloud.in</code> — you should get the Cloudflare email PIN first.</p>
+
+  <h3>5.5 Bootstrap the staging super admin (optional but useful for drills)</h3>
+  <pre>set API_BASE=https://api.staging.orvexacloud.in
+set ADMIN_BOOTSTRAP_KEY=paste-staging-key
+set ADMIN_EMAIL=you@orvexatech.com
+set ADMIN_PASSWORD=choose-a-long-password
+set CONFIRM_PRODUCTION_BOOTSTRAP=yes
+npm run admin:bootstrap</pre>
+  <p>Then delete <code>ADMIN_BOOTSTRAP_KEY</code> from the <em>staging</em> Render service if you want to rehearse that too. You can leave a staging key only if the staging database is disposable.</p>
+
+  <ul class="check">
+    <li>GitHub staging environment has three secrets only (hook + two Cloudflare values)</li>
+    <li>First PR into <code>staging</code> is green</li>
+    <li>Health commit equals the merge SHA</li>
+    <li>Unauthenticated admin API is 401</li>
+    <li>Access PIN appears on the admin hostname</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2><span class="phase">PHASE 6</span> Staging drills — do not skip</h2>
+  <p>Production cutover is forbidden until all four drills pass. Write the date you completed each one on the last page.</p>
+
+  <h3>Drill A — failed tests must not deploy</h3>
+  <ol class="steps">
+    <li>Open a PR to <code>staging</code> that deliberately breaks a unit test (or add <code>throw new Error('drill')</code> in a test).</li>
+    <li>Confirm <strong>Check &amp; Audit</strong> fails and <strong>Deploy staging</strong> never starts (or stops before the hook).</li>
+    <li>Close the PR. Do not merge it.</li>
+  </ol>
+
+  <h3>Drill B — bad SHA must not take traffic</h3>
+  <ol class="steps">
+    <li>Note the current healthy commit from <code>/api/health</code>.</li>
+    <li>In Render, trigger a deploy of a commit that cannot boot (or temporarily point the hook at a nonsense ref if you are rehearsing wait-for-commit locally).</li>
+    <li>The wait step in Actions should time out. The previous Live instance on Render should still answer the old SHA.</li>
+  </ol>
+
+  <h3>Drill C — rollback.yml restores a known-good SHA</h3>
+  <ol class="steps">
+    <li>Actions → <strong>Rollback</strong> → Run workflow.</li>
+    <li>Target: <code>staging</code>. SHA: the last green merge SHA.</li>
+    <li>Approve the environment if asked.</li>
+    <li>When it finishes, <code>/api/health</code> must report that SHA again.</li>
+  </ol>
+
+  <h3>Drill D — secret scan blocks a leak</h3>
+  <ol class="steps">
+    <li>On a throwaway branch, add a file containing a fake AWS key in the well-known <code>AKIA…</code> shape, or a <code>-----BEGIN RSA PRIVATE KEY-----</code> block.</li>
+    <li>Open a PR. <strong>Secret Scan</strong> must fail. Delete the branch. Never merge it.</li>
+  </ol>
+
+  <div class="ok"><strong>Only after A–D are ticked</strong> do you start Phase 7. If any drill failed, fix the pipeline first.</div>
+  <ul class="check">
+    <li>Drill A date: __________</li>
+    <li>Drill B date: __________</li>
+    <li>Drill C date: __________</li>
+    <li>Drill D date: __________</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2><span class="phase">PHASE 7</span> Production Atlas, Render and Cloudflare</h2>
+  <p>Repeat Phases 2–5 with production names and <strong>new</strong> secrets. Do not copy staging passwords.</p>
+
+  <h3>7.1 Atlas project <code>orvexa-production</code></h3>
+  <ol class="steps">
+    <li><strong>New Project</strong> → <code>orvexa-production</code>.</li>
+    <li>Cluster: <strong>M10 dedicated replica set</strong>, provider <strong>AWS</strong>, region <strong>Singapore</strong> (<code>ap-southeast-1</code> or the Atlas label that matches).</li>
+    <li>Users: new <code>orvexa_master</code> and <code>orvexa_tenant</code> with <em>new</em> passwords.</li>
+    <li>Network: empty except, in a moment, production Render Singapore IPs. <strong>Never</strong> <code>0.0.0.0/0</code>.</li>
+    <li>Build production URIs the same way as 2.4, with the production host and passwords.</li>
+  </ol>
+
+  <h3>7.2 Render service <code>orvexa-api-production</code></h3>
+  <ol class="steps">
+    <li>Apply the remaining service from <code>render.yaml</code>, or New Blueprint → only production.</li>
+    <li>Singapore, Starter (upgrade later if CPU is short). Auto-Deploy <strong>No</strong>.</li>
+    <li>Bind every secret from the <strong>production</strong> worksheet. Set <code>ALLOW_SEED=no</code>.</li>
+    <li>Copy this service’s outbound IPs into Atlas production. Confirm they match Singapore.</li>
+    <li>Health Check Path <code>/api/health</code>.</li>
+    <li>Create <code>RENDER_PRODUCTION_DEPLOY_HOOK</code>.</li>
+    <li>Do <strong>not</strong> run <code>npm run seed</code> against this URI. Ever.</li>
+  </ol>
+
+  <h3>7.3 Cloudflare production hostnames</h3>
+  <p>Create Pages projects <code>orvexa-admin</code>, <code>orvexa-app</code>, <code>orvexa-shop</code>. Create R2 bucket <code>orvexa-media</code> and apply <code>infra/cloudflare/r2-cors.json</code> unchanged (PUT only from <code>https://app.orvexacloud.in</code>).</p>
+  <table>
+    <tr><th>Name</th><th>Type</th><th>Content</th><th>Worker</th></tr>
+    <tr><td><code>api</code></td><td>CNAME</td><td>Production Render hostname</td><td>None</td></tr>
+    <tr><td><code>admin</code></td><td>CNAME</td><td>Pages <code>orvexa-admin</code></td><td>None</td></tr>
+    <tr><td><code>app</code></td><td>CNAME</td><td>Pages <code>orvexa-app</code></td><td>None</td></tr>
+    <tr><td><code>media</code></td><td>CNAME</td><td>R2 <code>orvexa-media</code></td><td>None</td></tr>
+    <tr><td><code>*</code></td><td>AAAA</td><td><code>100::</code></td><td><code>orvexa-shop-router</code></td></tr>
+  </table>
+  <p>Access application on <code>admin.orvexacloud.in</code>, email PIN, 8-hour session, staff inboxes only. Rate limit <code>api.orvexacloud.in/api/auth/</code>: 10 / minute / IP, block 1 hour.</p>
+
+  <h3>7.4 GitHub production environment secrets</h3>
+  <table>
+    <tr><th>Secret</th><th>Environment</th></tr>
+    <tr><td><code>RENDER_PRODUCTION_DEPLOY_HOOK</code></td><td><code>production</code></td></tr>
+    <tr><td><code>CLOUDFLARE_API_TOKEN</code></td><td><code>production</code> (same token is fine)</td></tr>
+    <tr><td><code>CLOUDFLARE_ACCOUNT_ID</code></td><td><code>production</code></td></tr>
+  </table>
+  <p>Variables: <code>PRODUCTION_API_URL=https://api.orvexacloud.in</code>, <code>PRODUCTION_WEB_URL=https://admin.orvexacloud.in</code>.</p>
+
+  <ul class="check">
+    <li>Production Atlas is M10 Singapore, no world-open IP</li>
+    <li>Production Render Auto-Deploy is No; hook stored in GitHub <code>production</code> only</li>
+    <li>Production DNS + Access + WAF + R2 CORS applied</li>
+    <li>No production JWT/Mongo/Razorpay/Resend value exists in GitHub</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2><span class="phase">PHASE 8</span> Launch-day cutover (owner present)</h2>
+  <p>Block two hours. Have Slack/phone with the second <code>platform</code> reviewer. Have the last green <code>staging</code> SHA written down in case you abort and stay on staging.</p>
+
+  <h3>8.1 Pre-flight (15 minutes)</h3>
+  <ul class="check">
+    <li>Atlas production Network Access shows only Render Singapore IPs — screenshot it</li>
+    <li>Render production Auto-Deploy = No</li>
+    <li>Cloudflare SSL = Full (strict)</li>
+    <li>Access is on for <code>admin.orvexacloud.in</code></li>
+    <li>WAF rate limit on <code>/api/auth/</code> is live</li>
+    <li>R2 CORS PUT origin is only <code>https://app.orvexacloud.in</code></li>
+    <li><code>VITE_DEMO_MODE</code> is false in the production workflow (already in the repo)</li>
+    <li>Owner is on the call</li>
+  </ul>
+
+  <h3>8.2 Merge to <code>main</code></h3>
+  <ol class="steps">
+    <li>Open a PR <code>staging</code> → <code>main</code>. Title it with the date, e.g. <code>Release 2026-10-15</code>.</li>
+    <li>Checks green. Code Owners + second reviewer approve.</li>
+    <li>Merge (merge commit or squash — either is fine; copy the resulting SHA).</li>
+    <li>Actions → <strong>Deploy production</strong> starts. The second person approves the <code>production</code> environment.</li>
+    <li>Do not close the laptop until smoke is green.</li>
+  </ol>
+
+  <h3>8.3 Confirm the live SHA</h3>
+  <pre>curl -sS https://api.orvexacloud.in/api/health</pre>
+  <p>The <code>commit</code> field must equal the merge SHA on <code>main</code>. If it does not after 10 minutes, use Rollback (appendix) — do not keep clicking Redeploy.</p>
+
+  <h3>8.4 Create the one production super admin</h3>
+  <pre>set API_BASE=https://api.orvexacloud.in
+set ADMIN_BOOTSTRAP_KEY=paste-production-key
+set ADMIN_EMAIL=owner-or-you@orvexatech.com
+set ADMIN_PASSWORD=long-unique-password
+set ADMIN_NAME=Orvexa Super Admin
+set CONFIRM_PRODUCTION_BOOTSTRAP=yes
+npm run admin:bootstrap</pre>
+  <p>You want HTTP 201. Then immediately:</p>
+  <ol class="steps">
+    <li>Render production → Environment → <strong>delete</strong> <code>ADMIN_BOOTSTRAP_KEY</code> → Save.</li>
+    <li>Confirm a second bootstrap attempt returns 409 or 403.</li>
+  </ol>
+  <div class="stop">Do not run the seeder. Do not create <code>admin@orvexatech.com</code> / <code>admin@password</code>. Those are demo leftovers.</div>
+
+  <h3>8.5 First human sign-in</h3>
+  <ol class="steps">
+    <li>Open <code>https://admin.orvexacloud.in</code>.</li>
+    <li>Complete the Cloudflare email PIN (inbox of the allowed staff address).</li>
+    <li>Sign in with the email and password from 8.4.</li>
+    <li>You should land on the Super Admin overview. There are <strong>zero</strong> demo stores.</li>
+  </ol>
+
+  <h3>8.6 First real merchant</h3>
+  <ol class="steps">
+    <li>Either approve a marketing-site application or use <strong>Provision New Store</strong> for a real brand.</li>
+    <li>Open the storefront URL the dashboard prints. Confirm it is not Lunar demo catalog unless that brand is a real customer.</li>
+    <li>Seller signs in at <code>https://app.orvexacloud.in</code> (or the store dashboard link) with the password you set / the reset email — not a published demo password.</li>
+  </ol>
+
+  <h3>8.7 If anything is wrong</h3>
+  <ol class="steps">
+    <li>Render → the production service → <strong>Manual Rollback</strong> to the previous Live instance (fastest for API).</li>
+    <li>Cloudflare → Workers / Pages → the previous deployment → <strong>Rollback</strong>.</li>
+    <li>Or Actions → <strong>Rollback</strong> → target <code>production</code> → last known-good SHA.</li>
+    <li>Tell the owner you have reverted. Do not keep shipping fixes on live without a new PR.</li>
+  </ol>
+
+  <ul class="check">
+    <li>Health commit = <code>main</code> merge SHA</li>
+    <li>Bootstrap 201, then key deleted</li>
+    <li>PIN + admin password work</li>
+    <li>No demo tenants in the store list</li>
+    <li>Owner agrees “we are live”</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h2>Appendix A — Secret worksheet</h2>
+  <p>Print two copies. Fill by hand. Do not type real values into a shared doc.</p>
+  <h3>Staging</h3>
+  <table>
+    <tr><th style="width:40%">Item</th><th>Stored in password manager as</th><th>Pasted into</th></tr>
+    <tr><td>Atlas master user password</td><td></td><td>Render staging <code>MONGODB_MASTER_URI</code></td></tr>
+    <tr><td>Atlas tenant user password</td><td></td><td>Render staging <code>MONGODB_TENANT_BASE_URI</code></td></tr>
+    <tr><td><code>JWT_SECRET</code></td><td></td><td>Render staging only</td></tr>
+    <tr><td><code>JWT_REFRESH_SECRET</code></td><td></td><td>Render staging only</td></tr>
+    <tr><td><code>ADMIN_BOOTSTRAP_KEY</code></td><td></td><td>Render staging (delete after use)</td></tr>
+    <tr><td><code>SIGNUP_SIGNING_SECRETS</code></td><td></td><td>Render + website connector</td></tr>
+    <tr><td>Render deploy hook</td><td></td><td>GitHub env <code>staging</code></td></tr>
+    <tr><td>Cloudflare API token / account id</td><td></td><td>GitHub env <code>staging</code></td></tr>
+  </table>
+  <h3>Production (different values)</h3>
+  <table>
+    <tr><th style="width:40%">Item</th><th>Stored in password manager as</th><th>Pasted into</th></tr>
+    <tr><td>Atlas master password</td><td></td><td>Render production</td></tr>
+    <tr><td>Atlas tenant password</td><td></td><td>Render production</td></tr>
+    <tr><td><code>JWT_SECRET</code></td><td></td><td>Render production only</td></tr>
+    <tr><td><code>JWT_REFRESH_SECRET</code></td><td></td><td>Render production only</td></tr>
+    <tr><td><code>ADMIN_BOOTSTRAP_KEY</code></td><td></td><td>Render production — delete same day</td></tr>
+    <tr><td><code>SIGNUP_SIGNING_SECRETS</code></td><td></td><td>Render + website connector</td></tr>
+    <tr><td>Resend API key + <code>MAIL_FROM</code></td><td></td><td>Render production</td></tr>
+    <tr><td>Razorpay live key / secret / webhook</td><td></td><td>Render production</td></tr>
+    <tr><td>Render deploy hook</td><td></td><td>GitHub env <code>production</code></td></tr>
+  </table>
+  <pre>node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</pre>
+</div>
+
+<div class="section">
+  <h2>Appendix B — Production DNS (copy into Cloudflare)</h2>
+  <table>
+    <tr><th>Name</th><th>Type</th><th>Content</th><th>Proxy</th><th>Worker</th></tr>
+    <tr><td><code>api</code></td><td>CNAME</td><td><code>orvexa-api-production.onrender.com</code> (use the real hostname)</td><td>On</td><td>None</td></tr>
+    <tr><td><code>admin</code></td><td>CNAME</td><td>Pages project <code>orvexa-admin</code></td><td>On</td><td>None</td></tr>
+    <tr><td><code>app</code></td><td>CNAME</td><td>Pages project <code>orvexa-app</code></td><td>On</td><td>None</td></tr>
+    <tr><td><code>media</code></td><td>CNAME</td><td>R2 bucket <code>orvexa-media</code></td><td>On</td><td>None</td></tr>
+    <tr><td><code>*</code></td><td>AAAA</td><td><code>100::</code></td><td>On</td><td><code>orvexa-shop-router</code></td></tr>
+    <tr><td>Merchant custom domain</td><td>CNAME or Custom Hostname</td><td><code>100::</code> / shop origin</td><td>On</td><td><code>orvexa-shop-router</code></td></tr>
+  </table>
+  <h3>URLs after cutover</h3>
+  <table>
+    <tr><th>URL</th><th>What you should see</th></tr>
+    <tr><td><code>https://api.orvexacloud.in/api/health</code></td><td><code>{"ok":true,"commit":"…"}</code></td></tr>
+    <tr><td><code>https://admin.orvexacloud.in</code></td><td>Cloudflare PIN, then Orvexa admin sign-in</td></tr>
+    <tr><td><code>https://app.orvexacloud.in</code></td><td>Seller portal</td></tr>
+    <tr><td><code>https://&lt;slug&gt;.orvexacloud.in</code></td><td>That merchant’s storefront</td></tr>
+    <tr><td><code>https://media.orvexacloud.in/…</code></td><td>Product image</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h2>Appendix C — Three rollback options</h2>
+  <table>
+    <tr><th style="width:28%">When</th><th>Where</th><th>What you click</th></tr>
+    <tr><td>API is 500 / health is wrong, frontends are fine</td><td>Render → production service</td><td><strong>Manual Rollback</strong> to the previous instance. Fastest.</td></tr>
+    <tr><td>Admin / app / shop look broken, API health is fine</td><td>Cloudflare → Pages / Workers</td><td>Previous deployment → <strong>Rollback</strong></td></tr>
+    <tr><td>You want API + edge on the same old SHA</td><td>GitHub → Actions → <strong>Rollback</strong></td><td>Target <code>production</code>, paste the last green SHA, approve the environment</td></tr>
+  </table>
+  <div class="note">After any rollback, run <code>curl https://api.orvexacloud.in/api/health</code> and confirm the <code>commit</code> you expected. Then tell the owner.</div>
+
+  <h2>Appendix D — Troubleshooting</h2>
+  <table>
+    <tr><th style="width:36%">What you see</th><th>What to do</th></tr>
+    <tr><td>Health 503, <code>ok: false</code></td><td>Atlas cannot see Render. Compare outbound IPs to Network Access. Confirm users and URIs. No <code>0.0.0.0/0</code> “fix”.</td></tr>
+    <tr><td>Health 200 but <code>commit</code> is <code>unknown</code> or an old SHA</td><td>The hook was called without <code>&amp;ref=&lt;sha&gt;</code>, or Auto-Deploy built the wrong commit. Re-run Deploy with the hook; do not type SHAs by hand in Render unless you know the box.</td></tr>
+    <tr><td>Admin page with no PIN</td><td>Access application missing or attached to the wrong hostname.</td></tr>
+    <tr><td>CORS errors in the seller browser</td><td>Add that exact origin to Render <code>CORS_ORIGIN</code>. Custom merchant domains are picked up from the database within a minute.</td></tr>
+    <tr><td>Storefront 404 on <code>brand.orvexacloud.in</code></td><td>Wildcard AAAA + shop-router route missing, or the slug is reserved (<code>admin</code>, <code>api</code>, <code>media</code>, …).</td></tr>
+    <tr><td>Bootstrap 403</td><td>Key too short, placeholder key, or already used. Key must be ≥ 16 random characters and not <code>orvexa_bootstrap_2026</code>.</td></tr>
+    <tr><td>Bootstrap 409</td><td>An admin already exists. Use the admin UI; do not seed.</td></tr>
+    <tr><td>Actions cannot deploy Pages</td><td>Token missing Pages Edit; project name typo; account id wrong.</td></tr>
+    <tr><td>Gitleaks fails on a docs file</td><td>Do not disable the scanner. Move the secret out of git. <code>.gitleaks.toml</code> already ignores <code>docs/</code> and <code>.env.example</code>.</td></tr>
+  </table>
+
+  <h2>Appendix E — Cost reminder</h2>
+  <table>
+    <tr><th>Item</th><th>Monthly (approx.)</th></tr>
+    <tr><td>Atlas M10 dedicated, AWS Singapore</td><td>~$58</td></tr>
+    <tr><td>Render Starter (one production API; staging is extra if you keep it)</td><td>$7 each</td></tr>
+    <tr><td>Cloudflare Workers Paid</td><td>~$5</td></tr>
+    <tr><td>GitHub Team / Render seats</td><td>per user, not in the $70–80 foundation</td></tr>
+  </table>
+  <p class="muted" style="margin-top:28px;text-align:center">© 2026 Orvexa Tech Private Limited · Operator setup checklist v1.0 · Do not store real secrets in this file</p>
+</div>
+
+</body>
+</html>

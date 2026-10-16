@@ -1,0 +1,51 @@
+import type { TenantConfig } from '@/types/tenant'
+
+export const silkhausTenantConfig: TenantConfig = {
+  id: 'tenant_silkhaus_002',
+  slug: 'silkhaus',
+  brandName: 'Silk Haus',
+  ownerName: 'Kavya Menon',
+  ownerEmail: 'kavya@silkhaus.in',
+  ownerPhone: '+91 87654 32109',
+  logo: '',
+  status: 'active',
+  plan: 'starter',
+  createdAt: '2026-08-02',
+  theme: {
+    primaryColor: '#7A2E3B',
+    accentColor: '#C99700',
+    backgroundColor: '#FDFBF7',
+    fontDisplay: "'Playfair Display', Georgia, serif",
+    fontSans: "'Plus Jakarta Sans', system-ui, sans-serif",
+    heroImage: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=1600&q=80',
+    heroHeadline: 'Royal Heritage Silks & Banarasi Splendor',
+    heroSubhead: 'Woven with pure mulberry silk, handcrafted gold zari, and timeless motifs passed down through generations of master weavers.',
+    heroCtaText: 'DISCOVER SILKS →',
+    logoUrl: '',
+    announcementMessages: [
+      'FESTIVE SILK COLLECTION LAUNCHED • FLAT 10% OFF ON BANARASI EDIT',
+      'COMPLIMENTARY BLOUSE STITCHING WITH EVERY SAREE',
+      'EXPRESS 48-HOUR DISPATCH ACROSS INDIA',
+    ],
+    enableAnimations: true,
+    enableReviews: true,
+    enableOrderTracking: true,
+  },
+  subscription: {
+    plan: 'starter',
+    pricePerMonth: 1460,
+    status: 'active',
+    nextBillingDate: '2026-10-02',
+    paymentMethod: 'razorpay',
+    invoices: [
+      { id: 'INV-101', amount: 1460, status: 'paid', date: '2026-09-02', description: 'Starter Plan - September 2026' },
+      { id: 'INV-102', amount: 1460, status: 'paid', date: '2026-08-02', description: 'Starter Plan - August 2026' },
+    ],
+  },
+  databaseConfig: {
+    dbName: 'orvexa_tenant_silkhaus',
+    mongoUri: 'mongodb://localhost:27017/orvexa_tenant_silkhaus',
+    isolationMode: 'dedicated_database',
+    folderPath: 'src/tenants/silkhaus',
+  },
+}

@@ -1,0 +1,43 @@
+# Shop router — paid Workers plan. Attach this worker to the zone catch-all
+# (AAAA 100:: proxied). Do NOT attach it to api / admin / app / media / www / mail / staging.
+# Those hostnames use Worker: None routes in the Cloudflare dashboard.
+
+name = "orvexa-shop-router"
+main = "shop-router/src/index.ts"
+compatibility_date = "2026-10-01"
+workers_dev = false
+
+[vars]
+ROOT_DOMAIN = "orvexacloud.in"
+API_ORIGIN = "https://api.orvexacloud.in"
+SHOP_ORIGIN = "https://shop.orvexacloud.in"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "orvexa-media"
+
+[env.staging]
+name = "orvexa-shop-router-staging"
+workers_dev = false
+
+[env.staging.vars]
+ROOT_DOMAIN = "staging.orvexacloud.in"
+API_ORIGIN = "https://api.staging.orvexacloud.in"
+SHOP_ORIGIN = "https://shop.staging.orvexacloud.in"
+
+[[env.staging.r2_buckets]]
+binding = "MEDIA"
+bucket_name = "orvexa-media-staging"
+
+[env.production]
+name = "orvexa-shop-router"
+workers_dev = false
+
+[env.production.vars]
+ROOT_DOMAIN = "orvexacloud.in"
+API_ORIGIN = "https://api.orvexacloud.in"
+SHOP_ORIGIN = "https://shop.orvexacloud.in"
+
+[[env.production.r2_buckets]]
+binding = "MEDIA"
+bucket_name = "orvexa-media"

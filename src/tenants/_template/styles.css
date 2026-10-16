@@ -1,0 +1,16 @@
+/*
+ * Styles for __STORE_NAME__ only.
+ * Keep every rule under [data-store='__STORE_SLUG__'] so it never leaks into other stores
+ * (the storefront root element carries this attribute).
+ */
+
+[data-store='__STORE_SLUG__'] {
+  /* Example: change the display font for every heading in this store. */
+  /* --font-display: 'Playfair Display', Georgia, serif; */
+}
+
+/* Example: round the product images.
+[data-store='__STORE_SLUG__'] .aspect-\[4\/5\] {
+  border-radius: 12px;
+}
+*/

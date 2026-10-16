@@ -1,0 +1,50 @@
+import type { TenantConfig } from '@/types/tenant'
+
+export const khadistudioTenantConfig: TenantConfig = {
+  id: 'tenant_khadistudio_003',
+  slug: 'khadistudio',
+  brandName: 'Khadi Studio',
+  ownerName: 'Arjun Patel',
+  ownerEmail: 'arjun@khadistudio.co',
+  ownerPhone: '+91 76543 21098',
+  logo: '',
+  status: 'active',
+  plan: 'starter',
+  createdAt: '2026-08-20',
+  theme: {
+    primaryColor: '#2C4A3E',
+    accentColor: '#8FA89B',
+    backgroundColor: '#F7F9F6',
+    fontDisplay: "'Cormorant Garamond', Georgia, serif",
+    fontSans: "'Inter', system-ui, sans-serif",
+    heroImage: 'https://images.unsplash.com/photo-1558769132-cb1aea458c5e?auto=format&fit=crop&w=1600&q=80',
+    heroHeadline: 'Sustainable Handspun Khadi & Organic Living',
+    heroSubhead: 'Slow fashion crafted on traditional charkhas with naturally dyed organic fibers. Kind to your skin, gentle on the earth.',
+    heroCtaText: 'VIEW KHADI COLLECTION →',
+    logoUrl: '',
+    announcementMessages: [
+      'ZERO-CARBON SUSTAINABLE FASHION • 100% ORGANIC CERTIFIED KHADI',
+      'PLANT-BASED NATURAL DYES • ZERO TOXIC CHEMICALS',
+      'PLANT A TREE WITH EVERY PURCHASE OVER ₹1,500',
+    ],
+    enableAnimations: true,
+    enableReviews: true,
+    enableOrderTracking: true,
+  },
+  subscription: {
+    plan: 'starter',
+    pricePerMonth: 1460,
+    status: 'active',
+    nextBillingDate: '2026-10-20',
+    paymentMethod: 'razorpay',
+    invoices: [
+      { id: 'INV-201', amount: 1460, status: 'paid', date: '2026-08-20', description: 'Starter Plan - August 2026' },
+    ],
+  },
+  databaseConfig: {
+    dbName: 'orvexa_tenant_khadistudio',
+    mongoUri: 'mongodb://localhost:27017/orvexa_tenant_khadistudio',
+    isolationMode: 'dedicated_database',
+    folderPath: 'src/tenants/khadistudio',
+  },
+}
