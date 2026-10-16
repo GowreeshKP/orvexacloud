@@ -490,14 +490,22 @@ router.post('/seller/change-password', async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────────────
 const PUBLISHED_BOOTSTRAP_KEYS = new Set(['orvexa_bootstrap_2026'])
 
+function bootstrapKeyMatches(provided: string | null): boolean {
+  const expected = process.env.ADMIN_BOOTSTRAP_KEY
+  const usable = Boolean(expected && expected.length >= 16 && !PUBLISHED_BOOTSTRAP_KEYS.has(expected))
+  return Boolean(
+    usable &&
+      provided &&
+      expected &&
+      provided.length === expected.length &&
+      crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected)),
+  )
+}
+
 router.post('/admin/bootstrap', async (req: Request, res: Response) => {
   try {
-    const BOOTSTRAP_KEY = process.env.ADMIN_BOOTSTRAP_KEY
     const provided = credential(req.body?.bootstrapKey, 500)
-    const usable = BOOTSTRAP_KEY && BOOTSTRAP_KEY.length >= 16 && !PUBLISHED_BOOTSTRAP_KEYS.has(BOOTSTRAP_KEY)
-    const matches =
-      usable && provided && provided.length === BOOTSTRAP_KEY.length && crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(BOOTSTRAP_KEY))
-    if (!matches) {
+    if (!bootstrapKeyMatches(provided)) {
       res.status(403).json({ error: 'Invalid bootstrap key.' })
       return
     }
@@ -531,6 +539,48 @@ router.post('/admin/bootstrap', async (req: Request, res: Response) => {
     })
   } catch (err) {
     serverError(res, 'bootstrap', err, 'Bootstrap failed')
+  }
+})
+
+// POST /api/auth/admin/recover — reset the existing super admin password with the same
+// bootstrap key. Use this when bootstrap already ran and the password was lost.
+// Body: { bootstrapKey, password, email? }
+router.post('/admin/recover', async (req: Request, res: Response) => {
+  try {
+    const provided = credential(req.body?.bootstrapKey, 500)
+    if (!bootstrapKeyMatches(provided)) {
+      res.status(403).json({ error: 'Invalid bootstrap key.' })
+      return
+    }
+
+    const password = validNewPassword(req.body?.password)
+    if (!password || password.length < 12) {
+      res.status(400).json({ error: 'A password of at least 12 characters is required.' })
+      return
+    }
+
+    const masterDb = await connectMasterDatabase()
+    const AdminUser = getAdminUserModel(masterDb)
+    const email = credential(req.body?.email)?.toLowerCase()
+    const admin = email
+      ? await AdminUser.findOne({ email })
+      : await AdminUser.findOne({}).sort({ createdAt: 1 })
+    if (!admin) {
+      res.status(404).json({ error: 'No super admin exists. Use /api/auth/admin/bootstrap first.' })
+      return
+    }
+
+    admin.passwordHash = await bcrypt.hash(password, 12)
+    await admin.save()
+    await getRefreshTokenModel(masterDb).deleteMany({ userId: admin.id })
+    console.warn('[bootstrap] Super admin password recovered. Delete ADMIN_BOOTSTRAP_KEY from the host now.')
+    res.json({
+      success: true,
+      email: admin.email,
+      message: 'Admin password reset. Delete ADMIN_BOOTSTRAP_KEY from Render immediately.',
+    })
+  } catch (err) {
+    serverError(res, 'admin recover', err, 'Admin recovery failed')
   }
 })
 

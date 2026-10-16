@@ -153,6 +153,11 @@ describe('authentication', () => {
     const r = await api('POST', '/api/auth/admin/bootstrap', { body: { bootstrapKey: 'orvexa_bootstrap_2026', email: 'evil@x.test', password: 'Evil-Password-123' } })
     assert.equal(r.status, 403)
   })
+
+  test('admin recover rejects the published default key', async () => {
+    const r = await api('POST', '/api/auth/admin/recover', { body: { bootstrapKey: 'orvexa_bootstrap_2026', password: 'Evil-Password-123' } })
+    assert.equal(r.status, 403)
+  })
 })
 
 describe('role-based access control', () => {

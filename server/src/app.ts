@@ -128,7 +128,7 @@ export function createApp() {
     legacyHeaders: false,
     message: { error: 'Too many login attempts. Please wait 15 minutes before trying again.' },
   })
-  const credentialPaths = /\/(login|forgot-password|reset-password|change-password|bootstrap)$/
+  const credentialPaths = /\/(login|forgot-password|reset-password|change-password|bootstrap|recover)$/
 
   // Signup connector — 60 requests / minute per IP
   const publicLimiter = rateLimit({

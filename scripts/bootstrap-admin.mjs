@@ -2,7 +2,7 @@
  * One-time production super-admin bootstrap. Refuses unless NODE_ENV-style confirm is set.
  * After success, delete ADMIN_BOOTSTRAP_KEY from Render immediately.
  *
- *   API_BASE=https://api.orvexacloud.in \
+ *   API_BASE=https://orvexa-api-nskw.onrender.com \
  *   ADMIN_BOOTSTRAP_KEY=... \
  *   ADMIN_EMAIL=you@orvexatech.com \
  *   ADMIN_PASSWORD='...' \

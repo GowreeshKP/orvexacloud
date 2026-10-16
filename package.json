@@ -14,6 +14,8 @@
     "deploy:wait": "node scripts/wait-for-commit.mjs",
     "deploy:smoke": "node scripts/prod-smoke.mjs",
     "admin:bootstrap": "node scripts/bootstrap-admin.mjs",
+    "admin:recover": "node scripts/recover-admin.mjs",
+    "seller:set-password": "node scripts/set-seller-password.mjs",
     "pages:deploy": "wrangler pages deploy dist --project-name orvexa-cloud"
   },
   "dependencies": {
