@@ -13,7 +13,8 @@
     "server:install": "cd server && npm install",
     "deploy:wait": "node scripts/wait-for-commit.mjs",
     "deploy:smoke": "node scripts/prod-smoke.mjs",
-    "admin:bootstrap": "node scripts/bootstrap-admin.mjs"
+    "admin:bootstrap": "node scripts/bootstrap-admin.mjs",
+    "pages:deploy": "wrangler pages deploy dist --project-name orvexa-cloud"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

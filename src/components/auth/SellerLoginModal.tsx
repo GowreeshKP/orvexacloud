@@ -4,6 +4,7 @@
 
 import { useState, useCallback } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { API_ORIGIN as API_BASE } from '@/lib/api-base'
 
 interface Props {
   isOpen: boolean
@@ -25,8 +26,6 @@ export default function SellerLoginModal({ isOpen, onClose, onSuccess }: Props) 
   const [forgotLoading, setForgotLoading] = useState(false)
   const [forgotError, setForgotError] = useState<string | null>(null)
   const [forgotResetToken, setForgotResetToken] = useState<string | null>(null)
-
-  const API_BASE = import.meta.env.VITE_API_URL || ''
 
   const handleLogin = useCallback(
     async (e: React.FormEvent) => {

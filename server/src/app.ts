@@ -65,6 +65,10 @@ export function createApp() {
     if (host === PLATFORM_ROOT_DOMAIN || host === `www.${PLATFORM_ROOT_DOMAIN}` || host.endsWith(`.${PLATFORM_ROOT_DOMAIN}`)) {
       return true
     }
+    // Free Cloudflare Pages project + its preview aliases.
+    if (host === 'orvexa-cloud.pages.dev' || host.endsWith('.orvexa-cloud.pages.dev')) {
+      return true
+    }
     const now = Date.now()
     if (now - customHostCache.at > 60_000) {
       try {

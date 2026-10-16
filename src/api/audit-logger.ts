@@ -2,6 +2,8 @@
 // Tracks all administrative, security, authentication, catalog, order, and configuration events
 // across the multi-tenant SaaS platform and individual merchant storefronts.
 
+import { API_BASE } from '@/lib/api-base'
+
 export type AuditCategory =
   | 'auth'
   | 'security'
@@ -45,7 +47,6 @@ export interface AuditFilterOptions {
 }
 
 const STORAGE_KEY = 'orvexa_audit_logs_v1'
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
 // Initial pre-seeded audit history for enterprise realism
 const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [

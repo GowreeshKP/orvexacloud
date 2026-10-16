@@ -12,6 +12,7 @@ import {
 import { mockStore } from '@/api/mock-store'
 import { DEMO_MODE } from '@/api/auth'
 import { useAuth } from '@/hooks/useAuth'
+import { API_BASE } from '@/lib/api-base'
 
 function deepCloneTenant(config: TenantConfig): TenantConfig {
   return JSON.parse(JSON.stringify(config))
@@ -49,7 +50,6 @@ export function useSwitchLayer() {
   return useContext(TenantContext).switchLayer
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
 /** The older sign-in (used by the seller and admin login forms) keeps its token in localStorage. */
 function storedSignInToken(): string | null {

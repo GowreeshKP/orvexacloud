@@ -1,0 +1,8 @@
+# Cloudflare Pages — frontend (free).
+# Build: npm ci && npm run build
+# Output: dist
+# Set VITE_API_URL / VITE_API_BASE_URL / VITE_DEMO_MODE on the Pages project.
+
+name = "orvexa-cloud"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-10-16"

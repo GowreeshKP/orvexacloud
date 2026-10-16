@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react'
 import { authService, type StoreCredentialInfo } from '@/api/auth'
 import type { TenantConfig } from '@/types/tenant'
 import { storeAddress } from '@/data/plans'
+import { API_BASE } from '@/lib/api-base'
 
 interface Props {
   tenant: TenantConfig | null
@@ -58,7 +59,6 @@ export default function StoreCredentialsModal({ tenant, isOpen, onClose, onSucce
       }
 
       // Fetch staff from backend
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
       authService.getValidAdminToken().then((token) => {
         fetch(`${API_BASE}/admin/tenants/${tenant.slug}/staff`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -135,7 +135,6 @@ export default function StoreCredentialsModal({ tenant, isOpen, onClose, onSucce
 
     setStaffLoading(true)
     setStaffMsg(null)
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
     const token = await authService.getValidAdminToken()
 
     try {
@@ -181,7 +180,6 @@ export default function StoreCredentialsModal({ tenant, isOpen, onClose, onSucce
   }
 
   const handleDeleteStaff = async (staffId: string) => {
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
     const token = await authService.getValidAdminToken()
     try {
       await fetch(`${API_BASE}/admin/tenants/${tenant.slug}/staff/${staffId}`, {

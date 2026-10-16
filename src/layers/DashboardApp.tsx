@@ -7,6 +7,7 @@ import { mockStore } from '@/api/mock-store'
 import { auditLogger } from '@/api/audit-logger'
 import { PLAN_CATALOG, formatPlanPrice, normalizePlanId, storeAddress } from '@/data/plans'
 import { tenantPortalPath } from '@/lib/store-urls'
+import { API_BASE } from '@/lib/api-base'
 import { fetchStoreAnalytics, fetchDomainConfig, saveCustomDomain } from '@/api/storefront-analytics'
 import { storeInbox, STORE_INBOX_EVENT, type NewsletterSubscriber, type StoreMessage } from '@/api/store-messages'
 import SellerLogin from '@/components/auth/SellerLogin'
@@ -3121,7 +3122,6 @@ function StoreSettings({ onNavigate, onToast }: { onNavigate?: (view: DashboardV
       setOwnerPhone(tenant.ownerPhone || '')
 
       // Fetch staff from backend API if available
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
       fetch(`${API_BASE}/admin/tenants/${tenant.slug}/staff`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
@@ -3224,7 +3224,6 @@ function StoreSettings({ onNavigate, onToast }: { onNavigate?: (view: DashboardV
     setIsAddingStaff(true)
     setStaffMsg(null)
 
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
     try {
       const res = await fetch(`${API_BASE}/admin/tenants/${tenant.slug}/staff`, {
         method: 'POST',
@@ -3266,7 +3265,6 @@ function StoreSettings({ onNavigate, onToast }: { onNavigate?: (view: DashboardV
   }
 
   const handleDeleteStaff = async (staffId: string) => {
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
     try {
       await fetch(`${API_BASE}/admin/tenants/${tenant.slug}/staff/${staffId}`, {
         method: 'DELETE',
