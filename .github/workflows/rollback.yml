@@ -41,13 +41,13 @@ jobs:
         run: npm ci && npm run build
         env:
           VITE_DEMO_MODE: "false"
-          VITE_API_URL: ${{ inputs.target == 'production' && (vars.PRODUCTION_API_URL || 'https://orvexa-api-nskw.onrender.com') || 'https://api.staging.orvexacloud.in' }}
+          VITE_API_URL: ${{ inputs.target == 'production' && vars.PRODUCTION_API_URL || inputs.target == 'production' && 'https://orvexa-api-nskw.onrender.com' || 'https://api.staging.orvexacloud.in' }}
 
       - name: Redeploy Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || '786db6086fad1eb1ce99e87e98947870' }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID || '786db6086fad1eb1ce99e87e98947870' }}
           command: pages deploy dist --project-name ${{ inputs.target == 'production' && 'orvexa-cloud' || 'orvexa-admin-staging' }} --commit-hash ${{ inputs.sha }}
 
       - name: Redeploy shop router
@@ -60,7 +60,7 @@ jobs:
           command: deploy --env ${{ inputs.target }}
 
       - name: Redeploy Render (production)
-        if: ${{ inputs.target == 'production' && secrets.RENDER_PRODUCTION_DEPLOY_HOOK != '' }}
+        if: inputs.target == 'production'
         uses: ./.github/actions/render-release
         with:
           deploy-hook: ${{ secrets.RENDER_PRODUCTION_DEPLOY_HOOK }}
