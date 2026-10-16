@@ -1,67 +1,16 @@
-# Orvexa Cloud — Render blueprint (Singapore).
-# Auto-deploy is OFF. GitHub Actions calls the deploy hook with ref=${GITHUB_SHA}.
-# Apply once per environment from the Render dashboard; bind secrets there, never in git.
+# Orvexa Cloud — Render blueprint (free compute).
+# One web service so we stay within the 750 free instance-hours / month.
+# Free instances spin down after 15 minutes idle (0.1 CPU / 512 MB).
+# Auto-deploy is OFF. Bind secrets in the Render dashboard, never in git.
 
 previewsEnabled: false
 
 services:
   - type: web
-    name: orvexa-api-staging
+    name: orvexa-api
     runtime: node
-    plan: starter
-    region: singapore
-    rootDir: server
-    autoDeploy: false
-    buildCommand: npm ci && npm run build
-    startCommand: npm start
-    healthCheckPath: /api/health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: TRUST_PROXY
-        value: "1"
-      - key: PLATFORM_ROOT_DOMAIN
-        value: staging.orvexacloud.in
-      - key: PUBLIC_APP_URL
-        value: https://admin.staging.orvexacloud.in
-      - key: CORS_ORIGIN
-        value: https://admin.staging.orvexacloud.in,https://app.staging.orvexacloud.in,https://shop.staging.orvexacloud.in
-      - key: CORS_ALLOW_VERCEL_PREVIEWS
-        value: "false"
-      - key: VITE_DEMO_MODE
-        value: "false"
-      - key: ALLOW_CUSTOM_DATABASES
-        value: "false"
-      - key: MONGODB_MASTER_URI
-        sync: false
-      - key: MONGODB_TENANT_BASE_URI
-        sync: false
-      - key: JWT_SECRET
-        sync: false
-      - key: JWT_REFRESH_SECRET
-        sync: false
-      - key: ADMIN_BOOTSTRAP_KEY
-        sync: false
-      - key: SIGNUP_SIGNING_SECRETS
-        sync: false
-      - key: RESEND_API_KEY
-        sync: false
-      - key: MAIL_FROM
-        sync: false
-      - key: MAIL_REPLY_TO
-        sync: false
-      - key: RAZORPAY_KEY_ID
-        sync: false
-      - key: RAZORPAY_KEY_SECRET
-        sync: false
-      - key: RAZORPAY_WEBHOOK_SECRET
-        sync: false
-
-  - type: web
-    name: orvexa-api-production
-    runtime: node
-    plan: starter
-    region: singapore
+    plan: free
+    region: oregon
     rootDir: server
     autoDeploy: false
     buildCommand: npm ci && npm run build
@@ -75,15 +24,13 @@ services:
       - key: PLATFORM_ROOT_DOMAIN
         value: orvexacloud.in
       - key: PUBLIC_APP_URL
-        value: https://admin.orvexacloud.in
+        value: https://orvexa-api.onrender.com
       - key: CORS_ORIGIN
-        value: https://admin.orvexacloud.in,https://app.orvexacloud.in
+        value: https://orvexa-api.onrender.com,https://admin.orvexacloud.in,https://app.orvexacloud.in
       - key: CORS_ALLOW_VERCEL_PREVIEWS
         value: "false"
       - key: VITE_DEMO_MODE
         value: "false"
-      - key: ALLOW_SEED
-        value: "no"
       - key: ALLOW_CUSTOM_DATABASES
         value: "false"
       - key: MONGODB_MASTER_URI
@@ -91,13 +38,13 @@ services:
       - key: MONGODB_TENANT_BASE_URI
         sync: false
       - key: JWT_SECRET
-        sync: false
+        generateValue: true
       - key: JWT_REFRESH_SECRET
-        sync: false
+        generateValue: true
       - key: ADMIN_BOOTSTRAP_KEY
-        sync: false
+        generateValue: true
       - key: SIGNUP_SIGNING_SECRETS
-        sync: false
+        generateValue: true
       - key: RESEND_API_KEY
         sync: false
       - key: MAIL_FROM
