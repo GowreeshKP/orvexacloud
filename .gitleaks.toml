@@ -4,12 +4,18 @@ title = "Orvexa Cloud"
 useDefault = true
 
 [allowlist]
-description = "Placeholders, published demo docs, and generated lockfiles"
+description = "Placeholders, published demo docs, generated lockfiles, and localStorage/test fixtures"
 paths = [
   '''(^|/)docs/''',
   '''(^|/)\.env\.example$''',
   '''(^|/)pnpm-lock\.yaml$''',
   '''(^|/)package-lock\.json$''',
   '''(^|/)server/src/scripts/seedData\.ts$''',
+  '''(^|/)server/tests/''',
   '''(^|/)orvexa-cloud/''',
+]
+regexes = [
+  '''orvexa_(store_messages|newsletter|tenants|databases|applications)_v1''',
+  '''orvexa_setup_2026''',
+  '''orvexa_bootstrap_2026''',
 ]

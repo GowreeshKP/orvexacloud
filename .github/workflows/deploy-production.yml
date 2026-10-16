@@ -12,6 +12,11 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+env:
+  PRODUCTION_API_URL: ${{ vars.PRODUCTION_API_URL || 'https://orvexa-api-nskw.onrender.com' }}
+  PRODUCTION_WEB_URL: ${{ vars.PRODUCTION_WEB_URL || 'https://orvexa-cloud.pages.dev' }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || '786db6086fad1eb1ce99e87e98947870' }}
+
 jobs:
   check:
     uses: ./.github/workflows/check.yml
@@ -32,44 +37,40 @@ jobs:
           node-version: "22"
           cache: npm
 
-      - name: Install and build portals
+      - name: Install and build portal
         run: npm ci && npm run build
         env:
           VITE_DEMO_MODE: "false"
-          VITE_API_URL: https://api.orvexacloud.in
+          VITE_API_URL: ${{ env.PRODUCTION_API_URL }}
+          VITE_API_BASE_URL: ${{ env.PRODUCTION_API_URL }}/api
 
-      - name: Deploy admin portal
+      - name: Note skipped publish steps
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN == '' || secrets.RENDER_PRODUCTION_DEPLOY_HOOK == '' }}
+        run: |
+          echo "Pages deploy runs only when CLOUDFLARE_API_TOKEN is set on the production environment."
+          echo "Render deploy runs only when RENDER_PRODUCTION_DEPLOY_HOOK is set."
+          echo "Smoke still hits the live Render API and orvexa-cloud.pages.dev."
+
+      - name: Deploy Cloudflare Pages
+        if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name orvexa-admin --branch main --commit-hash ${{ github.sha }}
+          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name orvexa-cloud --branch main --commit-hash ${{ github.sha }}
 
-      - name: Deploy seller portal
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name orvexa-app --branch main --commit-hash ${{ github.sha }}
-
-      - name: Deploy shop portal
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name orvexa-shop --branch main --commit-hash ${{ github.sha }}
-
-      - name: Deploy shop router worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: infra/cloudflare
-          command: deploy --env production
-
-      - uses: ./.github/actions/render-release
+      - name: Deploy API on Render
+        if: ${{ secrets.RENDER_PRODUCTION_DEPLOY_HOOK != '' }}
+        uses: ./.github/actions/render-release
         with:
           deploy-hook: ${{ secrets.RENDER_PRODUCTION_DEPLOY_HOOK }}
-          api-base: ${{ vars.PRODUCTION_API_URL || 'https://api.orvexacloud.in' }}
-          web-base: ${{ vars.PRODUCTION_WEB_URL || 'https://admin.orvexacloud.in' }}
+          api-base: ${{ env.PRODUCTION_API_URL }}
+          web-base: ${{ env.PRODUCTION_WEB_URL }}
           sha: ${{ github.sha }}
+
+      - name: Smoke live Pages and API
+        if: ${{ secrets.RENDER_PRODUCTION_DEPLOY_HOOK == '' }}
+        env:
+          API_BASE: ${{ env.PRODUCTION_API_URL }}
+          WEB_BASE: ${{ env.PRODUCTION_WEB_URL }}
+        run: node scripts/prod-smoke.mjs

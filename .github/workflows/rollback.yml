@@ -41,30 +41,17 @@ jobs:
         run: npm ci && npm run build
         env:
           VITE_DEMO_MODE: "false"
-          VITE_API_URL: ${{ inputs.target == 'production' && 'https://api.orvexacloud.in' || 'https://api.staging.orvexacloud.in' }}
+          VITE_API_URL: ${{ inputs.target == 'production' && (vars.PRODUCTION_API_URL || 'https://orvexa-api-nskw.onrender.com') || 'https://api.staging.orvexacloud.in' }}
 
-      - name: Redeploy admin portal
+      - name: Redeploy Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name ${{ inputs.target == 'production' && 'orvexa-admin' || 'orvexa-admin-staging' }} --commit-hash ${{ inputs.sha }}
-
-      - name: Redeploy seller portal
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name ${{ inputs.target == 'production' && 'orvexa-app' || 'orvexa-app-staging' }} --commit-hash ${{ inputs.sha }}
-
-      - name: Redeploy shop portal
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy dist --project-name ${{ inputs.target == 'production' && 'orvexa-shop' || 'orvexa-shop-staging' }} --commit-hash ${{ inputs.sha }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || '786db6086fad1eb1ce99e87e98947870' }}
+          command: pages deploy dist --project-name ${{ inputs.target == 'production' && 'orvexa-cloud' || 'orvexa-admin-staging' }} --commit-hash ${{ inputs.sha }}
 
       - name: Redeploy shop router
+        if: inputs.target == 'staging'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -73,12 +60,12 @@ jobs:
           command: deploy --env ${{ inputs.target }}
 
       - name: Redeploy Render (production)
-        if: inputs.target == 'production'
+        if: ${{ inputs.target == 'production' && secrets.RENDER_PRODUCTION_DEPLOY_HOOK != '' }}
         uses: ./.github/actions/render-release
         with:
           deploy-hook: ${{ secrets.RENDER_PRODUCTION_DEPLOY_HOOK }}
-          api-base: ${{ vars.PRODUCTION_API_URL || 'https://api.orvexacloud.in' }}
-          web-base: ${{ vars.PRODUCTION_WEB_URL || 'https://admin.orvexacloud.in' }}
+          api-base: ${{ vars.PRODUCTION_API_URL || 'https://orvexa-api-nskw.onrender.com' }}
+          web-base: ${{ vars.PRODUCTION_WEB_URL || 'https://orvexa-cloud.pages.dev' }}
           sha: ${{ inputs.sha }}
 
       - name: Redeploy Render (staging)
