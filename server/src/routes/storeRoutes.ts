@@ -392,7 +392,7 @@ router.put('/theme', ...ownerOfTenant, async (req: Request, res: Response) => {
     const mirror = Object.fromEntries(Object.entries(updates).map(([k, v]) => [`theme.${k}`, v]))
     await getTenantModel(masterDb).updateOne({ slug: req.tenant!.slug }, { $set: { ...mirror, ...profile } })
 
-    res.json({ success: true, theme: savedTheme, store: profile })
+    res.json({ success: true, theme: savedTheme?.toObject ? savedTheme.toObject() : savedTheme, store: profile })
   } catch (err) {
     sendError(res, err, 'Failed to update theme', 'update theme')
   }
@@ -589,15 +589,15 @@ router.post('/orders', checkoutLimiter, async (req: Request, res: Response) => {
       timeline: [{ title: 'Order Placed', time: now.toISOString(), desc: 'We have received your order.', completed: true }],
     }).save()
 
-    res.status(201).json(order)
     if (customerEmail) {
-      collectSubscriber(req, customerEmail, 'checkout').catch(() => undefined)
+      await collectSubscriber(req, customerEmail, 'checkout').catch(() => undefined)
     }
     req.tenantDb!.StoreEvent.create({
       type: 'order_placed',
       path: '/checkout',
       sessionId: optString(body.sessionId, 'sessionId', 80) || '',
     }).catch(() => undefined)
+    res.status(201).json(order)
   } catch (err) {
     await releaseStock(req, reserved)
     sendError(res, err, 'Failed to place order', 'place order')
@@ -1071,16 +1071,26 @@ router.get('/export', ...ownerOfTenant, async (req: Request, res: Response) => {
 // 8. STOREFRONT INBOX & NEWSLETTER (public capture, staff read)
 // ====================================================================
 
-function serializeMessage(doc: { id: string; name: string; email: string; phone: string; subject: string; message: string; read: boolean; createdAt: Date }) {
+function serializeMessage(doc: { id?: string; name: string; email: string; phone: string; subject: string; message: string; read: boolean; createdAt: Date; toObject?: (opts?: object) => Record<string, unknown> }) {
+  const obj = (typeof doc.toObject === 'function' ? doc.toObject({ virtuals: false }) : doc) as {
+    id?: string
+    name: string
+    email: string
+    phone?: string
+    subject?: string
+    message: string
+    read?: boolean
+    createdAt: Date | string
+  }
   return {
-    id: doc.id,
-    name: doc.name,
-    email: doc.email,
-    phone: doc.phone || '',
-    subject: doc.subject || '',
-    message: doc.message,
-    read: Boolean(doc.read),
-    createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : String(doc.createdAt),
+    id: String(obj.id || ''),
+    name: obj.name,
+    email: obj.email,
+    phone: obj.phone || '',
+    subject: obj.subject || '',
+    message: obj.message,
+    read: Boolean(obj.read),
+    createdAt: obj.createdAt instanceof Date ? obj.createdAt.toISOString() : String(obj.createdAt),
   }
 }
 

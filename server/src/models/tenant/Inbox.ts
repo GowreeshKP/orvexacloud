@@ -24,7 +24,7 @@ const StoreMessageSchema = new Schema<IStoreMessage>(
     message: { type: String, required: true, maxlength: 4000 },
     read: { type: Boolean, default: false, index: true },
   },
-  { timestamps: true }
+  { timestamps: true, id: false }
 )
 
 export function getStoreMessageModel(conn: Connection): Model<IStoreMessage> {

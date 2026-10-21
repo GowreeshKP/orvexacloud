@@ -6,6 +6,7 @@ import { after, before, describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import jwt from 'jsonwebtoken'
 import { PASSWORDS, api, login, mailLog, order, signedSignup, sleep, startTestServer, stopTestServer } from './harness.js'
+import { tenantDatabaseName } from '../src/lib/tenant-db.js'
 
 let admin: { accessToken: string; refreshToken: string }
 let alpha: { accessToken: string; refreshToken: string }
@@ -225,7 +226,7 @@ describe('role-based access control', () => {
     assert.equal(text.includes('customMongoUri'), false)
     const alphaRow = r.body.find((t: { slug: string }) => t.slug === 'alpha')
     assert.equal(alphaRow.isolationMode, 'dedicated_database')
-    assert.equal(alphaRow.databaseName, 'orvexa_test_tenant_alpha')
+    assert.equal(alphaRow.databaseName, tenantDatabaseName('alpha'))
     assert.equal(alphaRow.hasCustomDatabase, false)
   })
 
@@ -234,8 +235,8 @@ describe('role-based access control', () => {
     const b = await api('GET', '/api/stores/bravo/database-status', { token: bravo.accessToken })
     assert.equal(a.status, 200)
     assert.equal(b.status, 200)
-    assert.equal(a.body.databaseName, 'orvexa_test_tenant_alpha')
-    assert.equal(b.body.databaseName, 'orvexa_test_tenant_bravo')
+    assert.equal(a.body.databaseName, tenantDatabaseName('alpha'))
+    assert.equal(b.body.databaseName, tenantDatabaseName('bravo'))
     assert.equal(a.body.isolationMode, 'dedicated_database')
     assert.notEqual(a.body.databaseName, b.body.databaseName)
   })
@@ -245,7 +246,7 @@ describe('role-based access control', () => {
     assert.equal((await api('POST', '/api/admin/tenants/alpha/provision-atlas', { token: alpha.accessToken })).status, 403)
     const r = await api('POST', '/api/admin/tenants/alpha/provision-atlas', { token: admin.accessToken })
     assert.equal(r.status, 503)
-    assert.equal(r.body.databaseName, 'orvexa_test_tenant_alpha')
+    assert.equal(r.body.databaseName, tenantDatabaseName('alpha'))
   })
 
   test('creating a store ignores mass-assigned password hashes and staff', async () => {

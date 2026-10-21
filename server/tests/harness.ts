@@ -69,10 +69,11 @@ async function startMongo(): Promise<string> {
 
 export async function startTestServer() {
   const mongoBase = await startMongo()
+  const ns = process.pid
   Object.assign(process.env, {
     NODE_ENV: 'test',
-    MONGODB_MASTER_URI: `${mongoBase}/orvexa_test_master`,
-    MONGODB_TENANT_BASE_URI: `${mongoBase}/orvexa_test_tenant_`,
+    MONGODB_MASTER_URI: `${mongoBase}/orvexa_test_master_${ns}`,
+    MONGODB_TENANT_BASE_URI: `${mongoBase}/orvexa_test_tenant_${ns}_`,
     JWT_SECRET: crypto.randomBytes(32).toString('hex'),
     JWT_REFRESH_SECRET: crypto.randomBytes(32).toString('hex'),
     DISABLE_RATE_LIMITS: 'true',

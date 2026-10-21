@@ -11,7 +11,7 @@
     "seed": "tsx src/scripts/seed.ts",
     "tenant:set-db": "tsx src/scripts/setTenantDb.ts",
     "tenant:provision-atlas": "tsx src/scripts/provisionTenantAtlas.ts",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test --test-concurrency=1 tests/*.test.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
