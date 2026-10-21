@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo, useEffect } from 'react'
 import { useTenant, useSwitchLayer } from '@/context/TenantContext'
 import { useDashboardStats, useDashboardProducts, useTenantOrders, useThemeCustomizer } from '@/api/hooks'
-import { authService, DEMO_MODE, type SellerSession } from '@/api/auth'
+import { authService, DEMO_MODE, SELLER_SESSION_EXPIRED_EVENT, type SellerSession } from '@/api/auth'
 import { apiClient } from '@/api/client'
 import { mockStore } from '@/api/mock-store'
 import { auditLogger } from '@/api/audit-logger'
@@ -122,10 +122,11 @@ const HERO_PHOTO_PRESETS = [
 export default function DashboardApp() {
   const { tenant, loading, switchTenant } = useTenant()
   const switchLayer = useSwitchLayer()
-  const [session, setSession] = useState<SellerSession | null>(() => authService.getSellerSession())
+  const [session, setSession] = useState<SellerSession | null>(null)
+  const [authChecked, setAuthChecked] = useState(false)
   const ownerToken = parseOwnerPortalToken()
   const [portalAllowed, setPortalAllowed] = useState<boolean | null>(() => {
-    if (session || isOwnerPortalPath()) return true
+    if (isOwnerPortalPath()) return true
     if (ownerToken) return null
     return false
   })
@@ -141,8 +142,37 @@ export default function DashboardApp() {
   const handleLogout = () => {
     authService.logoutSeller()
     setSession(null)
-    setPortalAllowed(false)
+    setPortalAllowed(isOwnerPortalPath() || Boolean(parseOwnerPortalToken()))
   }
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      const stored = authService.getSellerSession()
+      if (stored) {
+        const token = await authService.getValidSellerToken()
+        if (cancelled) return
+        if (token) {
+          setSession(stored)
+          setPortalAllowed(true)
+        } else {
+          authService.logoutSeller()
+          setSession(null)
+        }
+      }
+      if (!cancelled) setAuthChecked(true)
+    })()
+
+    const onExpired = () => {
+      setSession(null)
+      setPortalAllowed(isOwnerPortalPath() || Boolean(parseOwnerPortalToken()) ? true : false)
+    }
+    window.addEventListener(SELLER_SESSION_EXPIRED_EVENT, onExpired)
+    return () => {
+      cancelled = true
+      window.removeEventListener(SELLER_SESSION_EXPIRED_EVENT, onExpired)
+    }
+  }, [])
 
   useEffect(() => {
     if (session || !ownerToken || !tenant?.slug) return
@@ -159,7 +189,7 @@ export default function DashboardApp() {
     }
   }, [session, ownerToken, tenant?.slug])
 
-  if (loading) {
+  if (loading || !authChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-stone-100">
         <div className="text-center">
@@ -3223,13 +3253,10 @@ function StoreSettings({ onNavigate, onToast }: { onNavigate?: (view: DashboardV
     }
 
     try {
-      const token = localStorage.getItem('lunar_seller_token') || localStorage.getItem('lunar_admin_token')
+      const headers = await authService.sellerAuthHeaders()
       const res = await fetch(`${API_BASE}/auth/seller/profile`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers,
         body: JSON.stringify({
           slug: tenant.slug,
           ownerName: ownerName.trim(),
@@ -4121,10 +4148,10 @@ Isolated Database: orvexa_tenant_${tenant.slug}
           <button
             type="button"
             onClick={async () => {
-              const token = authService.getSellerToken()
-              const res = await fetch(`/api/stores/${encodeURIComponent(tenant.slug)}/billing/checkout`, {
+              const headers = await authService.sellerAuthHeaders()
+              const res = await fetch(`${API_BASE}/stores/${encodeURIComponent(tenant.slug)}/billing/checkout`, {
                 method: 'POST',
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                headers,
               })
               const data = await res.json().catch(() => ({}))
               if (!res.ok || !data.url) {
@@ -4140,9 +4167,9 @@ Isolated Database: orvexa_tenant_${tenant.slug}
           <button
             type="button"
             onClick={async () => {
-              const token = authService.getSellerToken()
-              const res = await fetch(`/api/stores/${encodeURIComponent(tenant.slug)}/export`, {
-                headers: token ? { Authorization: `Bearer ${token}` } : {},
+              const headers = await authService.sellerAuthHeaders()
+              const res = await fetch(`${API_BASE}/stores/${encodeURIComponent(tenant.slug)}/export`, {
+                headers,
               })
               if (!res.ok) {
                 onToast('Could not download store data.')

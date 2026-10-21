@@ -72,19 +72,15 @@ function mergedLocal<T>(storageKey: string, tenant: TenantInboxKey, idOf: (item:
   return out
 }
 
-function sellerHeaders(): Record<string, string> {
-  const token = authService.getSellerToken()
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  }
+async function sellerHeaders(): Promise<Record<string, string>> {
+  return authService.sellerAuthHeaders()
 }
 
 async function apiJson<T>(method: string, path: string, body?: unknown, auth = false): Promise<T | null> {
   try {
     const res = await fetch(`${API_BASE}${path}`, {
       method,
-      headers: auth ? sellerHeaders() : { 'Content-Type': 'application/json' },
+      headers: auth ? await sellerHeaders() : { 'Content-Type': 'application/json' },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     })
     if (!res.ok) return null

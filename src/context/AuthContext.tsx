@@ -3,10 +3,10 @@
 // super_admin (platform console), seller (merchant dashboard), staff (store operator)
 //
 // Token strategy:
-//   - Access token: 15-min JWT, kept in React state (memory only) — never written to localStorage
-//   - Refresh token: 30-day JWT, persisted in localStorage — safe because it is server-validated on every use
+//   - Access token: short-lived JWT, kept in React state and mirrored to localStorage
+//   - Refresh token: 30-day JWT, persisted in localStorage — rotated through authService
 //   - Silent refresh: automatically fires 60s before access token expires
-//   - Page reload: on mount, reads refresh token from localStorage and silently restores the session
+//   - Page reload: reuse a still-valid access token, otherwise rotate the refresh token
 
 import {
   createContext,
@@ -18,7 +18,7 @@ import {
   type ReactNode,
 } from 'react'
 import { authService } from '@/api/auth'
-import { API_ORIGIN as API_BASE } from '@/lib/api-base'
+import { API_BASE } from '@/lib/api-base'
 
 // ─────────────────────────────────────────────────────────
 // Types
@@ -147,28 +147,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Core: perform token refresh against the server
   // ───────────────────────────────────────────────────────
   const silentRefresh = useCallback(async (): Promise<string | null> => {
-    const storedRefresh = getStoredRefreshToken()
-    if (!storedRefresh) return null
-
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: storedRefresh }),
-      })
-
-      if (!res.ok) {
-        clearStoredRefreshToken()
-        setState((prev) => ({ ...prev, accessToken: null, session: null, isAuthenticated: false }))
-        return null
-      }
-
-      const data = await res.json()
-      storeRefreshToken(data.refreshToken)
-      return data.accessToken
-    } catch {
+    const newToken = await authService.refreshAccessToken()
+    if (!newToken) {
+      setState((prev) => ({ ...prev, accessToken: null, session: null, isAuthenticated: false }))
       return null
     }
+    return newToken
   }, [])
 
   // ───────────────────────────────────────────────────────
@@ -209,14 +193,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false
 
     async function restoreSession() {
-      const storedRefresh = getStoredRefreshToken()
-      if (!storedRefresh) {
+      const existing = authService.getSellerToken() || authService.getAdminToken()
+      const newAccessToken = existing || (await silentRefresh())
+      if (cancelled) return
+
+      if (!newAccessToken) {
         setState((prev) => ({ ...prev, isLoading: false }))
         return
       }
-
-      const newAccessToken = await silentRefresh()
-      if (cancelled) return
 
       if (newAccessToken) {
         const payload = decodeJwtPayload(newAccessToken)
@@ -271,13 +255,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let body: Record<string, string> = {}
 
         if (credentials.type === 'seller') {
-          endpoint = `/api/auth/seller/login`
+          endpoint = `/auth/seller/login`
           body = { loginId: credentials.loginId!, password: credentials.password }
         } else if (credentials.type === 'admin') {
-          endpoint = `/api/auth/admin/login`
+          endpoint = `/auth/admin/login`
           body = { loginId: credentials.loginId!, password: credentials.password }
         } else if (credentials.type === 'staff') {
-          endpoint = `/api/auth/staff/login`
+          endpoint = `/auth/staff/login`
           body = {
             tenantSlug: credentials.tenantSlug!,
             email: credentials.email!,
@@ -327,7 +311,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return
         }
 
-        storeRefreshToken(data.refreshToken)
+        if (data.accessToken) authService.acceptAuthTokens(data.accessToken, data.refreshToken)
+        else if (data.refreshToken) storeRefreshToken(data.refreshToken)
+        if (credentials.type === 'seller' && data.session) {
+          try {
+            localStorage.setItem('lunar_seller_session', JSON.stringify(data.session))
+          } catch {
+            // storage disabled
+          }
+        }
 
         const session: AuthSession = {
           ...data.session,
@@ -390,7 +382,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Fire-and-forget server-side revocation
     if (storedRefresh) {
       try {
-        await fetch(`${API_BASE}/api/auth/logout`, {
+        await fetch(`${API_BASE}/auth/logout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken: storedRefresh }),
@@ -401,6 +393,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     clearStoredRefreshToken()
+    authService.logoutSeller()
+    authService.logoutAdmin()
 
     setState({
       accessToken: null,

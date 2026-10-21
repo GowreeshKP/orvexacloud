@@ -89,6 +89,10 @@ const SELLER_SESSION_KEY = 'lunar_seller_session'
 const ADMIN_SESSION_KEY = 'lunar_admin_session'
 const SELLER_TOKEN_KEY = 'lunar_seller_token'
 const ADMIN_TOKEN_KEY = 'lunar_admin_token'
+const REFRESH_TOKEN_KEY = 'orvexa_refresh_token'
+
+/** Dashboard listens for this and returns the owner to SellerLogin. */
+export const SELLER_SESSION_EXPIRED_EVENT = 'orvexa:seller-session-expired'
 
 /** Stores a sign-in token and tells the store provider that someone signed in, so it can re-load the store with the token
  *  (owners and admins then receive their private details). Not used for silent token refreshes. */
@@ -134,17 +138,99 @@ function saveStoredCredentialsMap(map: Record<string, StoreCredentialInfo>): voi
   }
 }
 
-function isTokenExpired(token: string | null): boolean {
-  if (!token) return true
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split('.')
-    if (parts.length !== 3) return true
+    if (parts.length !== 3) return null
     const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
-    const payload = JSON.parse(decodeURIComponent(atob(base64).split('').map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')))
-    if (!payload.exp) return false
-    return Date.now() >= (payload.exp * 1000 - 30000)
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
+    const json = atob(padded)
+    return JSON.parse(json) as Record<string, unknown>
   } catch {
-    return true
+    return null
+  }
+}
+
+function isTokenExpired(token: string | null): boolean {
+  if (!token) return true
+  const payload = decodeJwtPayload(token)
+  if (!payload) return true
+  const exp = Number(payload.exp)
+  if (!Number.isFinite(exp)) return false
+  return Date.now() >= exp * 1000 - 30000
+}
+
+function readStorage(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeStorage(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    // storage disabled
+  }
+}
+
+function removeStorage(key: string): void {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // storage disabled
+  }
+}
+
+function persistAccessToken(token: string): void {
+  const role = decodeJwtPayload(token)?.role
+  if (role === 'super_admin') writeStorage(ADMIN_TOKEN_KEY, token)
+  else writeStorage(SELLER_TOKEN_KEY, token)
+}
+
+let refreshInFlight: Promise<string | null> | null = null
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (refreshInFlight) return refreshInFlight
+  refreshInFlight = (async () => {
+    const storedRefresh = readStorage(REFRESH_TOKEN_KEY)
+    if (!storedRefresh) return null
+    try {
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: storedRefresh }),
+      })
+      if (!res.ok) {
+        if (readStorage(REFRESH_TOKEN_KEY) === storedRefresh) removeStorage(REFRESH_TOKEN_KEY)
+        return null
+      }
+      const data = await res.json()
+      const newToken = data.accessToken || data.token
+      if (!newToken) return null
+      persistAccessToken(newToken)
+      if (data.refreshToken) writeStorage(REFRESH_TOKEN_KEY, data.refreshToken)
+      return newToken as string
+    } catch {
+      return null
+    }
+  })().finally(() => {
+    refreshInFlight = null
+  })
+  return refreshInFlight
+}
+
+function notifySellerSessionExpired(): void {
+  try {
+    localStorage.removeItem(SELLER_SESSION_KEY)
+    clearSignInToken(SELLER_TOKEN_KEY)
+    const role = decodeJwtPayload(readStorage(REFRESH_TOKEN_KEY) || '')?.role
+    if (role !== 'super_admin') removeStorage(REFRESH_TOKEN_KEY)
+    window.dispatchEvent(new Event(SELLER_SESSION_EXPIRED_EVENT))
+  } catch {
+    // ignored
   }
 }
 
@@ -597,7 +683,7 @@ export const authService = {
         localStorage.setItem(SELLER_SESSION_KEY, JSON.stringify(session))
         const token = data.accessToken || data.token
         if (token) saveSignInToken(SELLER_TOKEN_KEY, token)
-        if (data.refreshToken) localStorage.setItem('orvexa_refresh_token', data.refreshToken)
+        if (data.refreshToken) writeStorage(REFRESH_TOKEN_KEY, data.refreshToken)
       } catch {
         // storage disabled
       }
@@ -701,17 +787,46 @@ export const authService = {
   },
 
   getSellerToken(): string | null {
-    try {
-      return localStorage.getItem(SELLER_TOKEN_KEY)
-    } catch {
-      return null
+    const token = readStorage(SELLER_TOKEN_KEY)
+    if (!token || isTokenExpired(token)) return null
+    return token
+  },
+
+  async getValidSellerToken(): Promise<string | null> {
+    const current = readStorage(SELLER_TOKEN_KEY)
+    if (current && !isTokenExpired(current)) return current
+    const refreshed = await refreshAccessToken()
+    if (refreshed && decodeJwtPayload(refreshed)?.role !== 'super_admin') return refreshed
+    return null
+  },
+
+  async sellerAuthHeaders(): Promise<Record<string, string>> {
+    const token = await this.getValidSellerToken()
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     }
+  },
+
+  async refreshAccessToken(): Promise<string | null> {
+    return refreshAccessToken()
+  },
+
+  acceptAuthTokens(accessToken: string, refreshToken?: string): void {
+    persistAccessToken(accessToken)
+    if (refreshToken) writeStorage(REFRESH_TOKEN_KEY, refreshToken)
+  },
+
+  expireSellerSession(): void {
+    notifySellerSessionExpired()
   },
 
   logoutSeller() {
     try {
       localStorage.removeItem(SELLER_SESSION_KEY)
       clearSignInToken(SELLER_TOKEN_KEY)
+      const role = decodeJwtPayload(readStorage(REFRESH_TOKEN_KEY) || '')?.role
+      if (role !== 'super_admin') removeStorage(REFRESH_TOKEN_KEY)
     } catch {
       // ignored
     }
@@ -741,14 +856,14 @@ export const authService = {
             localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(data.session))
             const token = data.accessToken || data.token
             if (token) saveSignInToken(ADMIN_TOKEN_KEY, token)
-            if (data.refreshToken) localStorage.setItem('orvexa_refresh_token', data.refreshToken)
+            if (data.refreshToken) writeStorage(REFRESH_TOKEN_KEY, data.refreshToken)
           } catch {}
         } else {
           try {
             localStorage.setItem(SELLER_SESSION_KEY, JSON.stringify(data.session))
             const token = data.accessToken || data.token
             if (token) saveSignInToken(SELLER_TOKEN_KEY, token)
-            if (data.refreshToken) localStorage.setItem('orvexa_refresh_token', data.refreshToken)
+            if (data.refreshToken) writeStorage(REFRESH_TOKEN_KEY, data.refreshToken)
           } catch {}
         }
         return { success: true, session: data.session }
@@ -812,7 +927,7 @@ export const authService = {
           saveSignInToken(ADMIN_TOKEN_KEY, token)
         }
         if (data.refreshToken) {
-          localStorage.setItem('orvexa_refresh_token', data.refreshToken)
+          writeStorage(REFRESH_TOKEN_KEY, data.refreshToken)
         }
       } catch {
         // storage disabled
@@ -864,52 +979,22 @@ export const authService = {
   },
 
   getAdminToken(): string | null {
-    try {
-      const token = localStorage.getItem(ADMIN_TOKEN_KEY)
-      if (token && isTokenExpired(token)) {
-        // Asynchronously renew expired token in the background
-        this.refreshAdminToken()
-      }
-      return token
-    } catch {
-      return null
-    }
+    const token = readStorage(ADMIN_TOKEN_KEY)
+    if (!token || isTokenExpired(token)) return null
+    return token
   },
 
   async refreshAdminToken(): Promise<string | null> {
-    try {
-      const storedRefresh = typeof window !== 'undefined' ? localStorage.getItem('orvexa_refresh_token') : null
-      if (storedRefresh) {
-        const res = await fetch(`${API_BASE}/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: storedRefresh }),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          const newToken = data.accessToken || data.token
-          if (newToken) {
-            localStorage.setItem(ADMIN_TOKEN_KEY, newToken)
-            if (data.refreshToken) localStorage.setItem('orvexa_refresh_token', data.refreshToken)
-            return newToken
-          }
-        }
-      }
-    } catch {
-      // refresh failed
-    }
-
-    // Never fall back to logging in with stored or demo credentials: a session that cannot be
-    // refreshed must sign in again.
-    return null
+    const token = await refreshAccessToken()
+    return token && decodeJwtPayload(token)?.role === 'super_admin' ? token : null
   },
 
   async getValidAdminToken(): Promise<string | null> {
-    let token = this.getAdminToken()
-    if (!token || isTokenExpired(token)) {
-      token = await this.refreshAdminToken()
-    }
-    return token
+    const current = readStorage(ADMIN_TOKEN_KEY)
+    if (current && !isTokenExpired(current)) return current
+    const refreshed = await refreshAccessToken()
+    if (refreshed && decodeJwtPayload(refreshed)?.role === 'super_admin') return refreshed
+    return null
   },
 
   logoutAdmin() {

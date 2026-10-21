@@ -78,17 +78,17 @@ export function useTenantOrders(): {
 
   const refresh = useCallback(() => {
     if (!tenant) return
-    const token = authService.getSellerToken()
-    fetch(`${API_BASE}/stores/${encodeURIComponent(tenant.slug)}/orders`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (Array.isArray(data)) setOrders(data)
-        else if (DEMO_MODE) setOrders([...mockStore.getOrders(tenant.id)])
-        else setOrders([])
-      })
-      .catch(() => setOrders(DEMO_MODE ? [...mockStore.getOrders(tenant.id)] : []))
+    void (async () => {
+      const headers = await authService.sellerAuthHeaders()
+      fetch(`${API_BASE}/stores/${encodeURIComponent(tenant.slug)}/orders`, { headers })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (Array.isArray(data)) setOrders(data)
+          else if (DEMO_MODE) setOrders([...mockStore.getOrders(tenant.id)])
+          else setOrders([])
+        })
+        .catch(() => setOrders(DEMO_MODE ? [...mockStore.getOrders(tenant.id)] : []))
+    })()
   }, [tenant])
 
   useEffect(() => {
@@ -108,15 +108,13 @@ export function useTenantOrders(): {
   const updateOrderStatus = useCallback((orderId: string, status: TrackedOrder['status'], courier?: string, awb?: string) => {
     if (!tenant) return
     mockStore.updateOrderStatus(tenant.id, orderId, status, courier, awb)
-    const token = authService.getSellerToken()
-    fetch(`${API_BASE}/stores/${encodeURIComponent(tenant.slug)}/orders/${encodeURIComponent(orderId)}/status`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ status, courier, awb }),
-    }).catch(() => undefined)
+    void authService.sellerAuthHeaders().then((headers) =>
+      fetch(`${API_BASE}/stores/${encodeURIComponent(tenant.slug)}/orders/${encodeURIComponent(orderId)}/status`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ status, courier, awb }),
+      }).catch(() => undefined)
+    )
     refresh()
   }, [tenant, refresh])
 

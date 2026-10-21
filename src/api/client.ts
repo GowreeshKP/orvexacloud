@@ -8,16 +8,34 @@ import { authService, DEMO_MODE } from './auth'
 import { API_BASE as API_BASE_URL } from '@/lib/api-base'
 
 class ApiClient {
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T | null> {
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    auth = true
+  ): Promise<T | null> {
     try {
-      const res = await fetch(`${API_BASE_URL}${endpoint}`, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authService.getSellerToken() ? { Authorization: `Bearer ${authService.getSellerToken()}` } : {}),
-          ...(options.headers || {}),
-        },
-      })
+      const token = auth ? await authService.getValidSellerToken() : null
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers as Record<string, string> | undefined),
+      }
+
+      let res = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers })
+
+      if (res.status === 401 && auth) {
+        const retried = await authService.refreshAccessToken()
+        if (retried && retried !== token) {
+          res = await fetch(`${API_BASE_URL}${endpoint}`, {
+            ...options,
+            headers: { ...headers, Authorization: `Bearer ${retried}` },
+          })
+        }
+        if (res.status === 401) {
+          authService.expireSellerSession()
+          throw new Error('Please sign in again.')
+        }
+      }
 
       if (!res.ok) {
         throw new Error(`API error ${res.status}: ${res.statusText}`)
@@ -25,6 +43,7 @@ class ApiClient {
 
       return await res.json()
     } catch (error) {
+      if (error instanceof Error && error.message === 'Please sign in again.') throw error
       // Backend not running or endpoint failed; return null to trigger mockStore fallback
       return null
     }
@@ -37,7 +56,7 @@ class ApiClient {
     if (search) params.set('search', search)
 
     const query = params.toString() ? `?${params.toString()}` : ''
-    const data = await this.request<Product[]>(`/stores/${tenantSlug}/products${query}`)
+    const data = await this.request<Product[]>(`/stores/${tenantSlug}/products${query}`, {}, false)
 
     if (data && Array.isArray(data)) {
       return data
@@ -90,7 +109,7 @@ class ApiClient {
 
   // --- THEME & HERO PICTURE CUSTOMIZATION ---
   async getTheme(tenantSlug: string): Promise<ThemeConfig | null> {
-    const data = await this.request<ThemeConfig>(`/stores/${tenantSlug}/theme`)
+    const data = await this.request<ThemeConfig>(`/stores/${tenantSlug}/theme`, {}, false)
     if (data) return data
     if (!DEMO_MODE) return null
     const tenant = mockStore.getTenantBySlug(tenantSlug)
@@ -142,10 +161,14 @@ class ApiClient {
   }
 
   async placeOrder(tenantSlug: string, order: TrackedOrder): Promise<TrackedOrder> {
-    const data = await this.request<TrackedOrder>(`/stores/${tenantSlug}/orders`, {
-      method: 'POST',
-      body: JSON.stringify(order),
-    })
+    const data = await this.request<TrackedOrder>(
+      `/stores/${tenantSlug}/orders`,
+      {
+        method: 'POST',
+        body: JSON.stringify(order),
+      },
+      false
+    )
     if (data) return data
     if (!DEMO_MODE) throw new Error('Could not place the order.')
     const tenant = mockStore.getTenantBySlug(tenantSlug)
@@ -156,7 +179,7 @@ class ApiClient {
   // --- REVIEWS ---
   async getReviews(tenantSlug: string, productId?: number): Promise<Review[]> {
     const query = productId ? `?productId=${productId}` : ''
-    const data = await this.request<Review[]>(`/stores/${tenantSlug}/reviews${query}`)
+    const data = await this.request<Review[]>(`/stores/${tenantSlug}/reviews${query}`, {}, false)
     if (data && Array.isArray(data)) return data
     if (!DEMO_MODE) return []
     const tenant = mockStore.getTenantBySlug(tenantSlug)
@@ -164,10 +187,14 @@ class ApiClient {
   }
 
   async postReview(tenantSlug: string, review: Omit<Review, 'id'>): Promise<Review | null> {
-    const data = await this.request<Review>(`/stores/${tenantSlug}/reviews`, {
-      method: 'POST',
-      body: JSON.stringify(review),
-    })
+    const data = await this.request<Review>(
+      `/stores/${tenantSlug}/reviews`,
+      {
+        method: 'POST',
+        body: JSON.stringify(review),
+      },
+      false
+    )
     if (data) return data
     if (!DEMO_MODE) return null
     const tenant = mockStore.getTenantBySlug(tenantSlug)

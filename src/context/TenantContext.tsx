@@ -10,7 +10,7 @@ import {
   type ApplicationLayer,
 } from '@/lib/tenant-resolver'
 import { mockStore } from '@/api/mock-store'
-import { DEMO_MODE } from '@/api/auth'
+import { authService, DEMO_MODE } from '@/api/auth'
 import { useAuth } from '@/hooks/useAuth'
 import { API_BASE } from '@/lib/api-base'
 
@@ -51,13 +51,9 @@ export function useSwitchLayer() {
 }
 
 
-/** The older sign-in (used by the seller and admin login forms) keeps its token in localStorage. */
+/** Seller/admin login forms keep a still-valid access token in localStorage. */
 function storedSignInToken(): string | null {
-  try {
-    return localStorage.getItem('lunar_seller_token') || localStorage.getItem('lunar_admin_token')
-  } catch {
-    return null
-  }
+  return authService.getSellerToken() || authService.getAdminToken()
 }
 
 type ResolveResult =
