@@ -38,17 +38,19 @@ async function freePort(): Promise<number> {
   })
 }
 
-async function waitForPort(port: number, timeoutMs = 20000): Promise<void> {
+async function waitForPort(port: number, hosts: string[] = ['127.0.0.1', 'localhost'], timeoutMs = 60000): Promise<string> {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
-    const ok = await new Promise<boolean>((resolve) => {
-      const sock = net.connect(port, '127.0.0.1', () => {
-        sock.end()
-        resolve(true)
+    for (const host of hosts) {
+      const ok = await new Promise<boolean>((resolve) => {
+        const sock = net.connect(port, host, () => {
+          sock.end()
+          resolve(true)
+        })
+        sock.on('error', () => resolve(false))
       })
-      sock.on('error', () => resolve(false))
-    })
-    if (ok) return
+      if (ok) return host
+    }
     await new Promise((r) => setTimeout(r, 200))
   }
   throw new Error(`mongod did not start on port ${port}`)
@@ -57,9 +59,10 @@ async function waitForPort(port: number, timeoutMs = 20000): Promise<void> {
 async function startMongo(): Promise<string> {
   if (process.env.MONGODB_TEST_URI) {
     const uri = process.env.MONGODB_TEST_URI.replace(/\/+$/, '')
-    const port = Number(new URL(uri.replace(/^mongodb:\/\//, 'http://')).port || 27017)
-    await waitForPort(port)
-    return uri
+    const parsed = new URL(uri.replace(/^mongodb:\/\//, 'http://'))
+    const port = Number(parsed.port || 27017)
+    const host = await waitForPort(port, [parsed.hostname, '127.0.0.1', 'localhost', 'mongo'].filter(Boolean) as string[])
+    return uri.includes('://') ? uri.replace(parsed.hostname, host) : uri
   }
   const binary = process.env.MONGOD_BINARY
   if (!binary || !fs.existsSync(binary)) {
