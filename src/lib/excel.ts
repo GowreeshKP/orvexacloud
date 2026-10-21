@@ -217,7 +217,10 @@ export function excelBlob(sheets: ExcelSheet[]): Blob {
       data: encodeXml(sheetXml(sheet.rows)),
     })),
   ]
-  return new Blob([zipStore(files)], {
+  const zip = zipStore(files)
+  const copy = new ArrayBuffer(zip.byteLength)
+  new Uint8Array(copy).set(zip)
+  return new Blob([copy], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   })
 }

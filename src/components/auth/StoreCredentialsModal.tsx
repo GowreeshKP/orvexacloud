@@ -61,7 +61,7 @@ export default function StoreCredentialsModal({ tenant, isOpen, onClose, onSucce
       }
 
       authService.getValidAdminToken().then((token) => {
-        const headers = token ? { Authorization: `Bearer ${token}` } : {}
+        const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
         fetch(`${API_BASE}/admin/tenants/${tenant.slug}/staff`, { headers })
           .then((r) => (r.ok ? r.json() : null))
           .then((data) => {
