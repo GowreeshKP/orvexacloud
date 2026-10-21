@@ -10,6 +10,7 @@ import { createStoreFolder } from '@/tenants/scaffold'
 import type { Product, Review, TrackedOrder } from '@/types'
 import type { TenantConfig, TenantApplication, PlatformStats, DashboardStats, ThemeConfig } from '@/types/tenant'
 import { API_BASE } from '@/lib/api-base'
+import { PLAN_CATALOG, normalizePlanId } from '@/data/plans'
 
 // =================================================================
 // STOREFRONT HOOKS (scoped to current tenant)
@@ -284,6 +285,68 @@ export function useThemeCustomizer(): {
 // ADMIN HOOKS (Super Admin — platform owner)
 // =================================================================
 
+function defaultTheme(partial?: Partial<ThemeConfig> | null): ThemeConfig {
+  return {
+    primaryColor: '#111111',
+    accentColor: '#C9A84C',
+    backgroundColor: '#FAFAF8',
+    fontDisplay: 'Georgia, serif',
+    fontSans: 'system-ui, sans-serif',
+    heroImage: '',
+    logoUrl: '',
+    announcementMessages: [],
+    enableAnimations: true,
+    enableReviews: true,
+    enableOrderTracking: true,
+    ...(partial || {}),
+  }
+}
+
+function fromBackendTenant(t: Record<string, unknown>): TenantConfig {
+  const theme = t.theme && typeof t.theme === 'object' ? (t.theme as Partial<ThemeConfig>) : {}
+  const sub = t.subscription && typeof t.subscription === 'object' ? (t.subscription as Record<string, unknown>) : {}
+  const plan = normalizePlanId(t.plan)
+  const subStatus = sub.status === 'active' || sub.status === 'past_due' || sub.status === 'cancelled' || sub.status === 'trial'
+    ? sub.status
+    : 'trial'
+  const paymentMethod = sub.paymentMethod === 'razorpay' || sub.paymentMethod === 'stripe' || sub.paymentMethod === 'manual'
+    ? sub.paymentMethod
+    : 'razorpay'
+  return {
+    id: String(t.id || ''),
+    slug: String(t.slug || ''),
+    brandName: String(t.brandName || t.name || ''),
+    name: t.name ? String(t.name) : undefined,
+    ownerName: String(t.ownerName || ''),
+    ownerEmail: String(t.ownerEmail || ''),
+    ownerPhone: String(t.ownerPhone || ''),
+    logo: String(t.logo || ''),
+    tagline: t.tagline ? String(t.tagline) : undefined,
+    aboutStory: t.aboutStory ? String(t.aboutStory) : undefined,
+    contact: t.contact && typeof t.contact === 'object' ? (t.contact as TenantConfig['contact']) : undefined,
+    customDomain: t.customDomain ? String(t.customDomain) : undefined,
+    customDomainVerified: Boolean(t.customDomainVerified),
+    customMongoUri: t.customMongoUri ? String(t.customMongoUri) : undefined,
+    status: (t.status as TenantConfig['status']) || 'pending',
+    plan,
+    createdAt: String(t.createdAt || ''),
+    storeType: t.storeType ? String(t.storeType) : undefined,
+    niche: t.niche ? String(t.niche) : undefined,
+    categories: Array.isArray(t.categories) ? (t.categories as TenantConfig['categories']) : undefined,
+    theme: defaultTheme({ ...theme, logoUrl: theme.logoUrl || String(t.logo || '') }),
+    subscription: {
+      plan,
+      pricePerMonth: Number(sub.pricePerMonth ?? PLAN_CATALOG[plan].pricePerMonth),
+      status: subStatus,
+      trialEndsAt: sub.trialEndsAt ? String(sub.trialEndsAt) : undefined,
+      nextBillingDate: String(sub.nextBillingDate || ''),
+      cycle: sub.cycle === 'yearly' ? 'yearly' : 'monthly',
+      paymentMethod,
+      invoices: Array.isArray(sub.invoices) ? (sub.invoices as TenantConfig['subscription']['invoices']) : [],
+    },
+  }
+}
+
 export function useAdminTenants(): {
   tenants: TenantConfig[]
   suspend: (id: string) => void
@@ -308,50 +371,90 @@ export function useAdminTenants(): {
 } {
   const [tenants, setTenants] = useState<TenantConfig[]>([])
 
-  const refresh = useCallback(() => {
-    setTenants([...mockStore.getAllTenants()])
+  const applyLocal = useCallback(() => {
+    if (DEMO_MODE) setTenants([...mockStore.getAllTenants()])
   }, [])
 
+  const syncFromBackend = useCallback(async () => {
+    try {
+      const res = await adminApiFetch('/admin/tenants')
+      if (!res.ok) {
+        if (DEMO_MODE) applyLocal()
+        return
+      }
+      const remote = await res.json()
+      if (!Array.isArray(remote)) return
+      const mapped = remote.map((row: Record<string, unknown>) => fromBackendTenant(row)).filter((t: TenantConfig) => t.id && t.slug)
+      if (DEMO_MODE) {
+        mockStore.mergeTenants(mapped)
+        applyLocal()
+      } else {
+        setTenants(mapped)
+      }
+    } catch {
+      if (DEMO_MODE) applyLocal()
+    }
+  }, [applyLocal])
+
+  const refresh = useCallback(() => {
+    applyLocal()
+    void syncFromBackend()
+  }, [applyLocal, syncFromBackend])
+
   useEffect(() => {
-    refresh()
-    window.addEventListener('orvexa:tenant-provisioned', refresh)
-    return () => window.removeEventListener('orvexa:tenant-provisioned', refresh)
-  }, [refresh])
-
-  const suspend = useCallback((id: string) => {
-    mockStore.suspendTenant(id)
-    refresh()
-  }, [refresh])
-
-  const reactivate = useCallback((id: string) => {
-    mockStore.reactivateTenant(id)
-    refresh()
-  }, [refresh])
+    if (DEMO_MODE) applyLocal()
+    void syncFromBackend()
+    const onChange = () => { void syncFromBackend() }
+    window.addEventListener('orvexa:tenant-provisioned', onChange)
+    window.addEventListener('focus', onChange)
+    return () => {
+      window.removeEventListener('orvexa:tenant-provisioned', onChange)
+      window.removeEventListener('focus', onChange)
+    }
+  }, [applyLocal, syncFromBackend])
 
   const setStatus = useCallback(async (id: string, status: TenantConfig['status']) => {
-    let endedSessions = false
     try {
       const res = await adminApiFetch(`/admin/tenants/${encodeURIComponent(id)}/status`, {
         method: 'PUT',
         body: JSON.stringify({ status }),
       })
-      if (!res.ok && res.status !== 404) {
+      if (!res.ok) {
+        if (DEMO_MODE && (res.status === 404 || res.status === 401)) {
+          mockStore.setTenantStatus(id, status)
+          applyLocal()
+          return {}
+        }
         const data = await res.json().catch(() => ({}))
         return { error: data.error || `The server refused this change (HTTP ${res.status}).` }
       }
-      endedSessions = res.ok && status !== 'active' && status !== 'read_only'
+      if (DEMO_MODE) mockStore.setTenantStatus(id, status)
+      await syncFromBackend()
+      return { endedSessions: status !== 'active' && status !== 'read_only' }
     } catch {
-      // Offline demo: the browser store is the source of truth.
+      if (DEMO_MODE) {
+        mockStore.setTenantStatus(id, status)
+        applyLocal()
+        return {}
+      }
+      return { error: 'The platform server is unreachable. Status was not changed.' }
     }
-    mockStore.setTenantStatus(id, status)
-    refresh()
-    return { endedSessions }
-  }, [refresh])
+  }, [applyLocal, syncFromBackend])
+
+  const suspend = useCallback((id: string) => {
+    void setStatus(id, 'suspended')
+  }, [setStatus])
+
+  const reactivate = useCallback((id: string) => {
+    void setStatus(id, 'active')
+  }, [setStatus])
 
   const changePlan = useCallback((id: string, plan: 'starter' | 'pro' | 'enterprise') => {
-    mockStore.changePlan(id, plan)
-    refresh()
-  }, [refresh])
+    if (DEMO_MODE) {
+      mockStore.changePlan(id, plan)
+      applyLocal()
+    }
+  }, [applyLocal])
 
   const provisionTenant = useCallback(
     async (data: {
@@ -369,39 +472,51 @@ export function useAdminTenants(): {
       customDomain?: string
     }): Promise<TenantConfig> => {
       const cleanSlug = data.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
-      const token = typeof window !== 'undefined' ? localStorage.getItem('lunar_admin_token') : null
+      const payload = {
+        slug: cleanSlug,
+        brandName: data.brandName,
+        ownerName: data.ownerName,
+        ownerEmail: data.ownerEmail,
+        ownerPhone: data.ownerPhone || '',
+        plan: data.plan || 'starter',
+        customDomain: data.customDomain || '',
+        niche: data.niche || '',
+        storeType: data.storeType || '',
+        categories: data.categories || [],
+        theme: {
+          primaryColor: data.primaryColor,
+          accentColor: data.accentColor,
+        },
+      }
 
       try {
-        await fetch(`${API_BASE}/admin/tenants`, {
+        const res = await adminApiFetch('/admin/tenants', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            id: `tenant_${cleanSlug}`,
-            slug: cleanSlug,
-            brandName: data.brandName,
-            ownerName: data.ownerName,
-            ownerEmail: data.ownerEmail,
-            ownerPhone: data.ownerPhone || '',
-            plan: data.plan || 'starter',
-            customDomain: data.customDomain || '',
-            niche: data.niche || '',
-            storeType: data.storeType || '',
-            categories: data.categories || [],
-          }),
+          body: JSON.stringify(payload),
         })
+        if (res.ok) {
+          const saved = fromBackendTenant(await res.json())
+          if (DEMO_MODE) mockStore.provisionTenant(data)
+          await createStoreFolder(saved.slug, saved.brandName)
+          window.dispatchEvent(new Event('orvexa:tenant-provisioned'))
+          await syncFromBackend()
+          return saved
+        }
+        if (!DEMO_MODE) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error || `Could not create the store (HTTP ${res.status}).`)
+        }
       } catch (err) {
+        if (!DEMO_MODE) throw err
         console.warn('Backend tenant create offline, using mock store:', err)
       }
 
       const created = mockStore.provisionTenant(data)
       await createStoreFolder(created.slug, created.brandName)
-      refresh()
+      applyLocal()
       return created
     },
-    [refresh]
+    [applyLocal, syncFromBackend]
   )
 
   return { tenants, suspend, reactivate, setStatus, changePlan, provisionTenant, refresh }

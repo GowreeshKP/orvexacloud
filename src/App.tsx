@@ -5,7 +5,7 @@ import { useApplicationLayer, useTenant, useSwitchLayer } from './context/Tenant
 import { mockStore } from './api/mock-store'
 import { auditLogger } from './api/audit-logger'
 import { DEMO_MODE } from './api/auth'
-import { DEMO_SHOPPER, shopperAccounts } from './api/shopper-accounts'
+import { shopperAccounts } from './api/shopper-accounts'
 import { storeInbox } from './api/store-messages'
 import { MOCK_TENANTS } from './data/mock-tenants'
 import {
@@ -2780,15 +2780,14 @@ function CheckoutModal({
   discountCode?: string | null
 }) {
   const [step, setStep] = useState<'shipping' | 'payment' | 'success'>('shipping')
-  const demoPrefill = DEMO_MODE && !isTemplateStore(tenant)
   const [formData, setFormData] = useState({
-    name: user?.name || (demoPrefill ? 'Priya Sharma' : ''),
-    email: user?.email || (demoPrefill ? 'priya.sharma@example.com' : ''),
-    phone: user?.phone || (demoPrefill ? '+91 98765 43210' : ''),
-    address: demoPrefill ? 'Flat 402, Sunshine Heights, Jubilee Hills' : '',
-    city: demoPrefill ? 'Hyderabad' : '',
-    state: demoPrefill ? 'Telangana' : '',
-    pincode: demoPrefill ? '500033' : '',
+    name: user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    address: '',
+    city: '',
+    state: '',
+    pincode: '',
     paymentMethod: 'upi',
   })
   const [orderId, setOrderId] = useState('')
@@ -3215,13 +3214,11 @@ function AuthModal({
   tenant?: TenantConfig
 }) {
   const [tab, setTab] = useState<'signin' | 'signup'>('signin')
-  
-  const isTemplate = isTemplateStore(tenant)
-  const tenantKey = tenant?.id || 'tenant_lunar'
+  const tenantSlug = tenant?.slug || ''
 
   // Shopper sign in state
-  const [signInEmail, setSignInEmail] = useState(DEMO_MODE && !isTemplate ? DEMO_SHOPPER.email : '')
-  const [signInPassword, setSignInPassword] = useState(DEMO_MODE && !isTemplate ? DEMO_SHOPPER.password : '')
+  const [signInEmail, setSignInEmail] = useState('')
+  const [signInPassword, setSignInPassword] = useState('')
   const [signInLoading, setSignInLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [signInError, setSignInError] = useState('')
@@ -3233,8 +3230,8 @@ function AuthModal({
   const [signUpPhone, setSignUpPhone] = useState('')
   const [signUpPassword, setSignUpPassword] = useState('')
   const [otpCode, setOtpCode] = useState('')
-  const [generatedOtp, setGeneratedOtp] = useState('849201')
   const [otpError, setOtpError] = useState('')
+  const [otpBusy, setOtpBusy] = useState(false)
   const [resendTimer, setResendTimer] = useState(30)
 
   const brandName = tenant?.brandName || tenant?.name || 'The Lunar Clothing'
@@ -3257,68 +3254,85 @@ function AuthModal({
       return
     }
 
-    setSignInLoading(true)
-    setSignInError('')
-    const user = await shopperAccounts.signIn(tenantKey, signInEmail, signInPassword, !isTemplate)
-    setSignInLoading(false)
-    if (!user) {
-      setSignInError(
-        shopperAccounts.emailExists(tenantKey, signInEmail, !isTemplate)
-          ? 'Incorrect password. Please try again.'
-          : 'No account found with this email. Create an account to continue.'
-      )
+    if (!tenantSlug) {
+      setSignInError('This store is not available for sign-in right now.')
       return
     }
-    onLoginSuccess(user, false)
+    setSignInLoading(true)
+    setSignInError('')
+    const res = await shopperAccounts.signIn(tenantSlug, signInEmail, signInPassword)
+    setSignInLoading(false)
+    if (!res.user) {
+      setSignInError(res.error || 'Could not sign in.')
+      return
+    }
+    onLoginSuccess(res.user, false)
     onClose()
   }
 
-  const handleFillDemo = () => {
-    setSignInEmail(DEMO_SHOPPER.email)
-    setSignInPassword(DEMO_SHOPPER.password)
-    setSignInError('')
-  }
-
-  // Shopper registration OTP handlers
-  const handleSendOtp = (e: React.FormEvent) => {
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!signUpName || !signUpEmail || !signUpPassword) {
       setOtpError('Please fill out all mandatory fields.')
       return
     }
-    if (signUpPassword.length < 6) {
-      setOtpError('Password must be at least 6 characters.')
+    if (signUpPassword.length < 8) {
+      setOtpError('Password must be at least 8 characters.')
       return
     }
-    if (shopperAccounts.emailExists(tenantKey, signUpEmail, !isTemplate)) {
-      setOtpError('An account with this email already exists. Please sign in instead.')
+    if (!tenantSlug) {
+      setOtpError('This store is not available for sign-up right now.')
       return
     }
-    const randomOtp = Math.floor(100000 + Math.random() * 900000).toString()
-    setGeneratedOtp(randomOtp)
+    setOtpBusy(true)
+    setOtpError('')
+    const res = await shopperAccounts.startRegister(tenantSlug, {
+      name: signUpName,
+      email: signUpEmail,
+      phone: signUpPhone,
+      password: signUpPassword,
+    })
+    setOtpBusy(false)
+    if (res.error) {
+      setOtpError(res.error)
+      if (res.retryAfterSeconds) setResendTimer(res.retryAfterSeconds)
+      return
+    }
     setSignUpStep('otp')
     setResendTimer(30)
-    setOtpError('')
+    setOtpCode('')
   }
 
   const handleVerifyOtpAndRegister = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (otpCode.trim() !== generatedOtp) {
-      setOtpError('Invalid verification code. Please check and try again.')
+    if (!tenantSlug) {
+      setOtpError('This store is not available for sign-up right now.')
       return
     }
-
-    const res = await shopperAccounts.register(
-      tenantKey,
-      { name: signUpName, email: signUpEmail, phone: signUpPhone, password: signUpPassword },
-      !isTemplate
-    )
+    setOtpBusy(true)
+    setOtpError('')
+    const res = await shopperAccounts.verify(tenantSlug, signUpEmail, otpCode.trim())
+    setOtpBusy(false)
     if (!res.user) {
       setOtpError(res.error || 'Could not create your account. Please try again.')
       return
     }
     onLoginSuccess(res.user, true)
     onClose()
+  }
+
+  const handleResendCode = async () => {
+    if (!tenantSlug) return
+    setOtpBusy(true)
+    setOtpError('')
+    const res = await shopperAccounts.resendCode(tenantSlug, signUpEmail)
+    setOtpBusy(false)
+    if (res.error) {
+      setOtpError(res.error)
+      if (res.retryAfterSeconds) setResendTimer(res.retryAfterSeconds)
+      return
+    }
+    setResendTimer(30)
   }
 
   return (
@@ -3372,19 +3386,6 @@ function AuthModal({
           {/* ── 1. CUSTOMER SIGN IN ─────────────────────────────── */}
           {tab === 'signin' && (
             <form onSubmit={handleSignIn} className="space-y-4 text-xs">
-              {!isTemplate && (
-                <div className="bg-amber-50 border border-amber-200 p-3 text-[11px] text-amber-900 rounded-xs flex items-center justify-between">
-                  <span>⚡ Test with demo account to view existing orders:</span>
-                  <button
-                    type="button"
-                    onClick={handleFillDemo}
-                    className="font-bold underline text-amber-950 hover:text-black cursor-pointer"
-                  >
-                    Quick Fill
-                  </button>
-                </div>
-              )}
-
               <div>
                 <label className="block text-black/60 font-semibold mb-1">Email Address *</label>
                 <input
@@ -3492,7 +3493,7 @@ function AuthModal({
                       required
                       value={signUpPassword}
                       onChange={(e) => setSignUpPassword(e.target.value)}
-                      placeholder="Minimum 6 characters"
+                      placeholder="Minimum 8 characters"
                       className="w-full border border-black/20 p-2.5 outline-none focus:border-black text-xs"
                     />
                   </div>
@@ -3501,9 +3502,10 @@ function AuthModal({
 
                   <button
                     type="submit"
-                    className="w-full bg-black text-white font-bold text-xs tracking-[0.2em] uppercase py-3.5 mt-2 hover:bg-stone-800 transition-colors cursor-pointer shadow-md"
+                    disabled={otpBusy}
+                    className="w-full bg-black text-white font-bold text-xs tracking-[0.2em] uppercase py-3.5 mt-2 hover:bg-stone-800 transition-colors cursor-pointer shadow-md disabled:opacity-60"
                   >
-                    CONTINUE TO EMAIL VERIFICATION →
+                    {otpBusy ? 'SENDING CODE…' : 'CONTINUE TO EMAIL VERIFICATION →'}
                   </button>
 
                   <div className="text-center pt-2 text-black/50">
@@ -3525,36 +3527,21 @@ function AuthModal({
                     </div>
                     <h3 className="text-sm font-bold uppercase tracking-wider text-black">Verify Your Email</h3>
                     <p className="text-black/60 text-[11px] mt-1">
-                      We sent a 6-digit verification code to <span className="font-bold text-black">{signUpEmail}</span>
+                      We sent a 6-digit verification code to <span className="font-bold text-black">{signUpEmail}</span>. Check your inbox (and spam).
                     </p>
-                  </div>
-
-                  {/* Demo OTP auto-paste box */}
-                  <div className="bg-emerald-50 border border-emerald-200 p-3 text-center rounded-xs">
-                    <p className="text-[11px] text-emerald-800 font-medium">Demo verification code sent to your inbox:</p>
-                    <div className="flex items-center justify-center gap-2 mt-1">
-                      <span className="font-mono text-base font-bold tracking-widest text-emerald-900 bg-white px-3 py-1 border border-emerald-300">
-                        {generatedOtp}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setOtpCode(generatedOtp)}
-                        className="text-[10px] uppercase font-bold text-emerald-900 underline cursor-pointer"
-                      >
-                        Auto-Fill Code
-                      </button>
-                    </div>
                   </div>
 
                   <div>
                     <label className="block text-black/60 font-semibold mb-1">Enter 6-Digit Code *</label>
                     <input
                       type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
                       required
                       maxLength={6}
                       value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value)}
-                      placeholder="e.g. 849201"
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="000000"
                       className="w-full border border-black/20 p-2.5 text-center font-mono text-lg tracking-[0.3em] font-bold outline-none focus:border-black"
                     />
                   </div>
@@ -3563,9 +3550,10 @@ function AuthModal({
 
                   <button
                     type="submit"
-                    className="w-full bg-black text-white font-bold text-xs tracking-[0.2em] uppercase py-3.5 hover:bg-stone-800 cursor-pointer shadow-md"
+                    disabled={otpBusy || otpCode.trim().length !== 6}
+                    className="w-full bg-black text-white font-bold text-xs tracking-[0.2em] uppercase py-3.5 hover:bg-stone-800 cursor-pointer shadow-md disabled:opacity-60"
                   >
-                    VERIFY EMAIL & COMPLETE SIGN UP ✓
+                    {otpBusy ? 'VERIFYING…' : 'VERIFY EMAIL & COMPLETE SIGN UP ✓'}
                   </button>
 
                   <div className="flex justify-between items-center text-[11px] text-black/60 pt-2">
@@ -3581,12 +3569,9 @@ function AuthModal({
                     ) : (
                       <button
                         type="button"
-                        onClick={() => {
-                          const code = Math.floor(100000 + Math.random() * 900000).toString()
-                          setGeneratedOtp(code)
-                          setResendTimer(30)
-                        }}
-                        className="font-bold underline text-black cursor-pointer"
+                        disabled={otpBusy}
+                        onClick={() => { void handleResendCode() }}
+                        className="font-bold underline text-black cursor-pointer disabled:opacity-50"
                       >
                         Resend Code
                       </button>
@@ -4031,15 +4016,15 @@ function AccountDrawer({
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-black/50 uppercase text-[10px] font-bold">Registered Name</p>
-                      <p className="font-bold text-black text-sm">{user?.name || 'Priya Sharma'}</p>
+                      <p className="font-bold text-black text-sm">{user?.name || '—'}</p>
                     </div>
                     <div>
                       <p className="text-black/50 uppercase text-[10px] font-bold">Email Address</p>
-                      <p className="font-bold text-black text-sm">{user?.email || 'priya.sharma@example.com'}</p>
+                      <p className="font-bold text-black text-sm">{user?.email || '—'}</p>
                     </div>
                     <div>
                       <p className="text-black/50 uppercase text-[10px] font-bold">Phone Number</p>
-                      <p className="font-bold text-black text-sm">{user?.phone || '+91 98765 43210'}</p>
+                      <p className="font-bold text-black text-sm">{user?.phone || '—'}</p>
                     </div>
                     <div>
                       <p className="text-black/50 uppercase text-[10px] font-bold">Default Delivery City</p>
@@ -4975,7 +4960,7 @@ export default function App() {
         </div>
       )
     }
-    return <StoreNotFound slug={tenantError?.match(/"([^"]+)"/)?.[1]} />
+    return <StoreNotFound slug={tenantError?.match(/"([^"]+)"/)?.[1]} error={tenantError} />
   }
 
   if (layer === 'dashboard') {
@@ -5019,8 +5004,7 @@ export default function App() {
   const myOrders = useMemo(() => {
     if (!user) return []
     const email = user.email.toLowerCase()
-    const isDemoShopper = !isTemplateStore(activeTenant) && email === DEMO_SHOPPER.email
-    return orders.filter((o) => (o.customerEmail ? o.customerEmail.toLowerCase() === email : isDemoShopper))
+    return orders.filter((o) => o.customerEmail && o.customerEmail.toLowerCase() === email)
   }, [orders, user, activeTenant])
   const [isAuthOpen, setIsAuthOpen] = useState(false)
   const [isAccountOpen, setIsAccountOpen] = useState(false)

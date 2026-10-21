@@ -122,7 +122,9 @@ router.get('/tenants', async (req: Request, res: Response) => {
   try {
     const masterDb = await connectMasterDatabase()
     const Tenant = getTenantModel(masterDb)
-    const tenants = await Tenant.find().sort({ createdAt: -1 })
+    const tenants = await Tenant.find()
+      .select('-passwordHash -staffMembers.passwordHash -ownerPortalToken -exportTokenHash -exportTokenExpires')
+      .sort({ createdAt: -1 })
     res.json(tenants)
   } catch (err) {
     serverError(res, 'list tenants', err, 'Failed to fetch stores')

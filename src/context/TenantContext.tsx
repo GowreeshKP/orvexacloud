@@ -56,9 +56,12 @@ function storedSignInToken(): string | null {
   return authService.getSellerToken() || authService.getAdminToken()
 }
 
+type UnavailableReason = 'cancelled' | 'suspended' | 'pending' | 'read_only'
+
 type ResolveResult =
   | { status: 'ok'; tenant: TenantConfig }
   | { status: 'missing' }
+  | { status: 'unavailable'; reason: UnavailableReason }
   | { status: 'transient' }
 
 async function fetchPublicTenant(slug: string, accessToken?: string | null): Promise<ResolveResult> {
@@ -72,7 +75,15 @@ async function fetchPublicTenant(slug: string, accessToken?: string | null): Pro
       signal: ctrl.signal,
       headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
     })
-    if (res.status === 404 || res.status === 403) return { status: 'missing' }
+    if (res.status === 404) return { status: 'missing' }
+    if (res.status === 403) {
+      const body = (await res.json().catch(() => null)) as { status?: string } | null
+      const reason = body?.status
+      if (reason === 'cancelled' || reason === 'suspended' || reason === 'pending' || reason === 'read_only') {
+        return { status: 'unavailable', reason }
+      }
+      return { status: 'missing' }
+    }
     if (!res.ok) return { status: 'transient' }
     const body = (await res.json()) as TenantConfig
     return body?.slug ? { status: 'ok', tenant: body } : { status: 'transient' }
@@ -121,6 +132,21 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         hasTenantRef.current = true
         setTenant(deepCloneTenant(fromApi.tenant))
         setError(null)
+        return
+      }
+
+      if (fromApi.status === 'unavailable') {
+        hasTenantRef.current = false
+        setTenant(null)
+        const why =
+          fromApi.reason === 'cancelled'
+            ? `Store "${slug}" has closed.`
+            : fromApi.reason === 'suspended'
+              ? `Store "${slug}" is suspended.`
+              : fromApi.reason === 'pending'
+                ? `Store "${slug}" is pending approval.`
+                : `Store "${slug}" is not taking orders.`
+        setError(why)
         return
       }
 

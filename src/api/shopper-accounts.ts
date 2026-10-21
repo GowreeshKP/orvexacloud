@@ -1,24 +1,8 @@
-// --- Storefront shopper accounts (per tenant, persisted in localStorage) ---
+// Storefront shopper accounts: email verification and login go through the tenant API.
 import type { UserAccount } from '@/types'
+import { API_BASE } from '@/lib/api-base'
 
-const ACCOUNTS_KEY = 'orvexa_shoppers_v1'
 const SESSION_KEY = 'orvexa_shopper_sessions_v1'
-
-interface StoredShopper {
-  name: string
-  email: string
-  phone: string
-  passwordHash: string
-  createdAt: string
-}
-
-/** Demo shopper that only exists on the original Lunar-style demo stores. */
-export const DEMO_SHOPPER = {
-  name: 'Priya Sharma',
-  email: 'priya.sharma@example.com',
-  phone: '+91 98765 43210',
-  password: 'lunar123',
-}
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -33,66 +17,87 @@ function writeJson(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value))
   } catch {
-    // Storage full or unavailable — accounts simply won't persist.
+    // Storage full or unavailable — sessions simply won't persist.
   }
 }
 
-async function hashPassword(email: string, password: string): Promise<string> {
-  const input = `${email.toLowerCase()}::${password}`
-  if (globalThis.crypto?.subtle) {
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input))
-    return Array.from(new Uint8Array(digest))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('')
-  }
-  let h = 5381
-  for (let i = 0; i < input.length; i++) h = ((h << 5) + h + input.charCodeAt(i)) | 0
-  return `djb2_${(h >>> 0).toString(16)}`
+function toUser(s: { name: string; email: string; phone?: string }): UserAccount {
+  return { name: s.name, email: s.email, phone: s.phone || '', verified: true }
 }
 
-function getAccounts(tenantId: string): StoredShopper[] {
-  return readJson<Record<string, StoredShopper[]>>(ACCOUNTS_KEY, {})[tenantId] || []
-}
-
-function toUser(s: { name: string; email: string; phone: string }): UserAccount {
-  return { name: s.name, email: s.email, phone: s.phone, verified: true }
+async function shopperFetch(
+  slug: string,
+  path: string,
+  body: Record<string, unknown>
+): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
+  const res = await fetch(`${API_BASE}/stores/${encodeURIComponent(slug)}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>
+  return { ok: res.ok, status: res.status, data }
 }
 
 export const shopperAccounts = {
-  emailExists(tenantId: string, email: string, allowDemo: boolean): boolean {
-    const e = email.trim().toLowerCase()
-    if (allowDemo && e === DEMO_SHOPPER.email) return true
-    return getAccounts(tenantId).some((a) => a.email.toLowerCase() === e)
+  async startRegister(
+    slug: string,
+    data: { name: string; email: string; phone: string; password: string }
+  ): Promise<{ error?: string; retryAfterSeconds?: number }> {
+    try {
+      const { ok, data: body } = await shopperFetch(slug, '/shoppers/register', data)
+      if (ok) return {}
+      return {
+        error: String(body.error || 'Could not send the verification email.'),
+        retryAfterSeconds: typeof body.retryAfterSeconds === 'number' ? body.retryAfterSeconds : undefined,
+      }
+    } catch {
+      return { error: 'Could not reach the store. Check your connection and try again.' }
+    }
   },
 
-  async register(
-    tenantId: string,
-    data: { name: string; email: string; phone: string; password: string },
-    allowDemo: boolean
+  async resendCode(slug: string, email: string): Promise<{ error?: string; retryAfterSeconds?: number }> {
+    try {
+      const { ok, data: body } = await shopperFetch(slug, '/shoppers/resend', { email })
+      if (ok) return {}
+      return {
+        error: String(body.error || 'Could not resend the code.'),
+        retryAfterSeconds: typeof body.retryAfterSeconds === 'number' ? body.retryAfterSeconds : undefined,
+      }
+    } catch {
+      return { error: 'Could not reach the store. Check your connection and try again.' }
+    }
+  },
+
+  async verify(
+    slug: string,
+    email: string,
+    code: string
   ): Promise<{ user?: UserAccount; error?: string }> {
-    const email = data.email.trim().toLowerCase()
-    if (this.emailExists(tenantId, email, allowDemo)) {
-      return { error: 'An account with this email already exists. Please sign in instead.' }
+    try {
+      const { ok, data: body } = await shopperFetch(slug, '/shoppers/verify', { email, code })
+      const user = body.user && typeof body.user === 'object' ? (body.user as UserAccount) : undefined
+      if (ok && user?.email) return { user: toUser(user) }
+      return { error: String(body.error || 'Invalid verification code. Please check and try again.') }
+    } catch {
+      return { error: 'Could not reach the store. Check your connection and try again.' }
     }
-    const all = readJson<Record<string, StoredShopper[]>>(ACCOUNTS_KEY, {})
-    const shopper: StoredShopper = {
-      name: data.name.trim(),
-      email,
-      phone: data.phone.trim(),
-      passwordHash: await hashPassword(email, data.password),
-      createdAt: new Date().toISOString(),
-    }
-    all[tenantId] = [...(all[tenantId] || []), shopper]
-    writeJson(ACCOUNTS_KEY, all)
-    return { user: toUser(shopper) }
   },
 
-  async signIn(tenantId: string, email: string, password: string, allowDemo: boolean): Promise<UserAccount | null> {
-    const e = email.trim().toLowerCase()
-    if (allowDemo && e === DEMO_SHOPPER.email && password === DEMO_SHOPPER.password) return toUser(DEMO_SHOPPER)
-    const account = getAccounts(tenantId).find((a) => a.email.toLowerCase() === e)
-    if (!account) return null
-    return account.passwordHash === (await hashPassword(e, password)) ? toUser(account) : null
+  async signIn(slug: string, email: string, password: string): Promise<{ user?: UserAccount; error?: string }> {
+    try {
+      const { ok, status, data: body } = await shopperFetch(slug, '/shoppers/login', { email, password })
+      const user = body.user && typeof body.user === 'object' ? (body.user as UserAccount) : undefined
+      if (ok && user?.email) return { user: toUser(user) }
+      return {
+        error: String(
+          body.error ||
+            (status === 401 ? 'No account found with this email. Create an account to continue.' : 'Could not sign in.')
+        ),
+      }
+    } catch {
+      return { error: 'Could not reach the store. Check your connection and try again.' }
+    }
   },
 
   getSession(tenantId: string): UserAccount | null {

@@ -29,6 +29,7 @@ import {
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { SUBSCRIBER_SOURCES, type SubscriberSource } from '../models/tenant/Inbox.js'
+import { sendEmail } from '../services/mailer.js'
 
 const router = Router({ mergeParams: true })
 
@@ -1093,6 +1094,209 @@ function serializeMessage(doc: { id?: string; name: string; email: string; phone
     createdAt: obj.createdAt instanceof Date ? obj.createdAt.toISOString() : String(obj.createdAt),
   }
 }
+
+const SHOPPER_CODE_MS = 10 * 60 * 1000
+const SHOPPER_RESEND_MS = 30 * 1000
+const SHOPPER_MAX_ATTEMPTS = 5
+
+function shopperCodeHash(email: string, code: string): string {
+  const pepper = process.env.JWT_SECRET || ''
+  return crypto.createHash('sha256').update(`${email}:${code}:${pepper}`).digest('hex')
+}
+
+function shopperHashesMatch(stored: string, incoming: string): boolean {
+  const a = Buffer.from(stored || '', 'hex')
+  const b = Buffer.from(incoming || '', 'hex')
+  if (a.length !== 32 || b.length !== 32 || a.length !== b.length) return false
+  return crypto.timingSafeEqual(a, b)
+}
+
+function publicShopper(doc: { name: string; email: string; phone?: string }) {
+  return { name: doc.name, email: doc.email, phone: doc.phone || '', verified: true }
+}
+
+const shopperLimiter = rateLimit({
+  skip: () => process.env.DISABLE_RATE_LIMITS === 'true' && process.env.NODE_ENV !== 'production',
+  windowMs: 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many tries. Wait a minute and try again.' },
+})
+
+async function issueShopperCode(
+  req: Request,
+  email: string,
+  fields: { name: string; phone: string; passwordHash: string }
+): Promise<{ error?: string; retryAfterSeconds?: number }> {
+  const Shopper = req.tenantDb!.Shopper
+  const existing = await Shopper.findOne({ email })
+  if (existing?.emailVerified) return { error: 'An account with this email already exists. Please sign in instead.' }
+
+  const now = Date.now()
+  if (existing?.lastCodeSentAt && now - existing.lastCodeSentAt.getTime() < SHOPPER_RESEND_MS) {
+    return { retryAfterSeconds: Math.ceil((SHOPPER_RESEND_MS - (now - existing.lastCodeSentAt.getTime())) / 1000) }
+  }
+
+  const code = String(crypto.randomInt(100000, 1000000))
+  const verifyCodeHash = shopperCodeHash(email, code)
+  const verifyExpires = new Date(now + SHOPPER_CODE_MS)
+  await Shopper.findOneAndUpdate(
+    { email },
+    {
+      $set: {
+        email,
+        name: fields.name,
+        phone: fields.phone,
+        passwordHash: fields.passwordHash,
+        emailVerified: false,
+        verifyCodeHash,
+        verifyExpires,
+        verifyAttempts: 0,
+        lastCodeSentAt: new Date(now),
+      },
+    },
+    { upsert: true, new: true }
+  )
+
+  const brand = req.tenant!.brandName
+  const sent = await sendEmail({
+    to: email,
+    subject: `Your ${brand} verification code`,
+    text: [
+      `Hi ${fields.name || 'there'},`,
+      '',
+      `Your 6-digit verification code for ${brand} is ${code}.`,
+      'It expires in 10 minutes. If you did not create this account, ignore this email.',
+    ].join('\n'),
+    idempotencyKey: `shopper-verify-${req.tenant!.slug}-${email}-${Math.floor(now / SHOPPER_RESEND_MS)}`,
+  })
+  if (!sent && process.env.NODE_ENV === 'production') {
+    return { error: 'We could not send the verification email. Try again shortly.' }
+  }
+  return {}
+}
+
+router.post('/shoppers/register', shopperLimiter, async (req: Request, res: Response) => {
+  try {
+    const body = isPlainObject(req.body) ? req.body : {}
+    const name = reqString(body.name, 'name', 120)
+    const email = reqString(body.email, 'email', 254).toLowerCase()
+    if (!EMAIL_PATTERN.test(email)) throw new ValidationError('Enter a valid email address.')
+    const phone = optString(body.phone, 'phone', 20) || ''
+    const password = reqString(body.password, 'password', 200, 8)
+
+    const result = await issueShopperCode(req, email, {
+      name,
+      phone,
+      passwordHash: await bcrypt.hash(password, 10),
+    })
+    if (result.error) {
+      res.status(result.error.startsWith('An account') ? 409 : 503).json({ error: result.error })
+      return
+    }
+    if (result.retryAfterSeconds) {
+      res.status(429).json({ error: `Wait ${result.retryAfterSeconds}s before requesting another code.`, retryAfterSeconds: result.retryAfterSeconds })
+      return
+    }
+    res.json({ sent: true })
+  } catch (err) {
+    sendError(res, err, 'Could not start email verification', 'shopper register')
+  }
+})
+
+router.post('/shoppers/resend', shopperLimiter, async (req: Request, res: Response) => {
+  try {
+    const body = isPlainObject(req.body) ? req.body : {}
+    const email = reqString(body.email, 'email', 254).toLowerCase()
+    if (!EMAIL_PATTERN.test(email)) throw new ValidationError('Enter a valid email address.')
+    const pending = await req.tenantDb!.Shopper.findOne({ email, emailVerified: false })
+    if (!pending?.passwordHash) {
+      res.json({ sent: true })
+      return
+    }
+    const result = await issueShopperCode(req, email, {
+      name: pending.name,
+      phone: pending.phone || '',
+      passwordHash: pending.passwordHash,
+    })
+    if (result.error) {
+      res.status(503).json({ error: result.error })
+      return
+    }
+    if (result.retryAfterSeconds) {
+      res.status(429).json({ error: `Wait ${result.retryAfterSeconds}s before requesting another code.`, retryAfterSeconds: result.retryAfterSeconds })
+      return
+    }
+    res.json({ sent: true })
+  } catch (err) {
+    sendError(res, err, 'Could not resend the code', 'shopper resend')
+  }
+})
+
+router.post('/shoppers/verify', shopperLimiter, async (req: Request, res: Response) => {
+  try {
+    const body = isPlainObject(req.body) ? req.body : {}
+    const email = reqString(body.email, 'email', 254).toLowerCase()
+    const code = reqString(body.code, 'code', 6, 6)
+    if (!/^\d{6}$/.test(code)) throw new ValidationError('Enter the 6-digit code from your email.')
+
+    const Shopper = req.tenantDb!.Shopper
+    const shopper = await Shopper.findOne({ email })
+    if (!shopper || shopper.emailVerified) {
+      res.status(400).json({ error: 'Invalid or expired verification code.' })
+      return
+    }
+    if (!shopper.verifyExpires || shopper.verifyExpires.getTime() < Date.now()) {
+      res.status(400).json({ error: 'That code has expired. Request a new one.' })
+      return
+    }
+    if (shopper.verifyAttempts >= SHOPPER_MAX_ATTEMPTS) {
+      res.status(429).json({ error: 'Too many attempts. Request a new code.' })
+      return
+    }
+    if (!shopperHashesMatch(shopper.verifyCodeHash, shopperCodeHash(email, code))) {
+      shopper.verifyAttempts += 1
+      await shopper.save()
+      res.status(400).json({ error: 'Invalid verification code. Check the email and try again.' })
+      return
+    }
+
+    shopper.emailVerified = true
+    shopper.verifyCodeHash = ''
+    shopper.verifyExpires = null
+    shopper.verifyAttempts = 0
+    await shopper.save()
+    await collectSubscriber(req, email, 'newsletter').catch(() => undefined)
+    res.json({ user: publicShopper(shopper) })
+  } catch (err) {
+    sendError(res, err, 'Could not verify the email', 'shopper verify')
+  }
+})
+
+router.post('/shoppers/login', shopperLimiter, async (req: Request, res: Response) => {
+  try {
+    const body = isPlainObject(req.body) ? req.body : {}
+    const email = reqString(body.email, 'email', 254).toLowerCase()
+    const password = reqString(body.password, 'password', 200, 1)
+    const shopper = await req.tenantDb!.Shopper.findOne({ email })
+    if (!shopper?.passwordHash) {
+      res.status(401).json({ error: 'No account found with this email. Create an account to continue.' })
+      return
+    }
+    if (!shopper.emailVerified) {
+      res.status(403).json({ error: 'Check your email for the 6-digit code, then finish creating your account.' })
+      return
+    }
+    if (!(await bcrypt.compare(password, shopper.passwordHash))) {
+      res.status(401).json({ error: 'Incorrect password. Please try again.' })
+      return
+    }
+    res.json({ user: publicShopper(shopper) })
+  } catch (err) {
+    sendError(res, err, 'Could not sign in', 'shopper login')
+  }
+})
 
 function serializeSubscriber(doc: { email: string; source?: string; subscribedAt?: Date; createdAt?: Date }) {
   const when = doc.subscribedAt || doc.createdAt

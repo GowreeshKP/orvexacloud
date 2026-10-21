@@ -278,31 +278,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = await res.json()
 
         if (!res.ok) {
-          // Check local credentials fallback
-          if (credentials.type === 'seller' && credentials.loginId) {
-            const localRes = await authService.loginSeller(credentials.loginId, credentials.password)
-            if (localRes.success && localRes.session) {
-              const session: AuthSession = {
-                userId: localRes.session.userId,
-                name: localRes.session.name,
-                email: localRes.session.email,
-                role: 'seller',
-                tenantId: localRes.session.tenantId,
-                tenantSlug: localRes.session.tenantSlug,
-                brandName: localRes.session.brandName,
-                loginTime: localRes.session.loginTime,
-              }
-              setState({
-                accessToken: 'local_token_fallback',
-                session,
-                isAuthenticated: true,
-                isLoading: false,
-                error: null,
-              })
-              return
-            }
-          }
-
           setState((prev) => ({
             ...prev,
             isLoading: false,
@@ -335,32 +310,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
 
         scheduleRefresh(data.accessToken, session)
-      } catch (err: any) {
-        // Fallback for offline / demo mode
-        if (credentials.type === 'seller' && credentials.loginId) {
-          const localRes = await authService.loginSeller(credentials.loginId, credentials.password)
-          if (localRes.success && localRes.session) {
-            const session: AuthSession = {
-              userId: localRes.session.userId,
-              name: localRes.session.name,
-              email: localRes.session.email,
-              role: 'seller',
-              tenantId: localRes.session.tenantId,
-              tenantSlug: localRes.session.tenantSlug,
-              brandName: localRes.session.brandName,
-              loginTime: localRes.session.loginTime,
-            }
-            setState({
-              accessToken: 'local_token_fallback',
-              session,
-              isAuthenticated: true,
-              isLoading: false,
-              error: null,
-            })
-            return
-          }
-        }
-
+      } catch {
         setState((prev) => ({
           ...prev,
           isLoading: false,

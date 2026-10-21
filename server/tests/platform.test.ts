@@ -748,3 +748,50 @@ describe('storefront inbox and newsletter subscribers', () => {
     assert.equal((await api('POST', '/api/stores/alpha/contact', { body: { name: 'X', email: 'x@x.test' } })).status, 400)
   })
 })
+
+describe('shopper email verification', () => {
+  test('register emails a 6-digit code, never returns it, and login requires verify', async () => {
+    const email = 'newshopper@example.com'
+    const password = 'Shopper-Pass-1'
+    mailLog.length = 0
+
+    const started = await api('POST', '/api/stores/alpha/shoppers/register', {
+      body: { name: 'New Shopper', email, phone: '+91 90000 00000', password },
+    })
+    assert.equal(started.status, 200)
+    assert.equal(started.body.sent, true)
+    assert.equal(started.body.code, undefined)
+    assert.equal(JSON.stringify(started.body).includes(email.split('@')[0]), false)
+
+    const mail = mailLog.find((m) => m.includes('verification code for Alpha Store'))
+    assert.ok(mail, 'verification email should be logged when Resend is unset')
+    const match = mail.match(/is (\d{6})\./)
+    assert.ok(match, `mail should include a 6-digit code: ${mail}`)
+    const code = match[1]
+    assert.equal(JSON.stringify(started.body).includes(code), false)
+
+    const beforeVerify = await api('POST', '/api/stores/alpha/shoppers/login', { body: { email, password } })
+    assert.equal(beforeVerify.status, 403)
+
+    const wrong = await api('POST', '/api/stores/alpha/shoppers/verify', { body: { email, code: '000000' } })
+    assert.equal(wrong.status, 400)
+    assert.equal(wrong.body.code, undefined)
+
+    const verified = await api('POST', '/api/stores/alpha/shoppers/verify', { body: { email, code } })
+    assert.equal(verified.status, 200)
+    assert.equal(verified.body.user.email, email)
+    assert.equal(verified.body.user.verified, true)
+    assert.equal(verified.body.code, undefined)
+    assert.equal(JSON.stringify(verified.body).includes(code), false)
+
+    const signedIn = await api('POST', '/api/stores/alpha/shoppers/login', { body: { email, password } })
+    assert.equal(signedIn.status, 200)
+    assert.equal(signedIn.body.user.email, email)
+
+    const otherStore = await api('POST', '/api/stores/bravo/shoppers/login', { body: { email, password } })
+    assert.equal(otherStore.status, 401)
+
+    const inbox = await api('GET', '/api/stores/alpha/inbox', { token: alpha.accessToken })
+    assert.equal(inbox.body.subscribers.some((s: { email: string }) => s.email === email), true)
+  })
+})

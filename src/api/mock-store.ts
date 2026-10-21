@@ -149,6 +149,12 @@ class MockPlatformStore {
     this.persist()
   }
 
+  // Live tenant rows overlay the demo list by id. Production admin never uses this as truth.
+  mergeTenants(remote: TenantConfig[]): void {
+    remote.forEach((t) => this.tenants.set(t.id, { ...this.tenants.get(t.id), ...t }))
+    this.persist()
+  }
+
   approveTenant(applicationId: string, slugOverride?: string): TenantConfig | null {
     const app = this.applications.get(applicationId)
     if (!app || app.status === 'waitlist') return null

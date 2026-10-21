@@ -4,7 +4,7 @@
 
 import { useState, useCallback } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { authService, DEFAULT_DEMO_SELLER_CREDENTIALS, DEMO_ADMIN_CREDENTIAL, DEMO_MODE } from '@/api/auth'
+import { authService } from '@/api/auth'
 import { API_ORIGIN as API_BASE } from '@/lib/api-base'
 
 interface Props {
@@ -110,13 +110,6 @@ export default function CommonLoginModal({ isOpen, onClose, onSuccess }: Props) 
     setLocalError(null)
     clearError()
     onClose()
-  }
-
-  const handleFillDemo = (id: string, pass: string) => {
-    setLoginId(id)
-    setPassword(pass)
-    setLocalError(null)
-    clearError()
   }
 
   if (!isOpen) return null
@@ -241,65 +234,6 @@ export default function CommonLoginModal({ isOpen, onClose, onSuccess }: Props) 
                   <span>Sign In →</span>
                 )}
               </button>
-
-              {DEMO_MODE && (
-              <div className="pt-4 border-t border-slate-800/80 space-y-2">
-                <p className="text-[10px] font-mono uppercase tracking-wider text-slate-400 text-center font-semibold">
-                  Quick Demo 1-Click Sign In:
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleFillDemo(DEMO_ADMIN_CREDENTIAL.loginId, DEMO_ADMIN_CREDENTIAL.password)}
-                    className="p-2 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 text-left transition-all cursor-pointer group hover:border-amber-500/40"
-                  >
-                    <p className="text-[11px] font-bold text-amber-300 flex items-center gap-1">
-                      <span>👑</span> Super Admin
-                    </p>
-                    <p className="text-[9px] font-mono text-slate-400 truncate mt-0.5">admin@orvexatech.com</p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleFillDemo(DEFAULT_DEMO_SELLER_CREDENTIALS[0].loginId, DEFAULT_DEMO_SELLER_CREDENTIALS[0].password)
-                    }
-                    className="p-2 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 text-left transition-all cursor-pointer group hover:border-blue-500/40"
-                  >
-                    <p className="text-[11px] font-bold text-blue-300 flex items-center gap-1">
-                      <span>👗</span> Lunar Clothing
-                    </p>
-                    <p className="text-[9px] font-mono text-slate-400 truncate mt-0.5">gowreesh@thelunar...</p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleFillDemo(DEFAULT_DEMO_SELLER_CREDENTIALS[1].loginId, DEFAULT_DEMO_SELLER_CREDENTIALS[1].password)
-                    }
-                    className="p-2 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 text-left transition-all cursor-pointer group hover:border-emerald-500/40"
-                  >
-                    <p className="text-[11px] font-bold text-emerald-300 flex items-center gap-1">
-                      <span>🧵</span> Silk Haus
-                    </p>
-                    <p className="text-[9px] font-mono text-slate-400 truncate mt-0.5">kavya@silkhaus.in</p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleFillDemo(DEFAULT_DEMO_SELLER_CREDENTIALS[2].loginId, DEFAULT_DEMO_SELLER_CREDENTIALS[2].password)
-                    }
-                    className="p-2 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 text-left transition-all cursor-pointer group hover:border-indigo-500/40"
-                  >
-                    <p className="text-[11px] font-bold text-indigo-300 flex items-center gap-1">
-                      <span>🪡</span> Khadi Studio
-                    </p>
-                    <p className="text-[9px] font-mono text-slate-400 truncate mt-0.5">arjun@khadistudio.co</p>
-                  </button>
-                </div>
-              </div>
-              )}
             </form>
           )}
 

@@ -23,6 +23,7 @@ import {
   type IStoreMessage,
   type ISubscriber,
 } from '../models/tenant/Inbox.js'
+import { getTenantShopperModel, type IShopper } from '../models/tenant/Shopper.js'
 
 export interface TenantDbContext {
   connection: Connection
@@ -34,6 +35,7 @@ export interface TenantDbContext {
   StoreEvent: Model<IStoreEvent>
   StoreMessage: Model<IStoreMessage>
   Subscriber: Model<ISubscriber>
+  Shopper: Model<IShopper>
 }
 
 declare global {
@@ -102,6 +104,7 @@ export async function tenantResolver(req: Request, res: Response, next: NextFunc
       StoreEvent: getTenantStoreEventModel(tenantConn),
       StoreMessage: getStoreMessageModel(tenantConn),
       Subscriber: getSubscriberModel(tenantConn),
+      Shopper: getTenantShopperModel(tenantConn),
     }
 
     next()

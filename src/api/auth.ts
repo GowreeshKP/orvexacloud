@@ -46,7 +46,7 @@ export interface StoreCredentialInfo {
 export const DEFAULT_DEMO_SELLER_CREDENTIALS: StoreCredentialInfo[] = [
   {
     loginId: 'gowreesh@thelunarclothing.com',
-    password: 'lunar@password',
+    password: '',
     tenantSlug: 'lunar',
     tenantName: 'The Lunar Clothing',
     ownerName: 'Gowreesh KP',
@@ -54,7 +54,7 @@ export const DEFAULT_DEMO_SELLER_CREDENTIALS: StoreCredentialInfo[] = [
   },
   {
     loginId: 'kavya@silkhaus.in',
-    password: 'silk@password',
+    password: '',
     tenantSlug: 'silkhaus',
     tenantName: 'Silk Haus',
     ownerName: 'Kavya Menon',
@@ -62,7 +62,7 @@ export const DEFAULT_DEMO_SELLER_CREDENTIALS: StoreCredentialInfo[] = [
   },
   {
     loginId: 'arjun@khadistudio.co',
-    password: 'khadi@password',
+    password: '',
     tenantSlug: 'khadistudio',
     tenantName: 'Khadi Studio',
     ownerName: 'Arjun Patel',
@@ -70,7 +70,7 @@ export const DEFAULT_DEMO_SELLER_CREDENTIALS: StoreCredentialInfo[] = [
   },
   {
     loginId: 'kavita@bloomweave.in',
-    password: 'bloom@password',
+    password: '',
     tenantSlug: 'bloomweave',
     tenantName: 'Bloom & Weave',
     ownerName: 'Kavita Reddy',
@@ -80,7 +80,7 @@ export const DEFAULT_DEMO_SELLER_CREDENTIALS: StoreCredentialInfo[] = [
 
 export const DEMO_ADMIN_CREDENTIAL = {
   loginId: 'admin@orvexatech.com',
-  password: 'admin@password',
+  password: '',
   name: 'Orvexa Tech Super Admin',
   role: 'super_admin',
 }
@@ -256,7 +256,7 @@ export const authService = {
         const demo = DEFAULT_DEMO_SELLER_CREDENTIALS.find((d) => d.tenantSlug === tenant.slug)
         result.push({
           loginId: tenant.ownerEmail || (demo?.loginId ?? `${tenant.slug}@store.com`),
-          password: DEMO_MODE ? demo?.password || `${tenant.slug}@password` : '',
+          password: '',
           tenantSlug: tenant.slug,
           tenantName: tenant.brandName || tenant.name || 'Store',
           ownerName: tenant.ownerName || 'Store Owner',
@@ -283,7 +283,7 @@ export const authService = {
     const tenant = mockStore.getTenantBySlug(slug)
     return {
       loginId: tenant?.ownerEmail || `${slug}@store.com`,
-      password: DEMO_MODE ? `${slug}@password` : '',
+      password: '',
       tenantSlug: slug,
       tenantName: tenant?.brandName || slug,
       ownerName: tenant?.ownerName || 'Store Owner',
@@ -702,75 +702,7 @@ export const authService = {
 
       return { success: true, session }
     } catch (err: any) {
-      if (!DEMO_MODE) {
-        return { success: false, error: err.message || 'Invalid login ID or password.' }
-      }
-      // ── Demo mode: offline credential verification ──────────
-      const allCreds = this.getStoreCredentialsList()
-
-      const matchingAccount = allCreds.find(
-        (c) => c.loginId.toLowerCase() === cleanId || c.tenantSlug.toLowerCase() === cleanId
-      )
-
-      if (
-        matchingAccount &&
-        (matchingAccount.isPasswordRevoked ||
-          matchingAccount.passwordResetPending ||
-          matchingAccount.password.startsWith('REVOKED_'))
-      ) {
-        return {
-          success: false,
-          error: `Your password was reset by an administrator. Please check your email (${matchingAccount.loginId}) and use the reset link to create a new password.`,
-        }
-      }
-
-      const foundCred = allCreds.find(
-        (c) =>
-          (c.loginId.toLowerCase() === cleanId || c.tenantSlug.toLowerCase() === cleanId) &&
-          c.password === cleanPass
-      )
-
-      if (foundCred) {
-        const tenant: TenantConfig | null = mockStore.getTenantBySlug(foundCred.tenantSlug) ||
-          MOCK_TENANTS.find((t) => t.slug === foundCred.tenantSlug) || null
-
-        const session: SellerSession = {
-          userId: `usr_${foundCred.tenantSlug}_session`,
-          name: foundCred.ownerName,
-          email: foundCred.loginId,
-          role: 'seller',
-          tenantId: tenant?.id || `tenant_${foundCred.tenantSlug}`,
-          tenantSlug: foundCred.tenantSlug,
-          brandName: foundCred.tenantName,
-          loginTime: new Date().toISOString(),
-        }
-        try {
-          localStorage.setItem(SELLER_SESSION_KEY, JSON.stringify(session))
-        } catch {
-          // ignored
-        }
-
-        auditLogger.log({
-          actorId: session.userId,
-          actorName: session.name,
-          actorRole: 'seller',
-          tenantSlug: session.tenantSlug,
-          tenantName: session.brandName,
-          action: 'SELLER_LOGIN_SUCCESS',
-          category: 'auth',
-          severity: 'info',
-          details: `Merchant ${session.name} logged into dashboard for ${session.brandName}.`,
-        })
-
-        return { success: true, session }
-      }
-
-      return {
-        success: false,
-        error: err.message?.includes('Backend unavailable')
-          ? 'Invalid login ID or password. Please check the credentials.'
-          : (err.message || 'Invalid Login ID or password.'),
-      }
+      return { success: false, error: err.message || 'Invalid login ID or password.' }
     }
   },
 
@@ -868,26 +800,9 @@ export const authService = {
         }
         return { success: true, session: data.session }
       }
-      if (!DEMO_MODE) {
-        return { success: false, error: data.error || 'Invalid login credentials. Please check your email or password.' }
-      }
+      return { success: false, error: data.error || 'Invalid login credentials. Please check your email or password.' }
     } catch {
-      if (!DEMO_MODE) {
-        return { success: false, error: 'Could not reach the authentication server. Please check your connection.' }
-      }
-    }
-
-    // Try Admin Credentials Fallback
-    const adminRes = await this.loginAdmin(cleanId, cleanPass)
-    if (adminRes.success && adminRes.session) return adminRes
-
-    // Try Seller Credentials Fallback
-    const sellerRes = await this.loginSeller(cleanId, cleanPass)
-    if (sellerRes.success && sellerRes.session) return sellerRes
-
-    return {
-      success: false,
-      error: 'Invalid login credentials. Please check your email or password.',
+      return { success: false, error: 'Could not reach the authentication server. Please check your connection.' }
     }
   },
 
@@ -935,28 +850,6 @@ export const authService = {
 
       return { success: true, session }
     } catch (err: any) {
-      // ── Demo mode only: offline admin login ──────────────
-      const isDemo =
-        DEMO_MODE &&
-        (cleanId === 'admin@orvexatech.com' || cleanId === 'admin@platform.com' || cleanId === 'admin') &&
-        cleanPass === DEMO_ADMIN_CREDENTIAL.password
-
-      if (isDemo) {
-        const session: AdminSession = {
-          userId: 'admin_master_001',
-          name: DEMO_ADMIN_CREDENTIAL.name,
-          email: cleanId.includes('@') ? cleanId : 'admin@orvexatech.com',
-          role: 'super_admin',
-          loginTime: new Date().toISOString(),
-        }
-        try {
-          localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session))
-        } catch {
-          // ignored
-        }
-        return { success: true, session }
-      }
-
       return {
         success: false,
         error: err.message?.includes('Backend unavailable')

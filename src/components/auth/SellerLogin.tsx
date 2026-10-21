@@ -79,7 +79,7 @@ export default function SellerLogin({ tenant, onLoginSuccess }: SellerLoginProps
                 type="text"
                 value={loginId}
                 onChange={(e) => setLoginId(e.target.value)}
-                placeholder="e.g. gowreesh@thelunarclothing.com or lunar"
+                placeholder="Owner email or store slug"
                 className="w-full bg-black/50 border border-white/15 focus:border-amber-400/80 rounded-xl px-4 py-3 text-xs text-white placeholder-white/25 outline-none transition-all"
                 required
               />
