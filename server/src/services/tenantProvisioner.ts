@@ -6,6 +6,9 @@
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
 import { PLAN_CATALOG, PLATFORM_ROOT_DOMAIN, TRIAL_DAYS, type PlanId } from '../config/plans.js'
+import { atlasApiConfigured } from './atlasProvision.js'
+import { initializeTenantDatabase, provisionTenantAtlasInBackground } from './tenantIsolation.js'
+import { tenantIsolationMode } from '../lib/tenant-db.js'
 
 // Filesystem scaffolding is a local-development convenience only; production keeps everything in MongoDB.
 const isVercel = Boolean(process.env.VERCEL)
@@ -39,6 +42,8 @@ export interface ProvisionResult {
   mongoUri: string
   passwordHash: string
   message: string
+  isolationMode: 'dedicated_atlas_cluster' | 'dedicated_database'
+  atlasProvisionStarted: boolean
 }
 
 export async function provisionTenantFolders(input: ProvisionTenantInput): Promise<ProvisionResult> {
@@ -169,6 +174,17 @@ export const ${camel}TenantConfig: TenantConfig = {
     }
   }
 
+  try {
+    await initializeTenantDatabase(slug, input.customMongoUri)
+  } catch (dbErr) {
+    console.warn('[Provisioner] Isolated tenant database init failed (non-fatal):', dbErr instanceof Error ? dbErr.message : dbErr)
+  }
+
+  const atlasProvisionStarted = !input.customMongoUri?.trim() && atlasApiConfigured()
+  if (atlasProvisionStarted) {
+    void provisionTenantAtlasInBackground(slug, { migrate: true })
+  }
+
   return {
     success: true,
     folderPath: `src/tenants/${slug}`,
@@ -176,6 +192,8 @@ export const ${camel}TenantConfig: TenantConfig = {
     dbName,
     mongoUri: redactUri(mongoUri),
     passwordHash,
+    isolationMode: tenantIsolationMode(input.customMongoUri),
+    atlasProvisionStarted,
     message: isVercel
       ? `Provisioned isolated database and credentials for ${input.brandName} (MongoDB only on Vercel)`
       : `Provisioned separate folder & isolated database for ${input.brandName} at src/tenants/${slug}`,

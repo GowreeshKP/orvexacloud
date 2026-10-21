@@ -49,6 +49,12 @@ export interface IThemeConfigDoc extends Document {
   discountPercent?: number
   freeShippingThreshold?: number
   shippingFee?: number
+  copy?: Record<string, string>
+  trustItems?: Array<{ icon: string; text: string }>
+  homeSections?: Array<{ id: string; visible: boolean }>
+  pdpOptions?: Record<string, boolean>
+  footerOptions?: { trustStrip?: boolean; newsletter?: boolean }
+  socialLinks?: { instagram?: string; whatsapp?: string; pinterest?: string; facebook?: string }
   enableAnimations: boolean
   enableReviews: boolean
   enableOrderTracking: boolean
@@ -73,6 +79,20 @@ export const ThemeConfigSchema = new Schema<IThemeConfigDoc>(
     discountPercent: { type: Number, default: 0, min: 0, max: 90 },
     freeShippingThreshold: { type: Number, default: 999, min: 0 },
     shippingFee: { type: Number, default: 70, min: 0 },
+    copy: { type: Schema.Types.Mixed, default: {} },
+    trustItems: { type: [{ icon: { type: String, default: '' }, text: { type: String, default: '' } }], default: undefined },
+    homeSections: { type: [{ id: { type: String, required: true }, visible: { type: Boolean, default: true } }], default: undefined },
+    pdpOptions: { type: Schema.Types.Mixed, default: undefined },
+    footerOptions: {
+      trustStrip: { type: Boolean, default: true },
+      newsletter: { type: Boolean, default: true },
+    },
+    socialLinks: {
+      instagram: { type: String, default: '' },
+      whatsapp: { type: String, default: '' },
+      pinterest: { type: String, default: '' },
+      facebook: { type: String, default: '' },
+    },
     enableAnimations: { type: Boolean, default: true },
     enableReviews: { type: Boolean, default: true },
     enableOrderTracking: { type: Boolean, default: true },

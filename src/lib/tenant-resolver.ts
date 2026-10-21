@@ -19,7 +19,10 @@ export function parseTenantPath(pathname = typeof window !== 'undefined' ? windo
   if (parts[0] !== 't' || !parts[1]) return { slug: null, layer: null }
   const slug = parts[1]
   if (!/^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(slug)) return { slug: null, layer: null }
-  return { slug, layer: parts[2] === 'dashboard' ? 'dashboard' : 'storefront' }
+  if (parts[2] === 'dashboard' || parts[2] === 'owner' || (parts[2] === 'o' && /^[a-f0-9]{64}$/.test(parts[3] || ''))) {
+    return { slug, layer: 'dashboard' }
+  }
+  return { slug, layer: 'storefront' }
 }
 
 function hostname(): string {
@@ -32,7 +35,7 @@ function isPreviewHost(host: string): boolean {
 
 /**
  * Layer from the URL only. A signed-in seller visiting /t/lunar still sees the storefront;
- * they open /t/lunar/dashboard for the seller portal.
+ * they open the unique owner URL from Orvexa admin credentials.
  */
 export function resolveApplicationLayer(): ApplicationLayer {
   if (typeof window === 'undefined') return 'admin'

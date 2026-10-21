@@ -13,6 +13,7 @@ import { getRefreshTokenModel } from '../models/master/RefreshToken.js'
 import {
   accessTokenLifetimeSeconds,
   requireAdmin,
+  requireSeller,
   signToken,
   signRefreshToken,
   verifyRefreshToken,
@@ -456,6 +457,60 @@ router.post('/seller/set-password', requireAdmin, async (req: Request, res: Resp
 // POST /api/auth/seller/change-password — store owner changes their password.
 // Body: { slug, currentPassword, newPassword }. The current password is always required.
 // ─────────────────────────────────────────────────────────
+// PUT /api/auth/seller/profile — store owner updates name / email / phone (not password).
+router.put('/seller/profile', requireSeller, async (req: Request, res: Response) => {
+  try {
+    const slug = credential(req.body?.slug, 60)?.toLowerCase()
+    const ownerName = credential(req.body?.ownerName, 100)
+    const ownerEmail = credential(req.body?.ownerEmail)?.toLowerCase()
+    const ownerPhone = credential(req.body?.ownerPhone, 20)
+    if (!slug) {
+      res.status(400).json({ error: 'slug is required.' })
+      return
+    }
+    const user = req.authUser
+    if (user?.role === 'seller' && user.tenantSlug !== slug) {
+      res.status(403).json({ error: 'You can only update your own store profile.' })
+      return
+    }
+
+    const masterDb = await connectMasterDatabase()
+    const Tenant = getTenantModel(masterDb)
+    const tenant = await Tenant.findOne({ slug })
+    if (!tenant) {
+      res.status(404).json({ error: 'Store not found.' })
+      return
+    }
+
+    const updates: Record<string, unknown> = {}
+    if (ownerName) updates.ownerName = ownerName
+    if (ownerPhone !== undefined) updates.ownerPhone = ownerPhone || ''
+    if (ownerEmail) {
+      if (!ownerEmail.includes('@') || ownerEmail.length > 254) {
+        res.status(400).json({ error: 'ownerEmail is not a valid email address.' })
+        return
+      }
+      if (ownerEmail !== tenant.ownerEmail && (await Tenant.exists({ $or: [{ ownerEmail }, { 'staffMembers.email': ownerEmail }] }))) {
+        res.status(409).json({ error: 'This email is already used by another account.' })
+        return
+      }
+      updates.ownerEmail = ownerEmail
+    }
+    const updated = await Tenant.findOneAndUpdate({ slug }, { $set: updates }, { new: true })
+    res.json({
+      success: true,
+      tenant: {
+        slug: updated?.slug,
+        ownerName: updated?.ownerName,
+        ownerEmail: updated?.ownerEmail,
+        ownerPhone: updated?.ownerPhone,
+      },
+    })
+  } catch (err) {
+    serverError(res, 'seller profile', err, 'Failed to update profile')
+  }
+})
+
 router.post('/seller/change-password', async (req: Request, res: Response) => {
   try {
     const slug = credential(req.body?.slug, 60)?.toLowerCase()

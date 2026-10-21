@@ -22,6 +22,7 @@ import { sendEmail } from '../services/mailer.js'
 import { optionalAuth, type JwtPayload } from '../middleware/authMiddleware.js'
 import { hostLookupKeys, isPlatformHost, normalizeHostname } from '../lib/hosts.js'
 import { RESERVED_TENANT_SLUGS } from '../lib/validate.js'
+import { OWNER_PORTAL_TOKEN_PATTERN, tokensMatch } from '../lib/owner-portal.js'
 
 const router = Router()
 
@@ -106,11 +107,13 @@ function publicTenant(t: ITenant) {
   return {
     id: t.id,
     slug: t.slug,
+    name: t.brandName,
     brandName: t.brandName,
+    tagline: t.tagline || t.theme?.heroHeadline || '',
     ownerName: t.ownerName,
     ownerEmail: t.ownerEmail,
     ownerPhone: t.ownerPhone,
-    logo: t.logo || '',
+    logo: t.logo || t.theme?.logoUrl || '',
     status: t.status,
     plan: t.plan,
     customDomain: t.customDomain || '',
@@ -119,10 +122,11 @@ function publicTenant(t: ITenant) {
     niche: t.niche || '',
     categories: t.categories || [],
     theme: t.theme,
+    aboutStory: t.aboutStory || '',
+    contact: t.contact || {},
     subscription: t.subscription,
     createdAt: t.createdAt,
     portalPath: `/t/${t.slug}`,
-    dashboardPath: `/t/${t.slug}/dashboard`,
   }
 }
 
@@ -132,8 +136,10 @@ function storefrontTenant(t: ITenant) {
   return {
     id: t.id,
     slug: t.slug,
+    name: t.brandName,
     brandName: t.brandName,
-    logo: t.logo || '',
+    tagline: t.tagline || t.theme?.heroHeadline || '',
+    logo: t.logo || t.theme?.logoUrl || '',
     status: t.status,
     plan: t.plan,
     customDomain: t.customDomain || '',
@@ -142,8 +148,9 @@ function storefrontTenant(t: ITenant) {
     niche: t.niche || '',
     categories: t.categories || [],
     theme: t.theme,
+    aboutStory: t.aboutStory || '',
+    contact: t.contact || {},
     portalPath: `/t/${t.slug}`,
-    dashboardPath: `/t/${t.slug}/dashboard`,
   }
 }
 /** The full record (owner contact, subscription) is only for a signed-in admin, or an owner/staff member of THIS store. */
@@ -182,6 +189,32 @@ router.get('/resolve', optionalAuth, async (req: Request, res: Response) => {
     res.json(mayReadOwnerData(req.authUser, tenant) ? publicTenant(tenant) : storefrontTenant(tenant))
   } catch (err: any) {
     console.error('[Resolve] Failed:', err.message)
+    res.status(503).json({ error: 'Temporarily unavailable' })
+  }
+})
+
+/** Unsigned: confirms an admin-issued owner URL without revealing whether the store exists. */
+router.get('/owner-portal', async (req: Request, res: Response) => {
+  try {
+    const slug = str(req.query.slug).toLowerCase()
+    const token = str(req.query.token)
+    if (!SLUG_PATTERN.test(slug) || !OWNER_PORTAL_TOKEN_PATTERN.test(token)) {
+      res.status(404).json({ error: 'Owner portal not found.' })
+      return
+    }
+    const db = await masterDbWithinDeadline()
+    const tenant = await getTenantModel(db).findOne({ slug }).select('ownerPortalToken status')
+    if (!tenant || tenant.status === 'cancelled' || tenant.status === 'pending' || tenant.status === 'suspended') {
+      res.status(404).json({ error: 'Owner portal not found.' })
+      return
+    }
+    if (!tokensMatch(tenant.ownerPortalToken, token)) {
+      res.status(404).json({ error: 'Owner portal not found.' })
+      return
+    }
+    res.json({ ok: true, slug })
+  } catch (err: any) {
+    console.error('[Owner portal] Failed:', err.message)
     res.status(503).json({ error: 'Temporarily unavailable' })
   }
 })

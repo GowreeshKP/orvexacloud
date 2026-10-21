@@ -84,6 +84,10 @@ export async function startTestServer() {
   })
   delete process.env.RESEND_API_KEY
   delete process.env.MAIL_FROM
+  delete process.env.ATLAS_API_PUBLIC_KEY
+  delete process.env.ATLAS_API_PRIVATE_KEY
+  delete process.env.ATLAS_ORG_ID
+  delete process.env.ATLAS_ACCESS_LIST
 
   // The mailer prints unsent bodies outside production; capture them as the "inbox".
   const realLog = console.log

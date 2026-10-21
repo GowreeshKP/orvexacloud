@@ -8,6 +8,7 @@ import { authService, type StoreCredentialInfo } from '@/api/auth'
 import type { TenantConfig } from '@/types/tenant'
 import { storeAddress } from '@/data/plans'
 import { API_BASE } from '@/lib/api-base'
+import { ownerPortalUrl as permanentOwnerPortalUrl } from '@/lib/store-urls'
 
 interface Props {
   tenant: TenantConfig | null
@@ -41,6 +42,7 @@ export default function StoreCredentialsModal({ tenant, isOpen, onClose, onSucce
   const [staffList, setStaffList] = useState<Array<{ id: string; name: string; email: string; role: string }>>([])
   const [staffLoading, setStaffLoading] = useState(false)
   const [staffMsg, setStaffMsg] = useState<string | null>(null)
+  const [copiedOwnerUrl, setCopiedOwnerUrl] = useState(false)
 
   useEffect(() => {
     if (tenant && isOpen) {
@@ -58,11 +60,9 @@ export default function StoreCredentialsModal({ tenant, isOpen, onClose, onSucce
         setResetSuccess(null)
       }
 
-      // Fetch staff from backend
       authService.getValidAdminToken().then((token) => {
-        fetch(`${API_BASE}/admin/tenants/${tenant.slug}/staff`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
+        const headers = token ? { Authorization: `Bearer ${token}` } : {}
+        fetch(`${API_BASE}/admin/tenants/${tenant.slug}/staff`, { headers })
           .then((r) => (r.ok ? r.json() : null))
           .then((data) => {
             if (data?.staff) setStaffList(data.staff)
@@ -73,6 +73,8 @@ export default function StoreCredentialsModal({ tenant, isOpen, onClose, onSucce
   }, [tenant, isOpen])
 
   if (!isOpen || !tenant) return null
+
+  const ownerPortalUrl = permanentOwnerPortalUrl(tenant.slug)
 
   const isPasswordRevoked =
     credInfo?.isPasswordRevoked ||
@@ -202,8 +204,8 @@ Store Name: ${tenant.brandName}
 Store portal: ${storeAddress(tenant.slug)}
 Storefront URL: ${window.location.origin}/t/${tenant.slug}
 
-🔑 MERCHANT PORTAL LOGIN DETAILS:
-Dashboard URL: ${window.location.origin}/t/${tenant.slug}/dashboard
+🔑 PERMANENT OWNER PORTAL URL (the only owner login):
+${ownerPortalUrl}
 Login ID / Email: ${ownerEmail || tenant.ownerEmail}
 Login Username: ${tenant.slug}
 Password Status: ${passwordStatusDescription}
@@ -329,6 +331,32 @@ Security Level: Dedicated Database Isolation
                       Active Merchant Account
                     </span>
                   )}
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-indigo-200 shadow-xs space-y-2">
+                  <p className="text-[10px] text-indigo-500 uppercase tracking-wider font-mono font-bold">Permanent owner login URL</p>
+                  <p className="text-[11px] text-slate-600">
+                    This link never changes. Give it to the store owner. It is not shown on the shop.
+                  </p>
+                  <a
+                    href={ownerPortalUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block text-[11px] font-mono text-indigo-800 bg-indigo-50 border border-indigo-100 rounded-lg p-2 break-all hover:underline"
+                  >
+                    {ownerPortalUrl}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(ownerPortalUrl)
+                      setCopiedOwnerUrl(true)
+                      setTimeout(() => setCopiedOwnerUrl(false), 2000)
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-600 text-white"
+                  >
+                    {copiedOwnerUrl ? 'Copied' : 'Copy owner URL'}
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -606,14 +634,14 @@ Security Level: Dedicated Database Isolation
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
                   <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">MERCHANT LOGIN URL</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">PERMANENT OWNER LOGIN URL</span>
                     <a
-                      href={`/t/${tenant.slug}/dashboard`}
+                      href={ownerPortalUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="text-blue-600 hover:underline font-semibold break-all"
                     >
-                      /t/{tenant.slug}/dashboard
+                      {ownerPortalUrl}
                     </a>
                   </div>
 

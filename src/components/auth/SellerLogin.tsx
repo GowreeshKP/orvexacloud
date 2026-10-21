@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { authService, type StoreCredentialInfo, type SellerSession } from '@/api/auth'
+import { useState } from 'react'
+import { authService, type SellerSession } from '@/api/auth'
 import type { TenantConfig } from '@/types/tenant'
 
 interface SellerLoginProps {
@@ -8,32 +8,12 @@ interface SellerLoginProps {
 }
 
 export default function SellerLogin({ tenant, onLoginSuccess }: SellerLoginProps) {
-  const [credentialsList, setCredentialsList] = useState<StoreCredentialInfo[]>(() =>
-    authService.getStoreCredentialsList()
-  )
-
-  const initialCred = tenant
-    ? authService.getStoreCredential(tenant.slug)
-    : credentialsList[0] || { loginId: 'gowreesh@thelunarclothing.com', password: 'lunar@password' }
-
-  const [loginId, setLoginId] = useState(initialCred.loginId)
-  const [password, setPassword] = useState(initialCred.password)
+  const [loginId, setLoginId] = useState('')
+  const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
-
-  useEffect(() => {
-    const handleUpdate = () => {
-      setCredentialsList(authService.getStoreCredentialsList())
-    }
-    window.addEventListener('orvexa:credentials-updated', handleUpdate)
-    window.addEventListener('orvexa:store-updated', handleUpdate)
-    return () => {
-      window.removeEventListener('orvexa:credentials-updated', handleUpdate)
-      window.removeEventListener('orvexa:store-updated', handleUpdate)
-    }
-  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,12 +36,6 @@ export default function SellerLogin({ tenant, onLoginSuccess }: SellerLoginProps
     } else {
       setError(res.error || 'Invalid credentials. Please verify your Login ID and password.')
     }
-  }
-
-  const handleSelectDemo = (demo: StoreCredentialInfo) => {
-    setLoginId(demo.loginId)
-    setPassword(demo.password)
-    setError(null)
   }
 
   return (
@@ -167,33 +141,6 @@ export default function SellerLogin({ tenant, onLoginSuccess }: SellerLoginProps
             )}
           </button>
         </form>
-
-        {/* Demo Merchant Quick Fill */}
-        <div className="mt-8 pt-6 border-t border-white/10">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-white/50">
-              Active Store Accounts
-            </p>
-            <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full text-white/70">1-Click Fill</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {credentialsList.slice(0, 6).map((demo) => (
-              <button
-                key={demo.tenantSlug}
-                type="button"
-                onClick={() => handleSelectDemo(demo)}
-                className={`text-left p-2.5 rounded-xl border text-[11px] transition-all cursor-pointer ${
-                  loginId === demo.loginId || loginId === demo.tenantSlug
-                    ? 'bg-amber-400/15 border-amber-400/50 text-white shadow-xs'
-                    : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <p className="font-bold truncate">{demo.tenantName}</p>
-                <p className="text-[9px] text-white/40 truncate">{demo.ownerName}</p>
-              </button>
-            ))}
-          </div>
-        </div>
 
         {/* Back Link */}
         <div className="mt-6 text-center">

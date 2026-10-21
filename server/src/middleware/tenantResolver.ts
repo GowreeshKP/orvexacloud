@@ -17,6 +17,12 @@ import {
 } from '../models/tenant/Review.js'
 import { SLUG_PATTERN } from '../lib/validate.js'
 import { getTenantStoreEventModel, type IStoreEvent } from '../models/tenant/StoreEvent.js'
+import {
+  getStoreMessageModel,
+  getSubscriberModel,
+  type IStoreMessage,
+  type ISubscriber,
+} from '../models/tenant/Inbox.js'
 
 export interface TenantDbContext {
   connection: Connection
@@ -26,6 +32,8 @@ export interface TenantDbContext {
   ThemeConfig: Model<IThemeConfigDoc>
   Customer: Model<ICustomerDoc>
   StoreEvent: Model<IStoreEvent>
+  StoreMessage: Model<IStoreMessage>
+  Subscriber: Model<ISubscriber>
 }
 
 declare global {
@@ -92,6 +100,8 @@ export async function tenantResolver(req: Request, res: Response, next: NextFunc
       ThemeConfig: getTenantThemeModel(tenantConn),
       Customer: getTenantCustomerModel(tenantConn),
       StoreEvent: getTenantStoreEventModel(tenantConn),
+      StoreMessage: getStoreMessageModel(tenantConn),
+      Subscriber: getSubscriberModel(tenantConn),
     }
 
     next()

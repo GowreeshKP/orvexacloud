@@ -104,14 +104,9 @@ export default function PlatformAuditLogs() {
     }
   }
 
-  const handleExportCsv = () => {
-    auditLogger.exportCsv(logs, `orvexa-platform-audit-${Date.now()}.csv`)
-    showToast('📥 Audit log CSV exported successfully!')
-  }
-
-  const handleExportJson = () => {
-    auditLogger.exportJson(logs, `orvexa-platform-audit-${Date.now()}.json`)
-    showToast('📥 Audit log JSON exported successfully!')
+  const handleExportExcel = () => {
+    auditLogger.exportExcel(logs, `orvexa-platform-audit-${Date.now()}.xlsx`)
+    showToast('📥 Audit log Excel exported successfully!')
   }
 
   return (
@@ -155,18 +150,11 @@ export default function PlatformAuditLogs() {
 
           <div className="flex items-center gap-2.5 flex-wrap">
             <button
-              onClick={handleExportCsv}
+              onClick={handleExportExcel}
               className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 transition-colors cursor-pointer flex items-center gap-2"
             >
               <span>📥</span>
-              <span>Export CSV</span>
-            </button>
-            <button
-              onClick={handleExportJson}
-              className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 transition-colors cursor-pointer flex items-center gap-2"
-            >
-              <span>📄</span>
-              <span>Export JSON</span>
+              <span>Export Excel</span>
             </button>
             <button
               onClick={refreshLogs}

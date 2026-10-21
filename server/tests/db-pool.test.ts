@@ -2,10 +2,12 @@ import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   mongoClusterHost,
+  publicTenantIsolation,
   runningCommit,
   sanitizeTenantSlug,
   tenantDatabaseName,
   tenantDbPrefix,
+  tenantIsolationMode,
   tenantSharesMasterCluster,
 } from '../src/lib/tenant-db.js'
 
@@ -45,6 +47,17 @@ describe('tenant database naming (useDb pool)', () => {
       false,
     )
     assert.equal(mongoClusterHost('mongodb://127.0.0.1:27017/orvexatech_master'), '127.0.0.1:27017')
+  })
+
+  test('public isolation facts never require a connection string', () => {
+    assert.equal(tenantIsolationMode(''), 'dedicated_database')
+    assert.equal(tenantIsolationMode('mongodb+srv://u:p@lunar.mongodb.net/orvexa_tenant_lunar'), 'dedicated_atlas_cluster')
+    assert.deepEqual(publicTenantIsolation('lunar'), {
+      databaseName: tenantDatabaseName('lunar'),
+      isolationMode: 'dedicated_database',
+      hasDedicatedCluster: false,
+    })
+    assert.equal(publicTenantIsolation('lunar', 'mongodb+srv://u:p@host/x').hasDedicatedCluster, true)
   })
 
   test('health commit prefers GIT_SHA, then Render, then Vercel', () => {

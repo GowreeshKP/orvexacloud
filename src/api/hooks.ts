@@ -227,24 +227,52 @@ export function useDashboardProducts(): {
 export function useThemeCustomizer(): {
   theme: ThemeConfig | null
   tenant: TenantConfig | null
-  updateTheme: (updates: Partial<ThemeConfig>) => void
-  updateTenant: (updates: Partial<TenantConfig>) => void
+  updateTheme: (updates: Partial<ThemeConfig> & {
+    brandName?: string
+    tagline?: string
+    aboutStory?: string
+    logo?: string
+    contact?: TenantConfig['contact']
+  }) => Promise<ThemeConfig | null>
+  updateTenant: (updates: Partial<TenantConfig>) => Promise<void>
 } {
   const { tenant, refreshTenant } = useTenant()
 
-  const updateTheme = useCallback((updates: Partial<ThemeConfig>) => {
-    if (tenant) {
+  const updateTheme = useCallback(async (updates: Partial<ThemeConfig> & {
+    brandName?: string
+    tagline?: string
+    aboutStory?: string
+    logo?: string
+    contact?: TenantConfig['contact']
+  }) => {
+    if (!tenant) return null
+    const saved = await apiClient.updateTheme(tenant.slug, updates)
+    if (DEMO_MODE) {
       mockStore.updateTheme(tenant.id, updates)
-      refreshTenant()
+      mockStore.updateTenant(tenant.id, {
+        brandName: updates.brandName || tenant.brandName,
+        name: updates.brandName || tenant.name,
+        tagline: updates.tagline ?? tenant.tagline,
+        aboutStory: updates.aboutStory ?? tenant.aboutStory,
+        logo: updates.logo ?? tenant.logo,
+        contact: updates.contact ? { ...tenant.contact, ...updates.contact } : tenant.contact,
+        theme: { ...tenant.theme, ...updates },
+      })
     }
+    refreshTenant()
+    return saved
   }, [tenant, refreshTenant])
 
-  const updateTenant = useCallback((updates: Partial<TenantConfig>) => {
-    if (tenant) {
-      mockStore.updateTenant(tenant.id, updates)
-      refreshTenant()
-    }
-  }, [tenant, refreshTenant])
+  const updateTenant = useCallback(async (updates: Partial<TenantConfig>) => {
+    if (!tenant) return
+    await updateTheme({
+      brandName: updates.brandName,
+      tagline: updates.tagline,
+      aboutStory: updates.aboutStory,
+      logo: updates.logo || updates.logoUrl,
+      contact: updates.contact,
+    })
+  }, [tenant, updateTheme])
 
   return {
     theme: tenant?.theme || null,

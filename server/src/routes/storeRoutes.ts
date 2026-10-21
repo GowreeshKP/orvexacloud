@@ -28,6 +28,7 @@ import {
 } from '../lib/validate.js'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
+import { SUBSCRIBER_SOURCES, type SubscriberSource } from '../models/tenant/Inbox.js'
 
 const router = Router({ mergeParams: true })
 
@@ -59,6 +60,17 @@ function sendError(res: Response, err: unknown, fallback: string, context: strin
   }
   console.error(`[Store API] ${context}:`, err)
   res.status(500).json({ error: fallback })
+}
+
+async function collectSubscriber(req: Request, email: string, source: SubscriberSource): Promise<{ created: boolean }> {
+  const normalized = email.trim().toLowerCase()
+  try {
+    await req.tenantDb!.Subscriber.create({ email: normalized, source, subscribedAt: new Date() })
+    return { created: true }
+  } catch (err: any) {
+    if (err?.code === 11000) return { created: false }
+    throw err
+  }
 }
 
 // ====================================================================
@@ -243,6 +255,8 @@ router.get('/theme', async (req: Request, res: Response) => {
 const THEME_COLOR_KEYS = ['primaryColor', 'accentColor', 'backgroundColor'] as const
 const THEME_TEXT_KEYS = ['fontDisplay', 'fontSans', 'heroHeadline', 'heroSubhead', 'heroCtaText', 'secondaryCtaText', 'discountCode'] as const
 const THEME_FLAG_KEYS = ['enableAnimations', 'enableReviews', 'enableOrderTracking'] as const
+const HOME_SECTION_IDS = ['trustBar', 'bestsellers', 'categories', 'featured', 'triptych', 'mission'] as const
+const PDP_OPTION_IDS = ['zoom', 'guarantee', 'details', 'shipping', 'related'] as const
 
 function themeFields(body: unknown): Record<string, unknown> {
   if (!isPlainObject(body)) throw new ValidationError('Request body must be a JSON object.')
@@ -274,6 +288,89 @@ function themeFields(body: unknown): Record<string, unknown> {
   if (threshold !== undefined) out.freeShippingThreshold = threshold
   const fee = optNumber(body.shippingFee, 'shippingFee', { min: 0, max: 100_000 })
   if (fee !== undefined) out.shippingFee = fee
+
+  if (body.copy !== undefined) {
+    if (!isPlainObject(body.copy)) throw new ValidationError('copy must be an object.')
+    const keys = Object.keys(body.copy)
+    if (keys.length > 40) throw new ValidationError('copy has too many fields.')
+    const copy: Record<string, string> = {}
+    for (const key of keys) {
+      if (!/^[a-zA-Z][a-zA-Z0-9]{0,40}$/.test(key)) throw new ValidationError('copy has an invalid field.')
+      const value = optString(body.copy[key], `copy.${key}`, 2000)
+      if (value) copy[key] = value
+    }
+    out.copy = copy
+  }
+  if (body.trustItems !== undefined) {
+    if (!Array.isArray(body.trustItems) || body.trustItems.length > 8) throw new ValidationError('trustItems must be a list of at most 8 items.')
+    out.trustItems = body.trustItems.map((item, i) => {
+      if (!isPlainObject(item)) throw new ValidationError(`trustItems[${i}] is invalid.`)
+      return {
+        icon: optString(item.icon, `trustItems[${i}].icon`, 8) || '',
+        text: reqString(item.text, `trustItems[${i}].text`, 80),
+      }
+    })
+  }
+  if (body.homeSections !== undefined) {
+    if (!Array.isArray(body.homeSections) || body.homeSections.length > 8) throw new ValidationError('homeSections must be a list of at most 8 items.')
+    out.homeSections = body.homeSections.map((item, i) => {
+      if (!isPlainObject(item)) throw new ValidationError(`homeSections[${i}] is invalid.`)
+      const id = reqString(item.id, `homeSections[${i}].id`, 40)
+      if (!(HOME_SECTION_IDS as readonly string[]).includes(id)) throw new ValidationError(`homeSections[${i}].id is invalid.`)
+      return { id, visible: optBoolean(item.visible, `homeSections[${i}].visible`) !== false }
+    })
+  }
+  if (body.pdpOptions !== undefined) {
+    if (!isPlainObject(body.pdpOptions)) throw new ValidationError('pdpOptions must be an object.')
+    const pdp: Record<string, boolean> = {}
+    for (const id of PDP_OPTION_IDS) {
+      const value = optBoolean(body.pdpOptions[id], `pdpOptions.${id}`)
+      if (value !== undefined) pdp[id] = value
+    }
+    out.pdpOptions = pdp
+  }
+  if (body.footerOptions !== undefined) {
+    if (!isPlainObject(body.footerOptions)) throw new ValidationError('footerOptions must be an object.')
+    out.footerOptions = {
+      trustStrip: optBoolean(body.footerOptions.trustStrip, 'footerOptions.trustStrip') !== false,
+      newsletter: optBoolean(body.footerOptions.newsletter, 'footerOptions.newsletter') !== false,
+    }
+  }
+  if (body.socialLinks !== undefined) {
+    if (!isPlainObject(body.socialLinks)) throw new ValidationError('socialLinks must be an object.')
+    const social: Record<string, string> = {}
+    for (const key of ['instagram', 'whatsapp', 'pinterest', 'facebook'] as const) {
+      const value = optString(body.socialLinks[key], `socialLinks.${key}`, 500)
+      if (value !== undefined) social[key] = value
+    }
+    out.socialLinks = social
+  }
+  return out
+}
+
+function storefrontProfileFields(body: unknown): Record<string, unknown> {
+  if (!isPlainObject(body)) return {}
+  const out: Record<string, unknown> = {}
+  const brandName = optString(body.brandName, 'brandName', 80)
+  if (brandName) out.brandName = brandName
+  const tagline = optString(body.tagline, 'tagline', 200)
+  if (tagline !== undefined) out.tagline = tagline
+  const aboutStory = optString(body.aboutStory, 'aboutStory', 4000)
+  if (aboutStory !== undefined) out.aboutStory = aboutStory
+  const logo = optImageUrl(body.logo, 'logo')
+  if (logo !== undefined) out.logo = logo
+  if (body.contact !== undefined) {
+    if (!isPlainObject(body.contact)) throw new ValidationError('contact must be an object.')
+    const email = optString(body.contact.email, 'contact.email', 254) || ''
+    if (email && !EMAIL_PATTERN.test(email)) throw new ValidationError('Enter a valid contact email address.')
+    out.contact = {
+      phone: optString(body.contact.phone, 'contact.phone', 30) || '',
+      email,
+      address: optString(body.contact.address, 'contact.address', 300) || '',
+      workingHours: optString(body.contact.workingHours, 'contact.workingHours', 80) || '',
+      shippingThresholdFormatted: optString(body.contact.shippingThresholdFormatted, 'contact.shippingThresholdFormatted', 40) || '',
+    }
+  }
   return out
 }
 
@@ -290,12 +387,12 @@ router.put('/theme', ...ownerOfTenant, async (req: Request, res: Response) => {
     const ThemeConfig = req.tenantDb!.ThemeConfig
     const savedTheme = await ThemeConfig.findOneAndUpdate({}, { $set: updates }, { new: true, upsert: true, runValidators: true })
 
-    // Mirror to the master tenant record for fast initial storefront loads
+    const profile = storefrontProfileFields(req.body)
     const masterDb = await connectMasterDatabase()
     const mirror = Object.fromEntries(Object.entries(updates).map(([k, v]) => [`theme.${k}`, v]))
-    await getTenantModel(masterDb).updateOne({ slug: req.tenant!.slug }, { $set: mirror })
+    await getTenantModel(masterDb).updateOne({ slug: req.tenant!.slug }, { $set: { ...mirror, ...profile } })
 
-    res.json({ success: true, theme: savedTheme })
+    res.json({ success: true, theme: savedTheme, store: profile })
   } catch (err) {
     sendError(res, err, 'Failed to update theme', 'update theme')
   }
@@ -493,6 +590,9 @@ router.post('/orders', checkoutLimiter, async (req: Request, res: Response) => {
     }).save()
 
     res.status(201).json(order)
+    if (customerEmail) {
+      collectSubscriber(req, customerEmail, 'checkout').catch(() => undefined)
+    }
     req.tenantDb!.StoreEvent.create({
       type: 'order_placed',
       path: '/checkout',
@@ -646,6 +746,7 @@ router.get('/database-status', ...staffOfTenant, async (req: Request, res: Respo
       tenantSlug: req.tenant!.slug,
       brandName: req.tenant!.brandName,
       isCustomDatabase: Boolean(req.tenant!.customMongoUri),
+      isolationMode: req.tenant!.customMongoUri ? 'dedicated_atlas_cluster' : 'dedicated_database',
       databaseName: conn.name,
       connected: conn.readyState === 1,
       stats: { products, orders, reviews },
@@ -963,6 +1064,132 @@ router.get('/export', ...ownerOfTenant, async (req: Request, res: Response) => {
     res.json(data)
   } catch (err) {
     sendError(res, err, 'Failed to export store data', 'export')
+  }
+})
+
+// ====================================================================
+// 8. STOREFRONT INBOX & NEWSLETTER (public capture, staff read)
+// ====================================================================
+
+function serializeMessage(doc: { id: string; name: string; email: string; phone: string; subject: string; message: string; read: boolean; createdAt: Date }) {
+  return {
+    id: doc.id,
+    name: doc.name,
+    email: doc.email,
+    phone: doc.phone || '',
+    subject: doc.subject || '',
+    message: doc.message,
+    read: Boolean(doc.read),
+    createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : String(doc.createdAt),
+  }
+}
+
+function serializeSubscriber(doc: { email: string; source?: string; subscribedAt?: Date; createdAt?: Date }) {
+  const when = doc.subscribedAt || doc.createdAt
+  return {
+    email: doc.email,
+    source: doc.source || 'newsletter',
+    subscribedAt: when instanceof Date ? when.toISOString() : String(when || new Date().toISOString()),
+  }
+}
+
+router.post('/newsletter', checkoutLimiter, async (req: Request, res: Response) => {
+  try {
+    const body = isPlainObject(req.body) ? req.body : {}
+    const email = reqString(body.email, 'email', 254).toLowerCase()
+    if (!EMAIL_PATTERN.test(email)) throw new ValidationError('Enter a valid email address.')
+    const rawSource = optString(body.source, 'source', 20) || 'newsletter'
+    const source: SubscriberSource = (SUBSCRIBER_SOURCES as readonly string[]).includes(rawSource)
+      ? (rawSource as SubscriberSource)
+      : 'newsletter'
+    const { created } = await collectSubscriber(req, email, source)
+    res.status(created ? 201 : 200).json({ success: true, created, email })
+  } catch (err) {
+    sendError(res, err, 'Failed to subscribe', 'newsletter')
+  }
+})
+
+router.post('/contact', checkoutLimiter, async (req: Request, res: Response) => {
+  try {
+    const body = isPlainObject(req.body) ? req.body : {}
+    const name = reqString(body.name, 'name', 120)
+    const email = reqString(body.email, 'email', 254).toLowerCase()
+    if (!EMAIL_PATTERN.test(email)) throw new ValidationError('Enter a valid email address.')
+    const phone = optString(body.phone, 'phone', 30) || ''
+    const subject = optString(body.subject, 'subject', 200) || 'Customer inquiry'
+    const message = reqString(body.message, 'message', 4000)
+
+    const saved = await req.tenantDb!.StoreMessage.create({
+      id: `msg_${crypto.randomBytes(8).toString('hex')}`,
+      name,
+      email,
+      phone,
+      subject,
+      message,
+      read: false,
+    })
+    await collectSubscriber(req, email, 'contact').catch(() => undefined)
+    res.status(201).json(serializeMessage(saved))
+  } catch (err) {
+    sendError(res, err, 'Failed to send message', 'contact')
+  }
+})
+
+router.get('/inbox', ...staffOfTenant, async (req: Request, res: Response) => {
+  try {
+    const [messages, subscribers] = await Promise.all([
+      req.tenantDb!.StoreMessage.find().sort({ createdAt: -1 }).lean(),
+      req.tenantDb!.Subscriber.find().sort({ subscribedAt: -1 }).lean(),
+    ])
+    res.json({
+      messages: messages.map(serializeMessage),
+      subscribers: subscribers.map(serializeSubscriber),
+    })
+  } catch (err) {
+    sendError(res, err, 'Failed to load inbox', 'inbox')
+  }
+})
+
+router.patch('/inbox/messages/:id', ...staffOfTenant, async (req: Request, res: Response) => {
+  try {
+    const id = reqString(req.params.id, 'id', 80)
+    const body = isPlainObject(req.body) ? req.body : {}
+    const read = optBoolean(body.read, 'read')
+    if (read === undefined) throw new ValidationError('read is required.')
+    const updated = await req.tenantDb!.StoreMessage.findOneAndUpdate({ id }, { $set: { read } }, { new: true })
+    if (!updated) {
+      res.status(404).json({ error: 'Message not found.' })
+      return
+    }
+    res.json(serializeMessage(updated))
+  } catch (err) {
+    sendError(res, err, 'Failed to update message', 'inbox read')
+  }
+})
+
+router.delete('/inbox/messages/:id', ...staffOfTenant, async (req: Request, res: Response) => {
+  try {
+    const id = reqString(req.params.id, 'id', 80)
+    const deleted = await req.tenantDb!.StoreMessage.findOneAndDelete({ id })
+    if (!deleted) {
+      res.status(404).json({ error: 'Message not found.' })
+      return
+    }
+    res.json({ success: true })
+  } catch (err) {
+    sendError(res, err, 'Failed to delete message', 'inbox delete')
+  }
+})
+
+router.delete('/inbox/subscribers', ...staffOfTenant, async (req: Request, res: Response) => {
+  try {
+    const body = isPlainObject(req.body) ? req.body : {}
+    const email = reqString(body.email, 'email', 254).toLowerCase()
+    if (!EMAIL_PATTERN.test(email)) throw new ValidationError('Enter a valid email address.')
+    await req.tenantDb!.Subscriber.deleteOne({ email })
+    res.json({ success: true })
+  } catch (err) {
+    sendError(res, err, 'Failed to remove subscriber', 'unsubscribe')
   }
 })
 

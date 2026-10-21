@@ -6,6 +6,10 @@ import { getApplicationModel } from '../models/master/Application.js'
 import { getAuditLogModel } from '../models/master/AuditLog.js'
 import { getTenantOrderModel } from '../models/tenant/Order.js'
 import { provisionTenantFolders } from '../services/tenantProvisioner.js'
+import { atlasApiConfigured } from '../services/atlasProvision.js'
+import { provisionTenantAtlasInBackground } from '../services/tenantIsolation.js'
+import { publicTenantIsolation } from '../lib/tenant-db.js'
+import { ownerPortalAbsoluteUrl, ownerPortalPath } from '../lib/owner-portal.js'
 import { optionalAuth, requireAdmin } from '../middleware/authMiddleware.js'
 import {
   EMAIL_PATTERN,
@@ -122,6 +126,50 @@ router.get('/tenants', async (req: Request, res: Response) => {
     res.json(tenants)
   } catch (err) {
     serverError(res, 'list tenants', err, 'Failed to fetch stores')
+  }
+})
+
+// POST provision a dedicated Atlas project+cluster for one store. Idempotent.
+router.post('/tenants/:slug/provision-atlas', async (req: Request, res: Response) => {
+  try {
+    const slug = String(req.params.slug || '').toLowerCase()
+    if (!SLUG_PATTERN.test(slug)) {
+      res.status(400).json({ error: 'Invalid store slug.' })
+      return
+    }
+    const masterDb = await connectMasterDatabase()
+    const Tenant = getTenantModel(masterDb)
+    const tenant = await Tenant.findOne({ slug })
+    if (!tenant) {
+      res.status(404).json({ error: 'Store not found.' })
+      return
+    }
+    const isolation = publicTenantIsolation(tenant.slug, tenant.customMongoUri, tenant.customDbName)
+    if (tenant.customMongoUri) {
+      res.json({
+        started: false,
+        alreadyProvisioned: true,
+        ...isolation,
+        atlasProvisionStatus: tenant.atlasProvisionStatus || 'ready',
+      })
+      return
+    }
+    if (!atlasApiConfigured()) {
+      res.status(503).json({
+        error: 'Atlas Admin API is not configured. Set ATLAS_API_PUBLIC_KEY, ATLAS_API_PRIVATE_KEY, ATLAS_ORG_ID, and ATLAS_ACCESS_LIST on the API service.',
+        ...isolation,
+      })
+      return
+    }
+    if (tenant.atlasProvisionStatus === 'creating') {
+      res.json({ started: false, alreadyRunning: true, ...isolation, atlasProvisionStatus: 'creating' })
+      return
+    }
+    await Tenant.updateOne({ slug }, { $set: { atlasProvisionStatus: 'creating' } })
+    void provisionTenantAtlasInBackground(slug, { migrate: true })
+    res.json({ started: true, ...isolation, atlasProvisionStatus: 'creating' })
+  } catch (err) {
+    serverError(res, 'provision atlas', err, 'Failed to start dedicated Atlas provisioning')
   }
 })
 
@@ -244,10 +292,16 @@ router.post('/tenants', requireAdmin, async (req: Request, res: Response) => {
         plan,
       })
       // Persist hashed password back to the tenant document
-      if (provisionResult.passwordHash) {
+      if (provisionResult.passwordHash || provisionResult.dbName) {
         await Tenant.findOneAndUpdate(
           { slug: saved.slug },
-          { $set: { passwordHash: provisionResult.passwordHash } }
+          {
+            $set: {
+              ...(provisionResult.passwordHash ? { passwordHash: provisionResult.passwordHash } : {}),
+              customDbName: provisionResult.dbName,
+              atlasProvisionStatus: provisionResult.atlasProvisionStarted ? 'creating' : '',
+            },
+          }
         )
       }
     } catch (provisionErr) {
@@ -433,11 +487,17 @@ router.put('/applications/:id/status', requireAdmin, async (req: Request, res: R
           plan,
         })
         // Persist hashed password to the tenant record
-        if (provisionResult.passwordHash) {
+        if (provisionResult.passwordHash || provisionResult.dbName) {
           const Tenant2 = getTenantModel(masterDb)
           await Tenant2.findOneAndUpdate(
             { slug: updated.requestedSubdomain },
-            { $set: { passwordHash: provisionResult.passwordHash } }
+            {
+              $set: {
+                ...(provisionResult.passwordHash ? { passwordHash: provisionResult.passwordHash } : {}),
+                customDbName: provisionResult.dbName,
+                atlasProvisionStatus: provisionResult.atlasProvisionStarted ? 'creating' : '',
+              },
+            }
           )
         }
       } catch (provisionErr) {
@@ -701,6 +761,7 @@ router.get('/tenants/:slug/credentials', async (req: Request, res: Response) => 
       return
     }
 
+    const appUrl = publicAppUrl(req.headers.origin)
     res.json({
       id: tenant.id,
       slug: tenant.slug,
@@ -714,11 +775,33 @@ router.get('/tenants/:slug/credentials', async (req: Request, res: Response) => 
       subdomain: `${PLATFORM_ROOT_DOMAIN}/t/${tenant.slug}`,
       customDomain: tenant.customDomain || null,
       customDomainVerified: Boolean(tenant.customDomainVerified),
-      dashboardUrl: `/t/${tenant.slug}/dashboard`,
+      ownerPortalPath: ownerPortalPath(tenant.slug),
+      ownerPortalUrl: ownerPortalAbsoluteUrl(tenant.slug, appUrl),
       storefrontUrl: `/t/${tenant.slug}`,
     })
   } catch (err) {
     serverError(res, 'credentials', err, 'Failed to fetch credentials')
+  }
+})
+
+// POST rotate the unique owner-portal URL. The previous link stops working.
+router.post('/tenants/:slug/owner-portal', async (req: Request, res: Response) => {
+  try {
+    const slug = String(req.params.slug || '').toLowerCase()
+    const masterDb = await connectMasterDatabase()
+    const Tenant = getTenantModel(masterDb)
+    const tenant = await Tenant.findOne({ slug })
+    if (!tenant) {
+      res.status(404).json({ error: 'Tenant not found.' })
+      return
+    }
+    const appUrl = publicAppUrl(req.headers.origin)
+    res.json({
+      ownerPortalPath: ownerPortalPath(tenant.slug),
+      ownerPortalUrl: ownerPortalAbsoluteUrl(tenant.slug, appUrl),
+    })
+  } catch (err) {
+    serverError(res, 'rotate owner portal', err, 'Failed to issue a new owner URL')
   }
 })
 

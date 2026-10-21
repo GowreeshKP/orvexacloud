@@ -16,6 +16,8 @@
     "admin:bootstrap": "node scripts/bootstrap-admin.mjs",
     "admin:recover": "node scripts/recover-admin.mjs",
     "seller:set-password": "node scripts/set-seller-password.mjs",
+    "tenant:set-db": "npm --prefix server run tenant:set-db --",
+    "tenant:provision-atlas": "npm --prefix server run tenant:provision-atlas --",
     "pages:deploy": "wrangler pages deploy dist --project-name orvexa-cloud"
   },
   "dependencies": {

@@ -3,6 +3,7 @@
 // across the multi-tenant SaaS platform and individual merchant storefronts.
 
 import { API_BASE } from '@/lib/api-base'
+import { downloadExcel } from '@/lib/excel'
 
 export type AuditCategory =
   | 'auth'
@@ -306,42 +307,14 @@ export const auditLogger = {
     return this.getLogs(options).logs
   },
 
-  // ─────────────────────────────────────────────────────────
-  // EXPORT UTILITIES (CSV / JSON)
-  // ─────────────────────────────────────────────────────────
-  exportCsv(logs: AuditLogEntry[], filename = 'audit-trail-export.csv'): void {
-    const headers = ['Timestamp', 'ID', 'Actor Name', 'Actor Role', 'Store Slug', 'Action', 'Category', 'Severity', 'Details', 'IP Address']
+  exportExcel(logs: AuditLogEntry[], filename = 'audit-trail-export.xlsx'): void {
+    const headers = ['Date', 'Person', 'Action', 'Details']
     const rows = logs.map((l) => [
-      `"${l.timestamp}"`,
-      `"${l.id}"`,
-      `"${l.actorName}"`,
-      `"${l.actorRole}"`,
-      `"${l.tenantSlug || 'Platform'}"`,
-      `"${l.action}"`,
-      `"${l.category}"`,
-      `"${l.severity}"`,
-      `"${l.details.replace(/"/g, '""')}"`,
-      `"${l.ipAddress || ''}"`,
+      new Date(l.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      l.actorName,
+      l.action,
+      l.details,
     ])
-
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.setAttribute('download', filename)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  },
-
-  exportJson(logs: AuditLogEntry[], filename = 'audit-trail-export.json'): void {
-    const jsonStr = JSON.stringify(logs, null, 2)
-    const blob = new Blob([jsonStr], { type: 'application/json' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.setAttribute('download', filename)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    downloadExcel(filename, [{ name: 'Audit log', rows: [headers, ...rows] }])
   },
 }

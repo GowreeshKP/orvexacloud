@@ -6,10 +6,11 @@ import { apiClient } from '@/api/client'
 import { mockStore } from '@/api/mock-store'
 import { auditLogger } from '@/api/audit-logger'
 import { PLAN_CATALOG, formatPlanPrice, normalizePlanId, storeAddress } from '@/data/plans'
-import { tenantPortalPath } from '@/lib/store-urls'
+import { isOwnerPortalPath, parseOwnerPortalToken, tenantPortalPath } from '@/lib/store-urls'
 import { API_BASE } from '@/lib/api-base'
 import { fetchStoreAnalytics, fetchDomainConfig, saveCustomDomain } from '@/api/storefront-analytics'
 import { storeInbox, STORE_INBOX_EVENT, type NewsletterSubscriber, type StoreMessage } from '@/api/store-messages'
+import { downloadExcel, cellFromUnknown, type ExcelCell } from '@/lib/excel'
 import SellerLogin from '@/components/auth/SellerLogin'
 import StoreAuditLogs from '@/components/store/StoreAuditLogs'
 import StorefrontContentEditor, {
@@ -122,6 +123,12 @@ export default function DashboardApp() {
   const { tenant, loading, switchTenant } = useTenant()
   const switchLayer = useSwitchLayer()
   const [session, setSession] = useState<SellerSession | null>(() => authService.getSellerSession())
+  const ownerToken = parseOwnerPortalToken()
+  const [portalAllowed, setPortalAllowed] = useState<boolean | null>(() => {
+    if (session || isOwnerPortalPath()) return true
+    if (ownerToken) return null
+    return false
+  })
   const [activeView, setActiveView] = useState<DashboardView>('overview')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -134,7 +141,23 @@ export default function DashboardApp() {
   const handleLogout = () => {
     authService.logoutSeller()
     setSession(null)
+    setPortalAllowed(false)
   }
+
+  useEffect(() => {
+    if (session || !ownerToken || !tenant?.slug) return
+    let cancelled = false
+    fetch(`${API_BASE}/public/owner-portal?slug=${encodeURIComponent(tenant.slug)}&token=${encodeURIComponent(ownerToken)}`)
+      .then((r) => {
+        if (!cancelled) setPortalAllowed(r.ok)
+      })
+      .catch(() => {
+        if (!cancelled) setPortalAllowed(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [session, ownerToken, tenant?.slug])
 
   if (loading) {
     return (
@@ -147,13 +170,42 @@ export default function DashboardApp() {
     )
   }
 
-  // If not authenticated, require Seller Login with Login ID & Password
+  if (!session && portalAllowed === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-stone-100">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-black/20 border-t-black rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-xs font-bold tracking-[0.2em] uppercase text-black/40">Checking owner link...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!session && !portalAllowed) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-stone-50 px-6">
+        <div className="max-w-md text-center">
+          <p className="text-xs font-bold tracking-[0.2em] uppercase text-black/40 mb-3">Private owner portal</p>
+          <h1 className="text-2xl font-serif mb-3">Use your unique owner URL</h1>
+          <p className="text-sm text-black/60 mb-6">
+            Store owner and staff login is not on the shop. Orvexa admin issues a unique URL from this store&apos;s credentials section.
+          </p>
+          <a href={tenant?.slug ? `/t/${tenant.slug}` : '/'} className="inline-block bg-black text-white text-xs font-bold tracking-widest uppercase px-6 py-3">
+            Back to store
+          </a>
+        </div>
+      </div>
+    )
+  }
+
   if (!session) {
     return (
       <SellerLogin
         tenant={tenant}
         onLoginSuccess={(newSession) => {
           setSession(newSession)
+          setPortalAllowed(true)
+          if (tenant?.slug) window.history.replaceState({}, '', tenantPortalPath(tenant.slug, 'dashboard'))
           if (newSession.tenantSlug && newSession.tenantSlug !== tenant?.slug) {
             switchTenant(newSession.tenantSlug)
           }
@@ -1562,6 +1614,7 @@ function StorefrontCustomizer({ onToast }: { onToast: (msg: string) => void }) {
   const { refreshTenant } = useTenant()
   const switchLayer = useSwitchLayer()
   const [isSaved, setIsSaved] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   const isTemplate = isTemplateStore(tenant)
   const nicheLabel = getNichePreset(tenant?.storeType).label
@@ -1694,46 +1747,47 @@ function StorefrontCustomizer({ onToast }: { onToast: (msg: string) => void }) {
     setAnnouncements(announcements.filter((_, i) => i !== index))
   }
 
-  const handleSaveAll = () => {
-    // Save theme updates
-    updateTheme({
-      heroImage,
-      heroHeadline,
-      heroSubhead,
-      heroCtaText,
-      secondaryCtaText,
-      primaryColor,
-      accentColor,
-      backgroundColor,
-      fontDisplay,
-      announcementMessages: announcements,
-      enableAnimations,
-      enableReviews,
-      enableOrderTracking,
-      logoUrl,
-      ...extrasToTheme(extras),
-    })
-
-    // Save tenant profile updates
-    updateTenant({
-      brandName,
-      name: brandName,
-      tagline: heroHeadline,
-      logo: logoUrl,
-      logoUrl,
-      aboutStory,
-      contact: {
-        phone: contactPhone,
-        email: contactEmail,
-        address: contactAddress,
-        workingHours: 'Mon–Sat: 10AM – 7PM IST',
-        shippingThresholdFormatted: `${tenant?.currencySymbol || '₹'}${Math.max(0, Math.round(extras.freeShippingThreshold || 0)).toLocaleString('en-IN')}`,
-      },
-    })
-
-    refreshTenant()
-    setIsSaved(true)
-    onToast('✅ Homepage banner, branding & theme published to live store!')
+  const handleSaveAll = async () => {
+    if (!tenant?.slug || isSaving) return
+    setIsSaving(true)
+    setIsSaved(false)
+    try {
+      await updateTheme({
+        heroImage,
+        heroHeadline,
+        heroSubhead,
+        heroCtaText,
+        secondaryCtaText,
+        primaryColor,
+        accentColor,
+        backgroundColor,
+        fontDisplay,
+        announcementMessages: announcements,
+        enableAnimations,
+        enableReviews,
+        enableOrderTracking,
+        logoUrl,
+        ...extrasToTheme(extras),
+        brandName,
+        tagline: heroHeadline,
+        aboutStory,
+        logo: logoUrl,
+        contact: {
+          phone: contactPhone,
+          email: contactEmail,
+          address: contactAddress,
+          workingHours: 'Mon–Sat: 10AM – 7PM IST',
+          shippingThresholdFormatted: `${tenant?.currencySymbol || '₹'}${Math.max(0, Math.round(extras.freeShippingThreshold || 0)).toLocaleString('en-IN')}`,
+        },
+      })
+      refreshTenant()
+      setIsSaved(true)
+      onToast('Published. Your live storefront now shows these changes.')
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : 'Could not publish storefront changes.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -1757,11 +1811,12 @@ function StorefrontCustomizer({ onToast }: { onToast: (msg: string) => void }) {
             <span>View Live Storefront ↗</span>
           </button>
           <button
-            onClick={handleSaveAll}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs tracking-widest uppercase px-6 py-3 rounded-lg transition-all cursor-pointer shadow-md flex items-center gap-2"
+            onClick={() => void handleSaveAll()}
+            disabled={isSaving}
+            className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold text-xs tracking-widest uppercase px-6 py-3 rounded-lg transition-all cursor-pointer shadow-md flex items-center gap-2"
           >
             <span>✓</span>
-            <span>SAVE & PUBLISH CHANGES</span>
+            <span>{isSaving ? 'PUBLISHING…' : 'SAVE & PUBLISH CHANGES'}</span>
           </button>
         </div>
       </div>
@@ -1770,7 +1825,7 @@ function StorefrontCustomizer({ onToast }: { onToast: (msg: string) => void }) {
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
           <div className="flex items-center gap-2 text-emerald-800 text-xs font-semibold">
             <span className="text-base">🎉</span>
-            <span>Changes successfully published! Your storefront is now displaying the updated banner, logo, and theme.</span>
+            <span>Published. Open the storefront to see the new banner, headlines and theme.</span>
           </div>
           <button
             onClick={() => switchLayer('storefront', tenant?.slug || 'lunar')}
@@ -2241,10 +2296,11 @@ function StorefrontCustomizer({ onToast }: { onToast: (msg: string) => void }) {
           <div className="pt-2">
             <button
               type="button"
-              onClick={handleSaveAll}
-              className="w-full bg-black text-white font-bold text-xs tracking-[0.2em] uppercase py-4 rounded-xl hover:bg-stone-800 transition-all cursor-pointer shadow-lg"
+              onClick={() => void handleSaveAll()}
+              disabled={isSaving}
+              className="w-full bg-black text-white font-bold text-xs tracking-[0.2em] uppercase py-4 rounded-xl hover:bg-stone-800 disabled:opacity-60 transition-all cursor-pointer shadow-lg"
             >
-              ✓ SAVE & PUBLISH ALL CHANGES
+              {isSaving ? 'PUBLISHING…' : '✓ SAVE & PUBLISH ALL CHANGES'}
             </button>
           </div>
         </div>
@@ -2424,61 +2480,71 @@ function StorefrontCustomizer({ onToast }: { onToast: (msg: string) => void }) {
 // =====================================================
 function InboxManager({ onToast }: { onToast: (msg: string) => void }) {
   const { tenant } = useTenant()
-  const tenantId = tenant?.id || ''
-  const [tab, setTab] = useState<'messages' | 'subscribers'>('messages')
-  const [messages, setMessages] = useState<StoreMessage[]>(() => storeInbox.getMessages(tenantId))
-  const [subscribers, setSubscribers] = useState<NewsletterSubscriber[]>(() => storeInbox.getSubscribers(tenantId))
+  const inboxKey = tenant || ''
+  const [tab, setTab] = useState<'messages' | 'subscribers'>('subscribers')
+  const [messages, setMessages] = useState<StoreMessage[]>(() => storeInbox.getMessages(inboxKey))
+  const [subscribers, setSubscribers] = useState<NewsletterSubscriber[]>(() => storeInbox.getSubscribers(inboxKey))
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
   const [openId, setOpenId] = useState<string | null>(null)
 
   useEffect(() => {
+    let cancelled = false
+    const refreshLocal = () => {
+      setMessages(storeInbox.getMessages(inboxKey))
+      setSubscribers(storeInbox.getSubscribers(inboxKey))
+    }
     const refresh = () => {
-      setMessages(storeInbox.getMessages(tenantId))
-      setSubscribers(storeInbox.getSubscribers(tenantId))
+      refreshLocal()
+      void storeInbox.loadInbox(inboxKey).then((data) => {
+        if (cancelled) return
+        setMessages(data.messages)
+        setSubscribers(data.subscribers)
+      })
     }
     refresh()
     window.addEventListener(STORE_INBOX_EVENT, refresh)
     window.addEventListener('storage', refresh)
     return () => {
+      cancelled = true
       window.removeEventListener(STORE_INBOX_EVENT, refresh)
       window.removeEventListener('storage', refresh)
     }
-  }, [tenantId])
+  }, [tenant?.slug, tenant?.id])
 
   const unreadCount = messages.filter((m) => !m.read).length
   const visibleMessages = filter === 'unread' ? messages.filter((m) => !m.read) : messages
 
   const toggleOpen = (m: StoreMessage) => {
     setOpenId((prev) => (prev === m.id ? null : m.id))
-    if (!m.read) storeInbox.setRead(tenantId, m.id, true)
+    if (!m.read) storeInbox.setRead(inboxKey, m.id, true)
   }
+
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
   const exportSubscribers = () => {
     if (subscribers.length === 0) {
       onToast('No subscribers to export.')
       return
     }
-    const csv = ['Email,Subscribed At', ...subscribers.map((s) => `"${s.email}","${s.subscribedAt}"`)].join('\n')
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
-    link.setAttribute('download', `${tenant?.slug || 'store'}-subscribers.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    onToast(`Exported ${subscribers.length} subscribers to CSV!`)
+    downloadExcel(`${tenant?.slug || 'store'}-subscribers.xlsx`, [
+      {
+        name: 'Subscribers',
+        rows: [
+          ['Email', 'Date'],
+          ...subscribers.map((s) => [s.email, formatDate(s.subscribedAt)]),
+        ],
+      },
+    ])
+    onToast(`Exported ${subscribers.length} subscribers to Excel.`)
   }
-
-  const formatDate = (iso: string) =>
-    new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-xl border border-black/8 shadow-sm">
         <div>
           <h2 className="text-lg font-bold text-black">Inbox & Newsletter Subscribers</h2>
-          <p className="text-xs text-black/50 mt-0.5">
-            Messages sent from your storefront contact form and emails collected by the footer newsletter.
-          </p>
+          <p className="text-xs text-black/50 mt-0.5">Emails and messages from your store.</p>
         </div>
         <div className="flex gap-2">
           {(['messages', 'subscribers'] as const).map((t) => (
@@ -2516,7 +2582,7 @@ function InboxManager({ onToast }: { onToast: (msg: string) => void }) {
             {unreadCount > 0 && (
               <button
                 type="button"
-                onClick={() => messages.filter((m) => !m.read).forEach((m) => storeInbox.setRead(tenantId, m.id, true))}
+                onClick={() => messages.filter((m) => !m.read).forEach((m) => storeInbox.setRead(inboxKey, m.id, true))}
                 className="text-[11px] font-bold text-violet-600 hover:underline cursor-pointer"
               >
                 Mark all as read
@@ -2572,7 +2638,7 @@ function InboxManager({ onToast }: { onToast: (msg: string) => void }) {
                           )}
                           <button
                             type="button"
-                            onClick={() => storeInbox.setRead(tenantId, m.id, false)}
+                            onClick={() => storeInbox.setRead(inboxKey, m.id, false)}
                             className="px-3 py-1.5 rounded-lg bg-black/5 text-black/70 text-[11px] font-bold uppercase tracking-wider cursor-pointer hover:bg-black/10"
                           >
                             Mark unread
@@ -2581,7 +2647,7 @@ function InboxManager({ onToast }: { onToast: (msg: string) => void }) {
                             type="button"
                             onClick={() => {
                               if (!window.confirm(`Delete the message from ${m.name}?`)) return
-                              storeInbox.deleteMessage(tenantId, m.id)
+                              storeInbox.deleteMessage(inboxKey, m.id)
                               setOpenId(null)
                               onToast('Message deleted.')
                             }}
@@ -2601,20 +2667,20 @@ function InboxManager({ onToast }: { onToast: (msg: string) => void }) {
       ) : (
         <div className="bg-white rounded-xl border border-black/8 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3 border-b border-black/8">
-            <p className="text-xs text-black/50">{subscribers.length} people joined your newsletter.</p>
+            <p className="text-xs text-black/50">{subscribers.length} {subscribers.length === 1 ? 'email' : 'emails'}</p>
             <button
               type="button"
               onClick={exportSubscribers}
               className="px-3 py-1.5 rounded-lg bg-black text-white text-[11px] font-bold uppercase tracking-wider cursor-pointer"
             >
-              Export CSV
+              Export Excel
             </button>
           </div>
           {subscribers.length === 0 ? (
             <div className="p-12 text-center">
               <p className="text-3xl mb-2">📨</p>
               <p className="text-sm font-bold text-black">No subscribers yet</p>
-              <p className="text-xs text-black/50 mt-1">Emails entered in your storefront footer's newsletter box will appear here.</p>
+              <p className="text-xs text-black/50 mt-1">Emails from your store will appear here.</p>
             </div>
           ) : (
             <ul className="divide-y divide-black/6">
@@ -2622,12 +2688,12 @@ function InboxManager({ onToast }: { onToast: (msg: string) => void }) {
                 <li key={s.email} className="px-5 py-3 flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm text-black">{s.email}</p>
-                    <p className="text-[11px] text-black/40">Joined {formatDate(s.subscribedAt)}</p>
+                    <p className="text-[11px] text-black/40">{formatDate(s.subscribedAt)}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
-                      storeInbox.unsubscribe(tenantId, s.email)
+                      storeInbox.unsubscribe(inboxKey, s.email)
                       onToast(`${s.email} removed from the list.`)
                     }}
                     className="text-[11px] font-bold text-red-600 hover:underline cursor-pointer"
@@ -2688,35 +2754,28 @@ function OrderManager({ onToast }: { onToast: (msg: string) => void }) {
     }
   }
 
-  const handleExportCsv = () => {
+  const handleExportExcel = () => {
     if (filteredOrders.length === 0) {
       onToast('No orders to export.')
       return
     }
-    const headers = ['Order ID', 'Date', 'Customer Name', 'Phone', 'City', 'State', 'Pincode', 'Items Count', 'Total', 'Payment Method', 'Status', 'Courier AWB']
-    const rows = filteredOrders.map((o) => [
-      `"${o.id}"`,
-      `"${o.date}"`,
-      `"${o.shippingAddress?.name || ''}"`,
-      `"${o.shippingAddress?.phone || ''}"`,
-      `"${o.shippingAddress?.city || ''}"`,
-      `"${o.shippingAddress?.state || ''}"`,
-      `"${o.shippingAddress?.pincode || ''}"`,
-      o.items?.length || 0,
-      o.total,
-      `"${o.paymentMethod || 'Prepaid'}"`,
-      `"${o.status}"`,
-      `"${o.awb || ''}"`,
+    downloadExcel(`${tenant?.slug || 'store'}-orders-${new Date().toISOString().split('T')[0]}.xlsx`, [
+      {
+        name: 'Orders',
+        rows: [
+          ['Order ID', 'Date', 'Customer', 'Phone', 'Total', 'Status'],
+          ...filteredOrders.map((o) => [
+            o.id,
+            o.date,
+            o.shippingAddress?.name || '',
+            o.shippingAddress?.phone || '',
+            o.total,
+            o.status,
+          ]),
+        ],
+      },
     ])
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.setAttribute('download', `${tenant?.slug || 'store'}-orders-${new Date().toISOString().split('T')[0]}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    onToast(`Exported ${filteredOrders.length} orders to CSV!`)
+    onToast(`Exported ${filteredOrders.length} orders to Excel.`)
   }
 
   return (
@@ -2731,11 +2790,11 @@ function OrderManager({ onToast }: { onToast: (msg: string) => void }) {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={handleExportCsv}
+            onClick={handleExportExcel}
             className="bg-stone-900 hover:bg-black text-white text-xs font-bold px-4 py-2.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
           >
             <span>📥</span>
-            <span>Export Orders CSV</span>
+            <span>Export Excel</span>
           </button>
         </div>
       </div>
@@ -3155,20 +3214,44 @@ function StoreSettings({ onNavigate, onToast }: { onNavigate?: (view: DashboardV
     e.preventDefault()
     setIsSavingProfile(true)
 
-    mockStore.updateTenant(tenant.id, {
-      ownerName: ownerName.trim(),
-      ownerEmail: ownerEmail.trim().toLowerCase(),
-      ownerPhone: ownerPhone.trim(),
-    })
+    if (DEMO_MODE) {
+      mockStore.updateTenant(tenant.id, {
+        ownerName: ownerName.trim(),
+        ownerEmail: ownerEmail.trim().toLowerCase(),
+        ownerPhone: ownerPhone.trim(),
+      })
+    }
 
-    // Also notify authService credentials map
-    await authService.changeSellerPassword(tenant.slug, {
-      newPassword: authService.getStoreCredential(tenant.slug).password,
-      newEmail: ownerEmail.trim().toLowerCase(),
-      ownerName: ownerName.trim(),
-    })
+    try {
+      const token = localStorage.getItem('lunar_seller_token') || localStorage.getItem('lunar_admin_token')
+      const res = await fetch(`${API_BASE}/auth/seller/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          slug: tenant.slug,
+          ownerName: ownerName.trim(),
+          ownerEmail: ownerEmail.trim().toLowerCase(),
+          ownerPhone: ownerPhone.trim(),
+        }),
+      })
+      if (!res.ok && !DEMO_MODE) {
+        const body = await res.json().catch(() => ({}))
+        onToast(body.error || 'Could not save profile. Try again in a moment.')
+        setIsSavingProfile(false)
+        return
+      }
+    } catch {
+      if (!DEMO_MODE) {
+        onToast('Could not reach the server. Your profile was not saved.')
+        setIsSavingProfile(false)
+        return
+      }
+    }
 
-    refreshTenant()
+    refreshTenant(tenant.slug)
     setIsSavingProfile(false)
     onToast('✅ Account credentials and profile details updated!')
   }
@@ -4065,17 +4148,56 @@ Isolated Database: orvexa_tenant_${tenant.slug}
                 onToast('Could not download store data.')
                 return
               }
-              const blob = await res.blob()
-              const url = URL.createObjectURL(blob)
-              const link = document.createElement('a')
-              link.href = url
-              link.download = `${tenant.slug}-export.json`
-              link.click()
-              URL.revokeObjectURL(url)
+              const data = (await res.json().catch(() => null)) as {
+                brandName?: string
+                slug?: string
+                exportedAt?: string
+                products?: Array<Record<string, unknown>>
+                orders?: Array<Record<string, unknown>>
+                reviews?: Array<Record<string, unknown>>
+              } | null
+              if (!data) {
+                onToast('Could not download store data.')
+                return
+              }
+              const products = data.products || []
+              const orders = data.orders || []
+              const reviews = data.reviews || []
+              const addr = (row: Record<string, unknown>) => (row.shippingAddress as Record<string, unknown> | undefined) || {}
+              downloadExcel(`${tenant.slug}-export.xlsx`, [
+                {
+                  name: 'Products',
+                  rows: [
+                    ['Name', 'Category', 'Price', 'Stock'],
+                    ...products.map((p): ExcelCell[] => [cellFromUnknown(p.name), cellFromUnknown(p.category), cellFromUnknown(p.price), cellFromUnknown(p.stockCount)]),
+                  ],
+                },
+                {
+                  name: 'Orders',
+                  rows: [
+                    ['Order ID', 'Date', 'Customer', 'Phone', 'Total', 'Status'],
+                    ...orders.map((o): ExcelCell[] => [
+                      cellFromUnknown(o.id),
+                      cellFromUnknown(o.date),
+                      cellFromUnknown(addr(o).name),
+                      cellFromUnknown(addr(o).phone),
+                      cellFromUnknown(o.total),
+                      cellFromUnknown(o.status),
+                    ]),
+                  ],
+                },
+                {
+                  name: 'Reviews',
+                  rows: [
+                    ['Author', 'Rating', 'Comment'],
+                    ...reviews.map((r): ExcelCell[] => [cellFromUnknown(r.author), cellFromUnknown(r.rating), cellFromUnknown(r.comment)]),
+                  ],
+                },
+              ])
             }}
             className="px-3 py-2 text-xs font-bold border border-slate-300 rounded-lg cursor-pointer"
           >
-            Download store data
+            Download store Excel
           </button>
         </div>
 

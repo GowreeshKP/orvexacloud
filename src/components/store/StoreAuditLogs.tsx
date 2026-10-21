@@ -92,14 +92,9 @@ export default function StoreAuditLogs({ tenant, onToast }: StoreAuditLogsProps)
     return { total, securityCount, productCount, orderCount }
   }, [logs])
 
-  const handleExportCsv = () => {
-    auditLogger.exportCsv(filteredLogs, `${tenant.slug}-audit-log-${new Date().toISOString().split('T')[0]}.csv`)
-    onToast?.(`Exported ${filteredLogs.length} audit records to CSV`)
-  }
-
-  const handleExportJson = () => {
-    auditLogger.exportJson(filteredLogs, `${tenant.slug}-audit-log-${new Date().toISOString().split('T')[0]}.json`)
-    onToast?.(`Exported ${filteredLogs.length} audit records to JSON`)
+  const handleExportExcel = () => {
+    auditLogger.exportExcel(filteredLogs, `${tenant.slug}-audit-log-${new Date().toISOString().split('T')[0]}.xlsx`)
+    onToast?.(`Exported ${filteredLogs.length} audit records to Excel`)
   }
 
   return (
@@ -131,18 +126,11 @@ export default function StoreAuditLogs({ tenant, onToast }: StoreAuditLogsProps)
             <span>Refresh</span>
           </button>
           <button
-            onClick={handleExportCsv}
+            onClick={handleExportExcel}
             className="text-xs font-bold px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-black text-white shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <span>📥</span>
-            <span>Export CSV</span>
-          </button>
-          <button
-            onClick={handleExportJson}
-            className="text-xs font-semibold px-3 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-black border border-stone-200 transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>📄</span>
-            <span>JSON</span>
+            <span>Export Excel</span>
           </button>
         </div>
       </div>

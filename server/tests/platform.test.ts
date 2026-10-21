@@ -47,6 +47,7 @@ describe('multi-tenant isolation (Tenant A vs Tenant B)', () => {
     assert.equal((await api('GET', '/api/stores/bravo/staff', { token: t })).status, 403)
     assert.equal((await api('PUT', '/api/stores/bravo/theme', { token: t, body: { heroHeadline: 'pwned' } })).status, 403)
     assert.equal((await api('GET', '/api/stores/bravo/database-status', { token: t })).status, 403)
+    assert.equal((await api('GET', '/api/stores/bravo/inbox', { token: t })).status, 403)
     assert.equal((await api('PUT', '/api/stores/bravo/orders/ANY/status', { token: t, body: { status: 'Cancelled' } })).status, 403)
     assert.equal((await api('POST', '/api/stores/bravo/staff', { token: t, body: { name: 'x', email: 'x@x.test', password: 'xxxxxxxxxx' } })).status, 403)
   })
@@ -81,6 +82,39 @@ describe('multi-tenant isolation (Tenant A vs Tenant B)', () => {
     assert.equal(r.status, 200)
     const b = await api('GET', '/api/stores/bravo/theme')
     assert.notEqual(b.body.heroHeadline, 'Alpha headline')
+  })
+
+  test('owner theme publish is stored and shown on the public storefront', async () => {
+    const r = await api('PUT', '/api/stores/alpha/theme', {
+      token: alpha.accessToken,
+      body: {
+        heroHeadline: 'Alpha live headline',
+        heroSubhead: 'New subhead from the owner',
+        copy: { bestsellersTitle: 'Our Picks' },
+        tagline: 'Alpha live headline',
+        aboutStory: 'Alpha is handmade in Pune.',
+        contact: { phone: '9876543210', email: 'care@alpha.test' },
+      },
+    })
+    assert.equal(r.status, 200)
+    assert.equal(r.body.theme.heroHeadline, 'Alpha live headline')
+    assert.equal(r.body.theme.copy.bestsellersTitle, 'Our Picks')
+
+    const theme = await api('GET', '/api/stores/alpha/theme')
+    assert.equal(theme.status, 200)
+    assert.equal(theme.body.heroHeadline, 'Alpha live headline')
+    assert.equal(theme.body.copy.bestsellersTitle, 'Our Picks')
+
+    const resolved = await api('GET', '/api/public/resolve?slug=alpha')
+    assert.equal(resolved.status, 200)
+    assert.equal(resolved.body.theme.heroHeadline, 'Alpha live headline')
+    assert.equal(resolved.body.theme.copy.bestsellersTitle, 'Our Picks')
+    assert.equal(resolved.body.aboutStory, 'Alpha is handmade in Pune.')
+    assert.equal(resolved.body.contact.email, 'care@alpha.test')
+
+    const other = await api('GET', '/api/public/resolve?slug=bravo')
+    assert.notEqual(other.body.theme?.heroHeadline, 'Alpha live headline')
+    assert.notEqual(other.body.aboutStory, 'Alpha is handmade in Pune.')
   })
 })
 
@@ -143,6 +177,12 @@ describe('authentication', () => {
     assert.ok(mail!.includes('https://app.orvexa.test/'), 'link uses PUBLIC_APP_URL, not the request origin')
   })
 
+  test('seller profile requires a merchant token', async () => {
+    const body = { slug: 'alpha', ownerName: 'New Name' }
+    assert.equal((await api('PUT', '/api/auth/seller/profile', { body })).status, 401)
+    assert.equal((await api('PUT', '/api/auth/seller/profile', { token: staff.accessToken, body })).status, 403)
+  })
+
   test('set-password requires a super admin token (no shared key)', async () => {
     const body = { slug: 'bravo', newPassword: 'Attacker-Pass-123', setupKey: 'orvexa_setup_2026' }
     assert.equal((await api('POST', '/api/auth/seller/set-password', { body })).status, 401)
@@ -183,6 +223,29 @@ describe('role-based access control', () => {
     assert.equal(text.includes('passwordHash'), false)
     assert.equal(text.includes('$2a$'), false)
     assert.equal(text.includes('customMongoUri'), false)
+    const alphaRow = r.body.find((t: { slug: string }) => t.slug === 'alpha')
+    assert.equal(alphaRow.isolationMode, 'dedicated_database')
+    assert.equal(alphaRow.databaseName, 'orvexa_test_tenant_alpha')
+    assert.equal(alphaRow.hasCustomDatabase, false)
+  })
+
+  test('each store reports its own isolated database name', async () => {
+    const a = await api('GET', '/api/stores/alpha/database-status', { token: alpha.accessToken })
+    const b = await api('GET', '/api/stores/bravo/database-status', { token: bravo.accessToken })
+    assert.equal(a.status, 200)
+    assert.equal(b.status, 200)
+    assert.equal(a.body.databaseName, 'orvexa_test_tenant_alpha')
+    assert.equal(b.body.databaseName, 'orvexa_test_tenant_bravo')
+    assert.equal(a.body.isolationMode, 'dedicated_database')
+    assert.notEqual(a.body.databaseName, b.body.databaseName)
+  })
+
+  test('dedicated Atlas provision is admin-only and stays off without Atlas API keys', async () => {
+    assert.equal((await api('POST', '/api/admin/tenants/alpha/provision-atlas')).status, 401)
+    assert.equal((await api('POST', '/api/admin/tenants/alpha/provision-atlas', { token: alpha.accessToken })).status, 403)
+    const r = await api('POST', '/api/admin/tenants/alpha/provision-atlas', { token: admin.accessToken })
+    assert.equal(r.status, 503)
+    assert.equal(r.body.databaseName, 'orvexa_test_tenant_alpha')
   })
 
   test('creating a store ignores mass-assigned password hashes and staff', async () => {
@@ -562,7 +625,20 @@ describe('tenant portals, custom domains and storefront analytics', () => {
     assert.equal(r.status, 200)
     assert.equal(r.body.slug, 'alpha')
     assert.equal(r.body.portalPath, '/t/alpha')
-    assert.equal(r.body.dashboardPath, '/t/alpha/dashboard')
+    assert.equal(r.body.dashboardPath, undefined)
+    assert.equal(r.body.ownerPortalToken, undefined)
+    assert.equal(r.body.ownerEmail, undefined)
+  })
+
+  test('admin credentials include the permanent owner URL', async () => {
+    assert.equal((await api('GET', '/api/admin/tenants/alpha/credentials')).status, 401)
+    assert.equal((await api('GET', '/api/admin/tenants/alpha/credentials', { token: alpha.accessToken })).status, 403)
+    const creds = await api('GET', '/api/admin/tenants/alpha/credentials', { token: admin.accessToken })
+    assert.equal(creds.status, 200)
+    assert.equal(creds.body.ownerPortalPath, '/t/alpha/owner')
+    assert.match(String(creds.body.ownerPortalUrl), /\/t\/alpha\/owner$/)
+    const tenants = await api('GET', '/api/admin/tenants', { token: admin.accessToken })
+    assert.equal(JSON.stringify(tenants.body).includes('ownerPortalToken'), false)
   })
 
   test('unknown slug is 404 and never another store', async () => {
@@ -604,5 +680,65 @@ describe('tenant portals, custom domains and storefront analytics', () => {
     assert.equal(cfg.status, 200)
     assert.equal(cfg.body.customDomain, 'shop.alpha.test')
     assert.match(String(cfg.body.cnameTarget), /cname\.orvexacloud\.in/)
+  })
+})
+
+describe('storefront inbox and newsletter subscribers', () => {
+  test('public newsletter and contact emails land in that store inbox only', async () => {
+    const sub = await api('POST', '/api/stores/alpha/newsletter', { body: { email: 'shopper@example.com' } })
+    assert.equal(sub.status, 201)
+    assert.equal(sub.body.created, true)
+    const again = await api('POST', '/api/stores/alpha/newsletter', { body: { email: 'SHOPPER@example.com' } })
+    assert.equal(again.status, 200)
+    assert.equal(again.body.created, false)
+
+    const contact = await api('POST', '/api/stores/alpha/contact', {
+      body: { name: 'Asha', email: 'asha@example.com', phone: '9876543210', subject: 'Sizing', message: 'Do you have M?' },
+    })
+    assert.equal(contact.status, 201)
+    assert.equal(contact.body.email, 'asha@example.com')
+    assert.equal(contact.body.read, false)
+
+    const checkout = await api('POST', '/api/stores/alpha/orders', {
+      body: order([{ productId: 2, quantity: 1 }], { customerEmail: 'buyer@example.com' }),
+    })
+    assert.equal(checkout.status, 201)
+
+    assert.equal((await api('GET', '/api/stores/alpha/inbox')).status, 401)
+    const inbox = await api('GET', '/api/stores/alpha/inbox', { token: alpha.accessToken })
+    assert.equal(inbox.status, 200)
+    const emails = inbox.body.subscribers.map((s: { email: string }) => s.email).sort()
+    assert.deepEqual(emails, ['asha@example.com', 'buyer@example.com', 'shopper@example.com'])
+    assert.equal(inbox.body.messages.length, 1)
+    assert.equal(inbox.body.messages[0].name, 'Asha')
+
+    const other = await api('GET', '/api/stores/bravo/inbox', { token: bravo.accessToken })
+    assert.equal(other.status, 200)
+    assert.equal(other.body.subscribers.length, 0)
+    assert.equal(other.body.messages.length, 0)
+    assert.equal((await api('GET', '/api/stores/bravo/inbox', { token: alpha.accessToken })).status, 403)
+  })
+
+  test('staff can mark contact messages read and remove a subscriber', async () => {
+    const contact = await api('POST', '/api/stores/alpha/contact', {
+      body: { name: 'Ravi', email: 'ravi@example.com', message: 'Where is my order?' },
+    })
+    assert.equal(contact.status, 201)
+    const patched = await api('PATCH', `/api/stores/alpha/inbox/messages/${contact.body.id}`, {
+      token: staff.accessToken,
+      body: { read: true },
+    })
+    assert.equal(patched.status, 200)
+    assert.equal(patched.body.read, true)
+
+    assert.equal(
+      (await api('DELETE', '/api/stores/alpha/inbox/subscribers', { token: staff.accessToken, body: { email: 'ravi@example.com' } })).status,
+      200,
+    )
+    const inbox = await api('GET', '/api/stores/alpha/inbox', { token: staff.accessToken })
+    assert.equal(inbox.body.subscribers.some((s: { email: string }) => s.email === 'ravi@example.com'), false)
+
+    assert.equal((await api('POST', '/api/stores/alpha/newsletter', { body: { email: 'not-an-email' } })).status, 400)
+    assert.equal((await api('POST', '/api/stores/alpha/contact', { body: { name: 'X', email: 'x@x.test' } })).status, 400)
   })
 })

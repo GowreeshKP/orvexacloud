@@ -97,7 +97,16 @@ class ApiClient {
     return tenant ? tenant.theme : null
   }
 
-  async updateTheme(tenantSlug: string, updates: Partial<ThemeConfig>): Promise<ThemeConfig | null> {
+  async updateTheme(
+    tenantSlug: string,
+    updates: Partial<ThemeConfig> & {
+      brandName?: string
+      tagline?: string
+      aboutStory?: string
+      logo?: string
+      contact?: TenantConfig['contact']
+    }
+  ): Promise<ThemeConfig | null> {
     const data = await this.request<{ success: boolean; theme: ThemeConfig }>(`/stores/${tenantSlug}/theme`, {
       method: 'PUT',
       body: JSON.stringify(updates),
@@ -107,10 +116,19 @@ class ApiClient {
       const tenant = mockStore.getTenantBySlug(tenantSlug)
       if (tenant) {
         mockStore.updateTheme(tenant.id, updates)
-        mockStore.updateTenant(tenant.id, { theme: { ...tenant.theme, ...updates } })
+        mockStore.updateTenant(tenant.id, {
+          brandName: updates.brandName || tenant.brandName,
+          name: updates.brandName || tenant.name,
+          tagline: updates.tagline ?? tenant.tagline,
+          aboutStory: updates.aboutStory ?? tenant.aboutStory,
+          logo: updates.logo ?? tenant.logo,
+          contact: updates.contact ? { ...tenant.contact, ...updates.contact } : tenant.contact,
+          theme: { ...tenant.theme, ...updates },
+        })
         return data?.theme || tenant.theme
       }
     }
+    if (!data?.theme && !DEMO_MODE) throw new Error('Could not publish storefront changes.')
     return data?.theme || null
   }
 

@@ -1611,8 +1611,8 @@ function DomainManager() {
                   )}
                 </td>
                 <td className="px-4 py-3.5">
-                  <a href={`/t/${tenant.slug}/dashboard`} className="text-[11px] font-semibold text-indigo-700 hover:underline">
-                    /t/{tenant.slug}/dashboard
+                  <a href={`/t/${tenant.slug}/owner`} className="text-[11px] font-semibold text-indigo-700 hover:underline">
+                    /t/{tenant.slug}/owner
                   </a>
                 </td>
                 <td className="px-5 py-3.5 text-right font-mono font-bold text-emerald-700">

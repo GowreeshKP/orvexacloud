@@ -2,10 +2,9 @@ import { Fragment, useState, useMemo, useEffect, useRef, type ComponentProps, ty
 import DashboardApp from './layers/DashboardApp'
 import AdminApp from './layers/AdminApp'
 import { useApplicationLayer, useTenant, useSwitchLayer } from './context/TenantContext'
-import { useAuth } from './context/AuthContext'
 import { mockStore } from './api/mock-store'
 import { auditLogger } from './api/audit-logger'
-import { authService, DEFAULT_DEMO_SELLER_CREDENTIALS, DEMO_MODE } from './api/auth'
+import { DEMO_MODE } from './api/auth'
 import { DEMO_SHOPPER, shopperAccounts } from './api/shopper-accounts'
 import { storeInbox } from './api/store-messages'
 import { MOCK_TENANTS } from './data/mock-tenants'
@@ -19,16 +18,14 @@ import {
   isTemplateStore,
 } from './data/store-niches'
 import type { HomeSectionId, TenantConfig } from './types/tenant'
-import CommonLoginModal from './components/auth/CommonLoginModal'
 import ResetPasswordModal from './components/auth/ResetPasswordModal'
 import { LegalComplianceModal, ComplianceFooterLinks, type ComplianceDocType } from './components/compliance/LegalComplianceModal'
 import { StoreModuleContext, applyStoreTheme, useStoreComponent, useStoreModule } from './tenants/loader'
 import type { StoreModule, StoreSection } from './tenants/store-module'
 import StoreNotFound from './components/platform/StoreNotFound'
 import { submitStorefrontOrder, trackStorefrontEvent } from './api/storefront-analytics'
-import { storefrontUrl, sellerPortalUrl } from './lib/store-urls'
+import { storefrontUrl } from './lib/store-urls'
 import { apiClient } from './api/client'
-import { API_ORIGIN } from './lib/api-base'
 
 // --- THE LUNAR CLOTHING OFFICIAL PRODUCT DATASET ---
 export interface Product {
@@ -3205,25 +3202,19 @@ function CheckoutModal({
   )
 }
 
-// 15b. AUTHENTICATION MODAL (CUSTOMER & STORE OWNER INTEGRATED PORTAL)
+// 15b. CUSTOMER AUTHENTICATION MODAL
 function AuthModal({
   isOpen,
   onClose,
   onLoginSuccess,
   tenant,
-  onSellerLoginSuccess,
 }: {
   isOpen: boolean
   onClose: () => void
   onLoginSuccess: (user: UserAccount, isNew?: boolean) => void
   tenant?: TenantConfig
-  onSellerLoginSuccess?: () => void
 }) {
-  const switchLayer = useSwitchLayer()
-  const { login: authLogin } = useAuth()
-
-  // Tab state: customer sign in, customer register, store owner login, or password reset
-  const [tab, setTab] = useState<'signin' | 'signup' | 'seller' | 'seller-forgot' | 'seller-forgot-sent'>('signin')
+  const [tab, setTab] = useState<'signin' | 'signup'>('signin')
   
   const isTemplate = isTemplateStore(tenant)
   const tenantKey = tenant?.id || 'tenant_lunar'
@@ -3246,24 +3237,7 @@ function AuthModal({
   const [otpError, setOtpError] = useState('')
   const [resendTimer, setResendTimer] = useState(30)
 
-  // Store Owner / Merchant state
   const brandName = tenant?.brandName || tenant?.name || 'The Lunar Clothing'
-  const currentSlug = tenant?.slug || 'lunar'
-  const matchedSeller = DEFAULT_DEMO_SELLER_CREDENTIALS.find(
-    (c) => c.tenantSlug.toLowerCase() === currentSlug.toLowerCase()
-  )
-
-  const [sellerLoginId, setSellerLoginId] = useState(DEMO_MODE ? matchedSeller?.loginId || '' : '')
-  const [sellerPassword, setSellerPassword] = useState(DEMO_MODE ? matchedSeller?.password || '' : '')
-  const [sellerShowPassword, setSellerShowPassword] = useState(false)
-  const [sellerError, setSellerError] = useState('')
-  const [sellerLoading, setSellerLoading] = useState(false)
-
-  // Store Owner Forgot Password State
-  const [sellerForgotEmail, setSellerForgotEmail] = useState(matchedSeller?.loginId || '')
-  const [sellerForgotLoading, setSellerForgotLoading] = useState(false)
-  const [sellerForgotError, setSellerForgotError] = useState<string | null>(null)
-  const [sellerForgotResetToken, setSellerForgotResetToken] = useState<string | null>(null)
 
   useEffect(() => {
     let interval: any
@@ -3273,13 +3247,6 @@ function AuthModal({
     return () => clearInterval(interval)
   }, [signUpStep, resendTimer])
 
-  // Sync default seller credentials if tenant changes
-  useEffect(() => {
-    setSellerLoginId(matchedSeller?.loginId || '')
-    setSellerPassword(matchedSeller?.password || '')
-    setSellerForgotEmail(matchedSeller?.loginId || '')
-  }, [matchedSeller])
-
   if (!isOpen) return null
 
   // Shopper login handler
@@ -3287,19 +3254,6 @@ function AuthModal({
     e.preventDefault()
     if (!signInEmail || !signInPassword) {
       setSignInError('Please provide both email and password.')
-      return
-    }
-
-    // Smart detection: If user typed store owner email in customer tab, offer switch
-    if (
-      signInEmail.toLowerCase().includes('lunarclothing') ||
-      signInEmail.toLowerCase().includes('silkhaus') ||
-      signInEmail.toLowerCase().includes('khadistudio') ||
-      signInEmail.toLowerCase().includes('bloomweave')
-    ) {
-      setSellerLoginId(signInEmail)
-      setSellerPassword(signInPassword)
-      setTab('seller')
       return
     }
 
@@ -3323,73 +3277,6 @@ function AuthModal({
     setSignInEmail(DEMO_SHOPPER.email)
     setSignInPassword(DEMO_SHOPPER.password)
     setSignInError('')
-  }
-
-  // Store owner quick fill
-  const handleFillSellerDemo = () => {
-    if (!matchedSeller) return
-    setSellerLoginId(matchedSeller.loginId)
-    setSellerPassword(matchedSeller.password)
-    setSellerError('')
-  }
-
-  // Store owner login handler
-  const handleSellerSignIn = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSellerLoading(true)
-    setSellerError('')
-
-    try {
-      // 1. Try unified auth context
-      try {
-        await authLogin({ type: 'seller', loginId: sellerLoginId, password: sellerPassword })
-      } catch {
-        // Fallback to local auth service
-      }
-
-      // 2. Perform direct seller login verification
-      const res = await authService.loginSeller(sellerLoginId, sellerPassword)
-      if (res.success) {
-        onClose()
-        if (onSellerLoginSuccess) {
-          onSellerLoginSuccess()
-        } else {
-          switchLayer('dashboard')
-        }
-      } else {
-        setSellerError(res.error || 'Invalid store owner login ID or password.')
-      }
-    } catch (err: any) {
-      setSellerError(err.message || 'Login failed. Please verify credentials.')
-    } finally {
-      setSellerLoading(false)
-    }
-  }
-
-  // Store owner forgot password handler
-  const handleSellerForgot = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSellerForgotError(null)
-    setSellerForgotLoading(true)
-    const API_BASE = API_ORIGIN
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/seller/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: sellerForgotEmail }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setSellerForgotError(data.error || 'Failed to send reset email.')
-      } else {
-        setSellerForgotResetToken(null)
-        setTab('seller-forgot-sent')
-      }
-    } catch {
-      setSellerForgotError('Could not reach the server. Please try again in a moment.')
-    } finally {
-      setSellerForgotLoading(false)
-    }
   }
 
   // Shopper registration OTP handlers
@@ -3434,15 +3321,11 @@ function AuthModal({
     onClose()
   }
 
-  const isSellerTab = tab === 'seller' || tab === 'seller-forgot' || tab === 'seller-forgot-sent'
-
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white max-w-md w-full border border-black/10 shadow-2xl rounded-sm overflow-hidden animate-slide-down">
         {/* Header */}
-        <div className={`text-white p-6 flex items-center justify-between transition-colors ${
-          isSellerTab ? 'bg-slate-950 border-b border-blue-500/30' : 'bg-black'
-        }`}>
+        <div className="text-white p-6 flex items-center justify-between bg-black">
           <div className="flex items-center gap-3">
             {tenant?.logo ? (
               <img src={tenant.logo} alt={brandName} className="h-8 w-auto object-contain rounded-md bg-white/10 p-0.5" />
@@ -3452,17 +3335,8 @@ function AuthModal({
               </div>
             )}
             <div>
-              <div className="flex items-center gap-2">
-                <p className="text-[10px] font-mono tracking-[0.25em] text-white/60 uppercase">{brandName}</p>
-                {isSellerTab && (
-                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-blue-500/20 text-blue-300 border border-blue-400/30">
-                    Merchant Portal
-                  </span>
-                )}
-              </div>
-              <h2 className="text-lg font-serif">
-                {isSellerTab ? 'Store Owner & Staff Portal' : 'Customer Portal & Tracking'}
-              </h2>
+              <p className="text-[10px] font-mono tracking-[0.25em] text-white/60 uppercase">{brandName}</p>
+              <h2 className="text-lg font-serif">Customer Portal & Tracking</h2>
             </div>
           </div>
           <button onClick={onClose} className="text-white/70 hover:text-white text-xl cursor-pointer" aria-label="Close">
@@ -3470,7 +3344,6 @@ function AuthModal({
           </button>
         </div>
 
-        {/* 3-Tab Switch (Sign In · Create Account · Store Owner) */}
         <div className="flex border-b border-black/10 text-xs font-bold uppercase tracking-wider bg-stone-50">
           <button
             onClick={() => { setTab('signin'); setSignUpStep('form') }}
@@ -3491,17 +3364,6 @@ function AuthModal({
             }`}
           >
             Create Account
-          </button>
-          <button
-            onClick={() => { setTab('seller'); setSellerError('') }}
-            className={`flex-1 py-3 text-center transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
-              isSellerTab
-                ? 'bg-blue-50 text-blue-900 border-b-2 border-blue-600 font-extrabold shadow-xs'
-                : 'text-blue-700 hover:text-blue-950 hover:bg-blue-50/50'
-            }`}
-          >
-            <span>🏬</span>
-            <span>Store Owner</span>
           </button>
         </div>
 
@@ -3576,200 +3438,10 @@ function AuthModal({
                   Register here
                 </button>
               </div>
-
-              {/* Seamless Store Owner Portal Switcher */}
-              <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-[11px] bg-blue-50/70 -mx-6 -mb-6 p-4 rounded-b-sm">
-                <div className="flex items-center gap-1.5 text-blue-900 font-medium">
-                  <span>🏬</span>
-                  <span>Store Owner or Staff?</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setTab('seller'); setSellerError('') }}
-                  className="font-bold underline text-blue-700 hover:text-blue-950 cursor-pointer"
-                >
-                  Login to Store Dashboard →
-                </button>
-              </div>
             </form>
           )}
 
-          {/* ── 2. STORE OWNER / MERCHANT LOGIN ────────────────── */}
-          {tab === 'seller' && (
-            <form onSubmit={handleSellerSignIn} className="space-y-4 text-xs">
-              {matchedSeller && (
-                <div className="bg-blue-50 border border-blue-200 p-3 text-[11px] text-blue-950 rounded-xs flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-blue-950 flex items-center gap-1">
-                      <span>⚡</span> <span>Demo Store Owner Credentials:</span>
-                    </p>
-                    <p className="text-[10px] text-blue-700 font-mono mt-0.5 truncate max-w-[220px]">
-                      {matchedSeller.loginId}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleFillSellerDemo}
-                    className="font-bold underline text-blue-900 hover:text-black cursor-pointer text-xs"
-                  >
-                    Quick Fill
-                  </button>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1">
-                  Store Owner Email or Slug *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={sellerLoginId}
-                  onChange={(e) => setSellerLoginId(e.target.value)}
-                  placeholder="e.g. gowreesh@thelunarclothing.com"
-                  className="w-full border border-slate-300 p-2.5 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 text-xs font-mono"
-                />
-              </div>
-
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-slate-700 font-semibold">Dashboard Password *</label>
-                  <button
-                    type="button"
-                    onClick={() => setSellerShowPassword(!sellerShowPassword)}
-                    className="text-[10px] text-slate-500 hover:text-slate-800 cursor-pointer"
-                  >
-                    {sellerShowPassword ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-                <input
-                  type={sellerShowPassword ? 'text' : 'password'}
-                  required
-                  value={sellerPassword}
-                  onChange={(e) => setSellerPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full border border-slate-300 p-2.5 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 text-xs"
-                />
-                <div className="flex justify-end mt-1">
-                  <button
-                    type="button"
-                    onClick={() => { setSellerForgotError(null); setTab('seller-forgot') }}
-                    className="text-[11px] text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
-                  >
-                    Forgot password?
-                  </button>
-                </div>
-              </div>
-
-              {sellerError && (
-                <div className="p-2.5 rounded bg-red-50 border border-red-200 text-red-700 font-medium text-xs">
-                  {sellerError}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={sellerLoading || !sellerLoginId || !sellerPassword}
-                className="w-full bg-blue-600 text-white font-bold text-xs tracking-[0.15em] uppercase py-3.5 mt-2 hover:bg-blue-700 transition-colors cursor-pointer shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {sellerLoading ? (
-                  <>
-                    <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    <span>AUTHENTICATING…</span>
-                  </>
-                ) : (
-                  <span>SIGN IN TO STORE DASHBOARD →</span>
-                )}
-              </button>
-
-              <div className="text-center pt-2 text-slate-500">
-                <span>Looking for your personal customer orders? </span>
-                <button
-                  type="button"
-                  onClick={() => setTab('signin')}
-                  className="text-slate-900 font-bold underline cursor-pointer"
-                >
-                  Customer Sign In
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* ── 3. STORE OWNER FORGOT PASSWORD ─────────────────── */}
-          {tab === 'seller-forgot' && (
-            <form onSubmit={handleSellerForgot} className="space-y-4 text-xs">
-              <div className="text-center pb-1">
-                <h3 className="font-bold text-sm text-slate-900">Reset Store Owner Password</h3>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Enter your store administrator email to receive a password reset link.
-                </p>
-              </div>
-
-              {sellerForgotError && (
-                <div className="p-2.5 rounded bg-red-50 border border-red-200 text-red-700 font-medium text-xs">
-                  {sellerForgotError}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1">Account Email *</label>
-                <input
-                  type="email"
-                  required
-                  value={sellerForgotEmail}
-                  onChange={(e) => setSellerForgotEmail(e.target.value)}
-                  placeholder="e.g. gowreesh@thelunarclothing.com"
-                  className="w-full border border-slate-300 p-2.5 outline-none focus:border-blue-600 text-xs font-mono"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={sellerForgotLoading || !sellerForgotEmail}
-                className="w-full bg-blue-600 text-white font-bold text-xs tracking-wider uppercase py-3 hover:bg-blue-700 transition-colors cursor-pointer shadow-sm disabled:opacity-50"
-              >
-                {sellerForgotLoading ? 'Sending Reset Link…' : 'SEND RESET LINK →'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setTab('seller')}
-                className="w-full text-center text-slate-600 hover:text-slate-900 underline text-xs cursor-pointer"
-              >
-                ← Back to Store Owner Login
-              </button>
-            </form>
-          )}
-
-          {/* ── 4. STORE OWNER FORGOT SENT ─────────────────────── */}
-          {tab === 'seller-forgot-sent' && (
-            <div className="space-y-4 text-center text-xs">
-              <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-xl mx-auto font-bold">
-                ✉
-              </div>
-              <h3 className="text-sm font-bold text-slate-900">Check Your Inbox</h3>
-              <p className="text-slate-600 leading-relaxed text-[11px]">
-                If an account with <strong className="text-slate-900">{sellerForgotEmail}</strong> exists, instructions to reset your dashboard password have been dispatched.
-              </p>
-
-              {sellerForgotResetToken && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded text-left text-[11px]">
-                  <p className="font-bold text-amber-900">⚡ Dev Mode — Reset Token:</p>
-                  <p className="font-mono text-[10px] text-amber-800 break-all mt-0.5">{sellerForgotResetToken}</p>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => setTab('seller')}
-                className="w-full bg-slate-900 text-white font-bold py-2.5 uppercase tracking-wider text-xs hover:bg-slate-800 cursor-pointer"
-              >
-                Return to Login
-              </button>
-            </div>
-          )}
-
-          {/* ── 5. CUSTOMER CREATE ACCOUNT (SIGN UP) ────────────── */}
+          {/* ── CUSTOMER CREATE ACCOUNT (SIGN UP) ────────────── */}
           {tab === 'signup' && (
             <div>
               {signUpStep === 'form' ? (
@@ -4508,7 +4180,7 @@ function ContactModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    storeInbox.addMessage(tenant?.id || 'tenant_lunar', {
+    storeInbox.addMessage(tenant || 'lunar', {
       name: name.trim(),
       email: email.trim(),
       phone: phone.trim(),
@@ -5111,16 +4783,9 @@ function Footer({
               <ul className="space-y-3 text-xs">
                 <li>
                   <button onClick={onOpenLogin} className="flex items-center gap-2 text-stone-300 hover:text-white font-medium transition-colors cursor-pointer">
-                    <span>🔐</span><span>Portal & Console Login</span>
+                    <span>🔐</span><span>Customer Sign In</span>
                   </button>
                 </li>
-                {tenant?.slug && (
-                  <li>
-                    <a href={sellerPortalUrl(tenant.slug)} className="flex items-center gap-2 text-stone-300 hover:text-white font-medium transition-colors">
-                      <span>🛍️</span><span>Seller portal</span>
-                    </a>
-                  </li>
-                )}
                 <li>
                   <button
                     type="button"
@@ -5275,7 +4940,6 @@ function sectionsAfter(storeModule: StoreModule | null, position: StoreSection['
 
 export default function App() {
   const layer = useApplicationLayer()
-  const switchLayer = useSwitchLayer()
   const { tenant, loading: tenantLoading, error: tenantError } = useTenant()
 
   if (layer === 'admin') {
@@ -5294,6 +4958,23 @@ export default function App() {
   }
 
   if (!tenant) {
+    if (layer === 'dashboard') {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-stone-50">
+          <div className="text-center max-w-md px-6">
+            <p className="text-xs font-bold tracking-[0.2em] uppercase text-black/40 mb-3">Seller portal</p>
+            <p className="text-sm text-black/60">Could not refresh the store just now. The API may still be waking up.</p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-6 inline-block bg-black text-white text-xs font-bold tracking-widest uppercase px-6 py-3"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      )
+    }
     return <StoreNotFound slug={tenantError?.match(/"([^"]+)"/)?.[1]} />
   }
 
@@ -5342,7 +5023,6 @@ export default function App() {
     return orders.filter((o) => (o.customerEmail ? o.customerEmail.toLowerCase() === email : isDemoShopper))
   }, [orders, user, activeTenant])
   const [isAuthOpen, setIsAuthOpen] = useState(false)
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
   const [isAccountOpen, setIsAccountOpen] = useState(false)
   const [isAboutOpen, setIsAboutOpen] = useState(false)
   const [isContactOpen, setIsContactOpen] = useState(false)
@@ -5382,7 +5062,6 @@ export default function App() {
       else if (isComplianceOpen) setIsComplianceOpen(false)
       else if (isAboutOpen) setIsAboutOpen(false)
       else if (isSearchOpen) setIsSearchOpen(false)
-      else if (isLoginModalOpen) setIsLoginModalOpen(false)
       else if (isAccountOpen) setIsAccountOpen(false)
       else if (isWishlistOpen) setIsWishlistOpen(false)
       else if (isCartOpen) setIsCartOpen(false)
@@ -5390,7 +5069,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [infoTopic, isComplianceOpen, isAboutOpen, isSearchOpen, isLoginModalOpen, isAccountOpen, isWishlistOpen, isCartOpen, isMobileMenuOpen])
+  }, [infoTopic, isComplianceOpen, isAboutOpen, isSearchOpen, isAccountOpen, isWishlistOpen, isCartOpen, isMobileMenuOpen])
 
   // Demo stores open with a pre-filled bag & wishlist; newly cloned stores start empty
   const buildDemoCart = (): CartItem[] =>
@@ -5436,6 +5115,7 @@ export default function App() {
     setUser(loggedInUser)
     shopperAccounts.setSession(activeTenant.id, loggedInUser)
     trackStorefrontEvent(activeTenant.slug, isNew ? 'shopper_register' : 'shopper_signin')
+    if (isNew && loggedInUser.email) storeInbox.subscribe(activeTenant, loggedInUser.email, 'account')
     showToast(isNew ? `Account created! Email verified for ${loggedInUser.name}.` : `Welcome back, ${loggedInUser.name}!`)
     setIsAccountOpen(true)
   }
@@ -5451,6 +5131,7 @@ export default function App() {
     const email = (user?.email || customerEmail || '').trim().toLowerCase()
     const newOrder: TrackedOrder = email ? { ...placedOrder, customerEmail: email } : placedOrder
     setOrders((prev) => [newOrder, ...prev])
+    if (email) storeInbox.subscribe(activeTenant, email, 'checkout')
     if (DEMO_MODE) mockStore.placeOrder(activeTenant.id, newOrder, customerEmail || user?.email)
     
     // Log audit trail event
@@ -5711,7 +5392,7 @@ export default function App() {
 
       {renderSlot(storeModule, 'Footer', Footer, {
         tenant: activeTenant,
-        onOpenLogin: () => setIsLoginModalOpen(true),
+        onOpenLogin: () => setIsAuthOpen(true),
         onOpenComplianceDoc: (doc) => {
           setComplianceDoc(doc)
           setIsComplianceOpen(true)
@@ -5729,7 +5410,7 @@ export default function App() {
           )
           handleNavigate('catalog', match?.slug || 'all')
         },
-        onSubscribe: (email) => storeInbox.subscribe(activeTenant.id, email),
+        onSubscribe: (email) => storeInbox.subscribe(activeTenant, email, 'newsletter'),
       })}
 
       <StoreInfoModal
@@ -5806,17 +5487,13 @@ export default function App() {
         }}
       />
 
-      {/* Authentication Modal (Integrated Shopper & Store Owner Portal) */}
+      {/* Customer authentication modal */}
       <AuthModal
         key={isAuthOpen ? 'auth-open' : 'auth-closed'}
         tenant={activeTenant}
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
         onLoginSuccess={handleLoginSuccess}
-        onSellerLoginSuccess={() => {
-          showToast(`Welcome back, ${activeTenant.brandName || activeTenant.name} Store Owner!`)
-          switchLayer('dashboard')
-        }}
       />
 
       {/* Account & Real-Time Order Tracking Drawer */}
@@ -5892,19 +5569,6 @@ export default function App() {
           <path d="M16 0C7.163 0 0 7.163 0 16c0 2.821.737 5.47 2.025 7.771L0 32l8.431-2.013A15.93 15.93 0 0016 32c8.837 0 16-7.163 16-16S24.837 0 16 0zm0 29.333a13.3 13.3 0 01-6.807-1.868l-.488-.29-5.007 1.196 1.217-4.873-.318-.5A13.262 13.262 0 012.667 16C2.667 8.636 8.636 2.667 16 2.667S29.333 8.636 29.333 16 23.364 29.333 16 29.333zm7.275-9.982c-.399-.2-2.36-1.163-2.726-1.296-.366-.133-.633-.2-.9.2-.266.4-1.033 1.296-1.266 1.563-.233.266-.466.3-.866.1-.4-.2-1.688-.622-3.214-1.984-1.188-1.06-1.99-2.37-2.222-2.77-.233-.4-.025-.616.175-.816.18-.18.4-.466.6-.7.2-.233.266-.4.4-.666.133-.267.066-.5-.033-.7-.1-.2-.9-2.166-1.233-2.966-.325-.78-.656-.673-.9-.686l-.766-.013c-.267 0-.7.1-1.067.5-.366.4-1.4 1.366-1.4 3.332 0 1.966 1.433 3.865 1.633 4.132.2.267 2.82 4.3 6.832 6.032.955.412 1.7.66 2.282.845.959.305 1.832.262 2.522.159.77-.114 2.36-.964 2.694-1.896.332-.933.332-1.733.233-1.9-.1-.166-.366-.266-.765-.466z"/>
         </svg>
       </a>
-
-      {/* Unified Common Login Modal (Super Admin, Merchant, Staff) */}
-      <CommonLoginModal
-        isOpen={isLoginModalOpen}
-        onClose={() => setIsLoginModalOpen(false)}
-        onSuccess={(session) => {
-          if (session?.role === 'super_admin') {
-            switchLayer('admin')
-          } else if (session?.tenantSlug) {
-            switchLayer('dashboard')
-          }
-        }}
-      />
 
       {/* Password Reset Modal (opened via email link or URL reset_token) */}
       <ResetPasswordModal

@@ -48,3 +48,19 @@ export function tenantSharesMasterCluster(
 export function runningCommit(env: NodeJS.ProcessEnv = process.env): string {
   return env.GIT_SHA || env.RENDER_GIT_COMMIT || env.VERCEL_GIT_COMMIT_SHA || 'unknown'
 }
+
+export type TenantIsolationMode = 'dedicated_atlas_cluster' | 'dedicated_database'
+
+export function tenantIsolationMode(customMongoUri?: string): TenantIsolationMode {
+  return customMongoUri?.trim() ? 'dedicated_atlas_cluster' : 'dedicated_database'
+}
+
+/** Public isolation facts — never includes hosts or connection strings. */
+export function publicTenantIsolation(slug: string, customMongoUri?: string, customDbName?: string) {
+  const databaseName = customDbName?.trim() || tenantDatabaseName(slug)
+  return {
+    databaseName,
+    isolationMode: tenantIsolationMode(customMongoUri),
+    hasDedicatedCluster: Boolean(customMongoUri?.trim()),
+  }
+}

@@ -60,18 +60,28 @@ function storedSignInToken(): string | null {
   }
 }
 
-async function fetchPublicTenant(slug: string, accessToken?: string | null): Promise<TenantConfig | null> {
-  if (!slug) return null
+type ResolveResult =
+  | { status: 'ok'; tenant: TenantConfig }
+  | { status: 'missing' }
+  | { status: 'transient' }
+
+async function fetchPublicTenant(slug: string, accessToken?: string | null): Promise<ResolveResult> {
+  if (!slug) return { status: 'missing' }
   const looksLikeHost = slug.includes('.')
   const qs = looksLikeHost ? `host=${encodeURIComponent(slug)}` : `slug=${encodeURIComponent(slug)}`
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 4000)
+  const timer = setTimeout(() => ctrl.abort(), 25000)
   try {
-    const res = await fetch(`${API_BASE}/public/resolve?${qs}`, { signal: ctrl.signal, headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined })
-    if (!res.ok) return null
-    return (await res.json()) as TenantConfig
+    const res = await fetch(`${API_BASE}/public/resolve?${qs}`, {
+      signal: ctrl.signal,
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    })
+    if (res.status === 404 || res.status === 403) return { status: 'missing' }
+    if (!res.ok) return { status: 'transient' }
+    const body = (await res.json()) as TenantConfig
+    return body?.slug ? { status: 'ok', tenant: body } : { status: 'transient' }
   } catch {
-    return null
+    return { status: 'transient' }
   } finally {
     clearTimeout(timer)
   }
@@ -86,6 +96,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const { accessToken } = useAuth()
   const tokenRef = useRef<string | null>(null)
   tokenRef.current = accessToken ?? null
+  const hasTenantRef = useRef(false)
 
   const loadTenant = useCallback(async (customSlug?: string) => {
     const currentLayer = resolveApplicationLayer()
@@ -107,10 +118,12 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(true)
+    let keepLoading = false
     try {
       const fromApi = await fetchPublicTenant(slug, tokenRef.current || storedSignInToken())
-      if (fromApi?.slug) {
-        setTenant(deepCloneTenant(fromApi))
+      if (fromApi.status === 'ok') {
+        hasTenantRef.current = true
+        setTenant(deepCloneTenant(fromApi.tenant))
         setError(null)
         return
       }
@@ -119,20 +132,31 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         mockStore.reloadFromStorage()
         const local = mockStore.getTenantBySlug(slug) || (slug.includes('.') ? mockStore.getTenantByDomain?.(slug) : null)
         if (local) {
+          hasTenantRef.current = true
           setTenant(deepCloneTenant(local))
           setError(null)
           return
         }
       }
 
+      if (fromApi.status === 'transient') {
+        setTenant((prev) => prev)
+        if (!hasTenantRef.current) {
+          keepLoading = true
+          setError('The store is waking up. This can take up to 30 seconds on the free API.')
+          window.setTimeout(() => { void loadTenant(slug) }, 4000)
+        }
+        return
+      }
+
+      hasTenantRef.current = false
       setTenant(null)
       setError(`Store "${slug}" not found.`)
     } catch (e) {
-      setTenant(null)
-      setError('Failed to load store configuration.')
+      setTenant((prev) => prev)
       console.error(e)
     } finally {
-      setLoading(false)
+      if (!keepLoading) setLoading(false)
     }
   }, [])
 

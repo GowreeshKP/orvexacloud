@@ -11,6 +11,27 @@ export function tenantPortalPath(slug: string, layer: 'storefront' | 'dashboard'
   return layer === 'dashboard' ? `/t/${clean}/dashboard` : `/t/${clean}`
 }
 
+/** Permanent owner login path. Always exists for a store; it is not on the shop. */
+export function ownerPortalPath(slug: string): string {
+  return `/t/${slug.trim().toLowerCase()}/owner`
+}
+
+export function ownerPortalUrl(slug: string): string {
+  if (typeof window !== 'undefined') return `${window.location.origin}${ownerPortalPath(slug)}`
+  return `https://${PLATFORM_ROOT_DOMAIN}${ownerPortalPath(slug)}`
+}
+
+export function isOwnerPortalPath(pathname = typeof window !== 'undefined' ? window.location.pathname : ''): boolean {
+  const parts = pathname.toLowerCase().split('/').filter(Boolean)
+  return parts[0] === 't' && Boolean(parts[1]) && parts[2] === 'owner'
+}
+
+export function parseOwnerPortalToken(pathname = typeof window !== 'undefined' ? window.location.pathname : ''): string | null {
+  const parts = pathname.toLowerCase().split('/').filter(Boolean)
+  if (parts[0] !== 't' || parts[2] !== 'o' || !/^[a-f0-9]{64}$/.test(parts[3] || '')) return null
+  return parts[3]
+}
+
 /** Public storefront URL: custom domain when connected, otherwise the platform portal. */
 export function storefrontUrl(slug: string, customDomain?: string): string {
   if (customDomain) {
