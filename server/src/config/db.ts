@@ -27,8 +27,12 @@ if (dnsServers) {
 if (process.env.NODE_ENV === 'production' && (!process.env.MONGODB_MASTER_URI || !process.env.MONGODB_TENANT_BASE_URI)) {
   throw new Error('MONGODB_MASTER_URI and MONGODB_TENANT_BASE_URI must be set in production (no localhost fallback).')
 }
-const MASTER_URI = process.env.MONGODB_MASTER_URI || 'mongodb://localhost:27017/orvexatech_master'
-const TENANT_BASE_URI = process.env.MONGODB_TENANT_BASE_URI || 'mongodb://localhost:27017/orvexa_tenant_'
+function masterUri(): string {
+  return process.env.MONGODB_MASTER_URI || 'mongodb://localhost:27017/orvexatech_master'
+}
+function tenantBaseUri(): string {
+  return process.env.MONGODB_TENANT_BASE_URI || 'mongodb://localhost:27017/orvexa_tenant_'
+}
 
 const POOL = {
   serverSelectionTimeoutMS: 8000,
@@ -59,7 +63,7 @@ export async function connectMasterDatabase(): Promise<Connection> {
 
   _masterPromise = (async () => {
     try {
-      const conn = mongoose.createConnection(MASTER_URI, POOL)
+      const conn = mongoose.createConnection(masterUri(), POOL)
 
       conn.on('connected', () => {
         console.log(`[Master DB] Connected`)
@@ -89,9 +93,11 @@ export async function connectMasterDatabase(): Promise<Connection> {
   return _masterPromise
 }
 
-connectMasterDatabase().catch((err) => {
-  console.warn('[Master DB] Initial connection failed — will retry on next request:', err.message)
-})
+if (process.env.NODE_ENV !== 'test') {
+  connectMasterDatabase().catch((err) => {
+    console.warn('[Master DB] Initial connection failed — will retry on next request:', err.message)
+  })
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tenant Database Connections
@@ -104,7 +110,7 @@ let _tenantBaseConnection: Connection | null = null
 let _tenantBasePromise: Promise<Connection> | null = null
 
 async function connectTenantBaseCluster(): Promise<Connection> {
-  if (tenantSharesMasterCluster(MASTER_URI, TENANT_BASE_URI)) {
+  if (tenantSharesMasterCluster(masterUri(), tenantBaseUri())) {
     return connectMasterDatabase()
   }
 
@@ -114,7 +120,7 @@ async function connectTenantBaseCluster(): Promise<Connection> {
   if (_tenantBasePromise) return _tenantBasePromise
 
   _tenantBasePromise = (async () => {
-    const conn = mongoose.createConnection(TENANT_BASE_URI, POOL)
+    const conn = mongoose.createConnection(tenantBaseUri(), POOL)
     conn.on('disconnected', () => {
       _tenantBaseConnection = null
       _tenantBasePromise = null
@@ -139,7 +145,7 @@ export async function getTenantConnection(tenantSlug: string, customMongoUri?: s
     return getCustomTenantConnection(slug, customMongoUri.trim())
   }
 
-  const dbName = tenantDatabaseName(slug, TENANT_BASE_URI)
+  const dbName = tenantDatabaseName(slug, tenantBaseUri())
   const existing = useDbCache.get(dbName)
   if (existing && (existing.readyState === 1 || existing.readyState === 2)) {
     return existing
@@ -197,7 +203,7 @@ async function getCustomTenantConnection(slug: string, connectionUri: string): P
  */
 export async function closeTenantConnection(tenantSlug: string): Promise<void> {
   const slug = sanitizeTenantSlug(tenantSlug)
-  useDbCache.delete(tenantDatabaseName(slug, TENANT_BASE_URI))
+  useDbCache.delete(tenantDatabaseName(slug, tenantBaseUri()))
   const custom = customConnectionPool.get(`custom_${slug}`)
   if (custom) {
     await custom.close()

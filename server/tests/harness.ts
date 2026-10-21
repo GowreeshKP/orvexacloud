@@ -55,7 +55,12 @@ async function waitForPort(port: number, timeoutMs = 20000): Promise<void> {
 }
 
 async function startMongo(): Promise<string> {
-  if (process.env.MONGODB_TEST_URI) return process.env.MONGODB_TEST_URI.replace(/\/+$/, '')
+  if (process.env.MONGODB_TEST_URI) {
+    const uri = process.env.MONGODB_TEST_URI.replace(/\/+$/, '')
+    const port = Number(new URL(uri.replace(/^mongodb:\/\//, 'http://')).port || 27017)
+    await waitForPort(port)
+    return uri
+  }
   const binary = process.env.MONGOD_BINARY
   if (!binary || !fs.existsSync(binary)) {
     throw new Error('Set MONGOD_BINARY (path to mongod) or MONGODB_TEST_URI to run the integration tests.')
