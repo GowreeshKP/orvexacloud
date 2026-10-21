@@ -700,8 +700,13 @@ describe('storefront inbox and newsletter subscribers', () => {
     assert.equal(contact.body.email, 'asha@example.com')
     assert.equal(contact.body.read, false)
 
+    const item = await api('POST', '/api/stores/alpha/products', {
+      token: alpha.accessToken,
+      body: { name: 'Inbox Stock Item', category: 'test', price: 150, stockCount: 5 },
+    })
+    assert.equal(item.status, 201)
     const checkout = await api('POST', '/api/stores/alpha/orders', {
-      body: order([{ productId: 2, quantity: 1 }], { customerEmail: 'buyer@example.com' }),
+      body: order([{ productId: item.body.id, quantity: 1 }], { customerEmail: 'buyer@example.com' }),
     })
     assert.equal(checkout.status, 201)
 
