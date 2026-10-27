@@ -1,0 +1,48 @@
+import type { TenantConfig } from '@/types/tenant'
+
+export const e2eijdce3TenantConfig: TenantConfig = {
+  id: "tenant_e2eijdce3_1792612791015",
+  slug: "e2eijdce3",
+  brandName: "E2E Brand e2eijdce3",
+  ownerName: "E2E Merchant",
+  ownerEmail: "owner.e2eijdce3@example.com",
+  ownerPhone: "+919999000111",
+  logo: '',
+  status: 'active',
+  plan: 'starter',
+  createdAt: '2026-10-21',
+  theme: {
+    primaryColor: '#8C5A4F',
+    accentColor: '#D4A574',
+    backgroundColor: '#FAFAF8',
+    fontDisplay: "'Instrument Serif', Georgia, serif",
+    fontSans: "'Work Sans', system-ui, sans-serif",
+    heroImage: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1600&q=80',
+    heroHeadline: "E2E Brand e2eijdce3 Atelier",
+    heroSubhead: "Handcrafted exclusive collection from E2E Brand e2eijdce3",
+    heroCtaText: 'EXPLORE CATALOG →',
+    logoUrl: '',
+    announcementMessages: [
+      "WELCOME TO E2E BRAND E2EIJDCE3",
+      'FREE SHIPPING OVER ₹999',
+    ],
+    enableAnimations: true,
+    enableReviews: true,
+    enableOrderTracking: true,
+  },
+  subscription: {
+    plan: 'starter',
+    pricePerMonth: 1460,
+    status: 'trial',
+    trialEndsAt: '2026-11-20',
+    nextBillingDate: '2026-11-20',
+    paymentMethod: 'razorpay',
+    invoices: [],
+  },
+  databaseConfig: {
+    dbName: 'orvexa_tenant_e2eijdce3',
+    mongoUri: "mongodb+srv://***:***@cluster0.9sn7eez.mongodb.net/orvexa_tenant_e2eijdce3",
+    isolationMode: 'dedicated_database',
+    folderPath: 'src/tenants/e2eijdce3',
+  },
+}

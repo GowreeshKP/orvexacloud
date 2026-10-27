@@ -1,0 +1,2 @@
+Bricolage Grotesque, Hanken Grotesk and IBM Plex Mono are licensed under the SIL Open Font License 1.1 (https://openfontlicense.org).
+Self-hosted (subset to Latin, rupee sign and arrows) so that visitors' browsers do not contact Google Fonts.

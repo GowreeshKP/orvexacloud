@@ -1,0 +1,2 @@
+# Cloudflare Pages SPA fallback — deep links like /admin must serve index.html
+/*    /index.html   200

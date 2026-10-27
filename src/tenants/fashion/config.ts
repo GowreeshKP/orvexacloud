@@ -1,0 +1,48 @@
+import type { TenantConfig } from '@/types/tenant'
+
+export const fashionTenantConfig: TenantConfig = {
+  id: "tenant_fashion_1792613077880",
+  slug: "fashion",
+  brandName: "Fashion",
+  ownerName: "arun",
+  ownerEmail: "samfriend090@gmail.com",
+  ownerPhone: "8681822650",
+  logo: '',
+  status: 'active',
+  plan: 'starter',
+  createdAt: '2026-10-21',
+  theme: {
+    primaryColor: '#8C5A4F',
+    accentColor: '#D4A574',
+    backgroundColor: '#FAFAF8',
+    fontDisplay: "'Instrument Serif', Georgia, serif",
+    fontSans: "'Work Sans', system-ui, sans-serif",
+    heroImage: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1600&q=80',
+    heroHeadline: "Fashion Atelier",
+    heroSubhead: "Handcrafted exclusive collection from Fashion",
+    heroCtaText: 'EXPLORE CATALOG →',
+    logoUrl: '',
+    announcementMessages: [
+      "WELCOME TO FASHION",
+      'FREE SHIPPING OVER ₹999',
+    ],
+    enableAnimations: true,
+    enableReviews: true,
+    enableOrderTracking: true,
+  },
+  subscription: {
+    plan: 'starter',
+    pricePerMonth: 1460,
+    status: 'trial',
+    trialEndsAt: '2026-11-20',
+    nextBillingDate: '2026-11-20',
+    paymentMethod: 'razorpay',
+    invoices: [],
+  },
+  databaseConfig: {
+    dbName: 'orvexa_tenant_fashion',
+    mongoUri: "mongodb+srv://***:***@cluster0.9sn7eez.mongodb.net/orvexa_tenant_fashion",
+    isolationMode: 'dedicated_database',
+    folderPath: 'src/tenants/fashion',
+  },
+}

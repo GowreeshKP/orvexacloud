@@ -1,0 +1,16 @@
+/*
+ * Styles for E2E Brand e2eijdce3 only.
+ * Keep every rule under [data-store='e2eijdce3'] so it never leaks into other stores
+ * (the storefront root element carries this attribute).
+ */
+
+[data-store='e2eijdce3'] {
+  /* Example: change the display font for every heading in this store. */
+  /* --font-display: 'Playfair Display', Georgia, serif; */
+}
+
+/* Example: round the product images.
+[data-store='e2eijdce3'] .aspect-\[4\/5\] {
+  border-radius: 12px;
+}
+*/

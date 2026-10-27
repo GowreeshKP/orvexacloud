@@ -1,0 +1,10 @@
+{
+  "description": "This web application simplifies expense tracking and bill splitting for friends and groups, ensuring transparent financial management and easy reimbursements.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
