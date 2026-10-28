@@ -1,2 +1,4 @@
-# Cloudflare Pages SPA fallback — deep links like /admin must serve index.html
-/*    /index.html   200
+# Do not add "/* /index.html 200".
+# Cloudflare rejects that rule (error 100324): /index.html is normalized back to /
+# and the splat matches again. Pages serves this SPA for unknown paths when there
+# is no top-level 404.html, so /admin, /t/:slug, and /owner/:key still load index.html.
