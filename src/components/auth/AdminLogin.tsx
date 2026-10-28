@@ -69,12 +69,8 @@ export default function AdminLogin({ onSuccess }: { onSuccess: (session: AdminSe
       return
     }
 
-    const failures = lock.failures + 1
-    const next = failures >= MAX_ATTEMPTS ? { failures: 0, lockedUntil: Date.now() + LOCKOUT_MS } : { failures, lockedUntil: 0 }
-    writeLock(next)
-    setLock(next)
-    setNow(Date.now())
-    setPassword('')
+    const message = res.error || 'Invalid admin credentials.'
+    const credentialFailure = /invalid/i.test(message)
     auditLogger.log({
       actorId: 'unknown',
       actorName: loginId.trim() || 'unknown',
@@ -84,10 +80,21 @@ export default function AdminLogin({ onSuccess }: { onSuccess: (session: AdminSe
       severity: 'security',
       details: `Failed admin portal sign-in attempt for "${loginId.trim()}".`,
     })
+    if (!credentialFailure) {
+      setError(message)
+      return
+    }
+
+    const failures = lock.failures + 1
+    const next = failures >= MAX_ATTEMPTS ? { failures: 0, lockedUntil: Date.now() + LOCKOUT_MS } : { failures, lockedUntil: 0 }
+    writeLock(next)
+    setLock(next)
+    setNow(Date.now())
+    setPassword('')
     setError(
       next.lockedUntil
         ? 'Too many failed attempts. Sign-in is locked for 60 seconds.'
-        : `Invalid admin credentials. ${MAX_ATTEMPTS - failures} attempt${MAX_ATTEMPTS - failures === 1 ? '' : 's'} left.`,
+        : `${message} ${MAX_ATTEMPTS - failures} attempt${MAX_ATTEMPTS - failures === 1 ? '' : 's'} left.`,
     )
   }
 

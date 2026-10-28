@@ -846,9 +846,15 @@ export const authService = {
       // GET /admin/applications silently 401s and marketing signups never appear.
       if (!response.ok) {
         if (DEMO_MODE && response.status >= 500) throw new Error('auth server unavailable')
+        if (typeof data.error === 'string' && data.error) {
+          return { success: false, error: data.error }
+        }
+        if (response.status === 401 || response.status === 403) {
+          return { success: false, error: 'Invalid Super Admin credentials.' }
+        }
         return {
           success: false,
-          error: data.error || 'Invalid Super Admin credentials.',
+          error: 'The sign-in service did not respond. Try again in a moment.',
         }
       }
 
