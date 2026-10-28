@@ -9,7 +9,7 @@ import { PLAN_CATALOG, formatPlanPrice, normalizePlanId, storeAddress } from '@/
 import { tenantPortalPath } from '@/lib/store-urls'
 import { fetchStoreAnalytics, fetchDomainConfig, saveCustomDomain } from '@/api/storefront-analytics'
 import { storeInbox, STORE_INBOX_EVENT, type NewsletterSubscriber, type StoreMessage } from '@/api/store-messages'
-import SellerLogin from '@/components/auth/SellerLogin'
+import { StoreDashboardGate } from '@/components/auth/SellerLogin'
 import StoreAuditLogs from '@/components/store/StoreAuditLogs'
 import StorefrontContentEditor, {
   extrasToTheme,
@@ -118,7 +118,7 @@ const HERO_PHOTO_PRESETS = [
 ]
 
 export default function DashboardApp() {
-  const { tenant, loading, switchTenant } = useTenant()
+  const { tenant, loading } = useTenant()
   const switchLayer = useSwitchLayer()
   const [session, setSession] = useState<SellerSession | null>(() => authService.getSellerSession())
   const [activeView, setActiveView] = useState<DashboardView>('overview')
@@ -169,17 +169,12 @@ export default function DashboardApp() {
     )
   }
 
-  // If not authenticated, require Seller Login with Login ID & Password
-  if (!session) {
+  if (!session || session.tenantSlug !== tenant?.slug) {
     return (
-      <SellerLogin
-        tenant={tenant}
-        onLoginSuccess={(newSession) => {
-          setSession(newSession)
-          if (newSession.tenantSlug && newSession.tenantSlug !== tenant?.slug) {
-            switchTenant(newSession.tenantSlug)
-          }
-        }}
+      <StoreDashboardGate
+        brandName={tenant?.brandName}
+        otherStore={session && session.tenantSlug !== tenant?.slug ? session.brandName : undefined}
+        onSignOut={session ? handleLogout : undefined}
       />
     )
   }
@@ -3939,10 +3934,10 @@ Isolated Database: orvexa_tenant_${tenant.slug}
             </a>
           </div>
           <div>
-            <p className="text-black/40 text-xs mb-1">Seller portal</p>
-            <a href={tenantPortalPath(tenant.slug, 'dashboard')} className="font-mono font-bold text-xs bg-stone-100 p-2 rounded text-amber-900 border border-black/5 block hover:underline">
-              {storeAddress(tenant.slug)}/dashboard
-            </a>
+            <p className="text-black/40 text-xs mb-1">Management dashboard</p>
+            <p className="font-mono font-bold text-xs bg-stone-100 p-2 rounded text-amber-900 border border-black/5 block">
+              Opens after the private store owner login link
+            </p>
           </div>
           <div>
             <p className="text-black/40 text-xs mb-1">Merchant Owner</p>

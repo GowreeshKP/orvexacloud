@@ -1335,7 +1335,7 @@ function DomainManager() {
               <th className="text-left px-5 py-3">Store</th>
               <th className="text-left px-4 py-3">Platform portal</th>
               <th className="text-left px-4 py-3">Custom Domain</th>
-              <th className="text-left px-4 py-3">Seller portal</th>
+              <th className="text-left px-4 py-3">Owner login</th>
               <th className="text-right px-5 py-3">DNS</th>
             </tr>
           </thead>
@@ -1360,10 +1360,8 @@ function DomainManager() {
                     <span className="text-slate-300">Not mapped</span>
                   )}
                 </td>
-                <td className="px-4 py-3.5">
-                  <a href={`/t/${tenant.slug}/dashboard`} className="text-[11px] font-semibold text-indigo-700 hover:underline">
-                    /t/{tenant.slug}/dashboard
-                  </a>
+                <td className="px-4 py-3.5 text-[11px] text-slate-600">
+                  Copy the store owner login URL from Credentials
                 </td>
                 <td className="px-5 py-3.5 text-right font-mono font-bold text-emerald-700">
                   {tenant.customDomain ? (tenant.customDomainVerified ? 'LIVE' : 'WAIT') : 'PORTAL'}

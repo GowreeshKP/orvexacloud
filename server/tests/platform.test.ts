@@ -176,6 +176,7 @@ describe('role-based access control', () => {
     assert.equal(r.status, 200)
     const text = JSON.stringify(r.body)
     assert.equal(text.includes('passwordHash'), false)
+    assert.equal(text.includes('ownerLoginKey'), false)
     assert.equal(text.includes('$2a$'), false)
     assert.equal(text.includes('customMongoUri'), false)
   })
@@ -558,6 +559,9 @@ describe('tenant portals, custom domains and storefront analytics', () => {
     assert.equal(r.body.slug, 'alpha')
     assert.equal(r.body.portalPath, '/t/alpha')
     assert.equal(r.body.dashboardPath, '/t/alpha/dashboard')
+    assert.equal(r.body.ownerLoginKey, undefined)
+    assert.equal(r.body.ownerLoginUrl, undefined)
+    assert.equal(JSON.stringify(r.body).includes('passwordHash'), false)
   })
 
   test('unknown slug is 404 and never another store', async () => {
@@ -599,5 +603,112 @@ describe('tenant portals, custom domains and storefront analytics', () => {
     assert.equal(cfg.status, 200)
     assert.equal(cfg.body.customDomain, 'shop.alpha.test')
     assert.match(String(cfg.body.cnameTarget), /cname\.orvexacloud\.in/)
+  })
+})
+
+describe('dedicated store owner login links', () => {
+  const keyOf = (url: string) => {
+    const key = String(url).split('/owner/')[1] || ''
+    assert.match(key, /^[A-Za-z0-9_-]{16,80}$/)
+    return key
+  }
+
+  test('a guessed or revoked link does not reveal another store', async () => {
+    assert.equal((await api('GET', '/api/public/owner-login/not-a-real-key-00000000')).status, 404)
+    assert.equal((await api('GET', '/api/public/owner-login/..%2Fbravo')).status, 404)
+    const creds = await api('GET', '/api/admin/tenants/alpha/credentials', { token: admin.accessToken })
+    assert.equal(creds.status, 200)
+    assert.equal(creds.body.password, undefined)
+    assert.equal(creds.body.passwordHash, undefined)
+    assert.equal(JSON.stringify(creds.body).includes('passwordHash'), false)
+    assert.equal(creds.body.ownerLoginRevoked, false)
+    const key = keyOf(creds.body.ownerLoginUrl)
+    const page = await api('GET', `/api/public/owner-login/${key}`)
+    assert.equal(page.status, 200)
+    assert.equal(page.body.slug, 'alpha')
+    assert.equal(page.body.brandName, 'Alpha Store')
+    assert.equal(page.body.ownerEmail, undefined)
+    assert.equal((await api('GET', '/api/admin/tenants/alpha/credentials', { token: alpha.accessToken })).status, 403)
+    assert.equal((await api('GET', '/api/admin/tenants/alpha/credentials')).status, 401)
+  })
+
+  test('the url stays put when store details change, and only an admin can replace or revoke it', async () => {
+    const created = await api('POST', '/api/admin/tenants', {
+      token: admin.accessToken,
+      body: {
+        slug: 'linkshop',
+        brandName: 'Link Shop',
+        ownerName: 'Link Owner',
+        ownerEmail: 'link@orvexa.test',
+        initialPassword: 'Link-Shop-Pass-1',
+        ownerLoginKey: 'AttackerKeyShouldNotStick1',
+      },
+    })
+    assert.equal(created.status, 201)
+    assert.equal(JSON.stringify(created.body).includes('ownerLoginKey'), false)
+    assert.equal(JSON.stringify(created.body).includes('passwordHash'), false)
+
+    const first = await api('GET', '/api/admin/tenants/linkshop/credentials', { token: admin.accessToken })
+    assert.equal(first.status, 200)
+    assert.equal(String(first.body.ownerLoginUrl).includes('AttackerKeyShouldNotStick1'), false)
+    const original = first.body.ownerLoginUrl as string
+    const originalKey = keyOf(original)
+
+    const renamed = await api('PUT', '/api/admin/tenants/linkshop/credentials', {
+      token: admin.accessToken,
+      body: { ownerName: 'Link Owner Updated', ownerLoginKey: 'AnotherAttackerKeyValue1', newPassword: '' },
+    })
+    assert.equal(renamed.status, 200)
+    const afterRename = await api('GET', '/api/admin/tenants/linkshop/credentials', { token: admin.accessToken })
+    assert.equal(afterRename.body.ownerLoginUrl, original)
+    assert.equal(afterRename.body.ownerName, 'Link Owner Updated')
+
+    const wrongStore = await api('POST', '/api/auth/seller/login', {
+      body: { loginId: 'alpha@orvexa.test', password: PASSWORDS.alpha, ownerLoginKey: originalKey },
+    })
+    assert.equal(wrongStore.status, 401)
+    const rightStore = await api('POST', '/api/auth/seller/login', {
+      body: { loginId: 'link@orvexa.test', password: 'Link-Shop-Pass-1', ownerLoginKey: originalKey },
+    })
+    assert.equal(rightStore.status, 200)
+    assert.equal(rightStore.body.session.tenantSlug, 'linkshop')
+    assert.equal((await api('GET', '/api/stores/alpha/orders', { token: rightStore.body.accessToken })).status, 403)
+    assert.equal((await api('GET', '/api/stores/linkshop/orders', { token: rightStore.body.accessToken })).status, 200)
+
+    const rotated = await api('POST', '/api/admin/tenants/linkshop/owner-login', { token: admin.accessToken, body: { action: 'rotate' } })
+    assert.equal(rotated.status, 200)
+    assert.notEqual(rotated.body.ownerLoginUrl, original)
+    assert.equal((await api('GET', `/api/public/owner-login/${originalKey}`)).status, 404)
+    const nextKey = keyOf(rotated.body.ownerLoginUrl)
+    assert.equal((await api('GET', `/api/public/owner-login/${nextKey}`)).body.slug, 'linkshop')
+    assert.equal((await api('POST', '/api/auth/seller/login', {
+      body: { loginId: 'link@orvexa.test', password: 'Link-Shop-Pass-1', ownerLoginKey: originalKey },
+    })).status, 401)
+    const again = await api('POST', '/api/auth/seller/login', {
+      body: { loginId: 'link@orvexa.test', password: 'Link-Shop-Pass-1', ownerLoginKey: nextKey },
+    })
+    assert.equal(again.status, 200)
+    assert.equal(again.body.session.tenantSlug, 'linkshop')
+
+    const revoked = await api('POST', '/api/admin/tenants/linkshop/owner-login', { token: admin.accessToken, body: { action: 'revoke' } })
+    assert.equal(revoked.status, 200)
+    assert.equal(revoked.body.ownerLoginRevoked, true)
+    assert.equal(revoked.body.ownerLoginUrl, rotated.body.ownerLoginUrl)
+    assert.equal((await api('GET', `/api/public/owner-login/${nextKey}`)).status, 404)
+    assert.equal((await api('POST', '/api/auth/seller/login', {
+      body: { loginId: 'link@orvexa.test', password: 'Link-Shop-Pass-1' },
+    })).status, 403)
+    assert.equal((await api('POST', '/api/admin/tenants/linkshop/owner-login', { token: alpha.accessToken, body: { action: 'restore' } })).status, 403)
+
+    const restored = await api('POST', '/api/admin/tenants/linkshop/owner-login', { token: admin.accessToken, body: { action: 'restore' } })
+    assert.equal(restored.status, 200)
+    assert.equal(restored.body.ownerLoginRevoked, false)
+    assert.equal(restored.body.ownerLoginUrl, rotated.body.ownerLoginUrl)
+    assert.equal((await api('GET', `/api/public/owner-login/${nextKey}`)).body.slug, 'linkshop')
+    const back = await api('POST', '/api/auth/seller/login', {
+      body: { loginId: 'link@orvexa.test', password: 'Link-Shop-Pass-1', ownerLoginKey: nextKey },
+    })
+    assert.equal(back.status, 200)
+    assert.equal(back.body.session.tenantSlug, 'linkshop')
   })
 })

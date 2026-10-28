@@ -7,6 +7,7 @@ import { MOCK_TENANTS } from '@/data/mock-tenants'
 import { mockStore } from '@/api/mock-store'
 import { auditLogger } from '@/api/audit-logger'
 import { API_BASE } from '@/api/base'
+import { absoluteOwnerLoginUrl, demoOwnerLogin, lookupDemoOwnerLogin, updateDemoOwnerLogin } from '@/lib/owner-login'
 
 export interface SellerSession {
   userId: string
@@ -563,7 +564,8 @@ export const authService = {
   // ─────────────────────────────────────────────────────────
   async loginSeller(
     loginId: string,
-    password: string
+    password: string,
+    ownerLoginKey?: string
   ): Promise<{ success: boolean; session?: SellerSession; error?: string }> {
     const cleanId = loginId.trim().toLowerCase()
     const cleanPass = password.trim()
@@ -572,13 +574,18 @@ export const authService = {
       const response = await fetch(`${API_BASE}/auth/seller/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ loginId: cleanId, password: cleanPass }),
+        body: JSON.stringify({
+          loginId: cleanId,
+          password: cleanPass,
+          ...(ownerLoginKey ? { ownerLoginKey } : {}),
+        }),
       })
 
       const data = await response.json().catch(() => ({}))
 
       // Never fall through to a tokenless demo session on 401 — store APIs would keep failing.
       if (!response.ok) {
+        if (DEMO_MODE && response.status >= 500) throw new Error('auth server unavailable')
         return { success: false, error: data.error || 'Invalid login ID or password.' }
       }
 
@@ -617,6 +624,10 @@ export const authService = {
         return { success: false, error: 'Could not reach the authentication server. Please check your connection.' }
       }
       // ── Demo mode only when the API is unreachable ──────────
+      const bound = ownerLoginKey ? lookupDemoOwnerLogin(ownerLoginKey) : null
+      if (ownerLoginKey && (!bound || bound.revoked)) {
+        return { success: false, error: 'Invalid login credentials. Please check your email or password.' }
+      }
       const allCreds = this.getStoreCredentialsList()
 
       const matchingAccount = allCreds.find(
@@ -641,7 +652,7 @@ export const authService = {
           c.password === cleanPass
       )
 
-      if (foundCred) {
+      if (foundCred && (!bound || foundCred.tenantSlug === bound.slug)) {
         const tenant: TenantConfig | null = mockStore.getTenantBySlug(foundCred.tenantSlug) ||
           MOCK_TENANTS.find((t) => t.slug === foundCred.tenantSlug) || null
 
@@ -677,6 +688,9 @@ export const authService = {
         return { success: true, session }
       }
 
+      if (ownerLoginKey) {
+        return { success: false, error: 'Invalid login credentials. Please check your email or password.' }
+      }
       return { success: false, error: 'Could not reach the authentication server. Please check your connection.' }
     }
   },
@@ -831,6 +845,7 @@ export const authService = {
       // Auth failures must not fall through to a tokenless demo session — otherwise
       // GET /admin/applications silently 401s and marketing signups never appear.
       if (!response.ok) {
+        if (DEMO_MODE && response.status >= 500) throw new Error('auth server unavailable')
         return {
           success: false,
           error: data.error || 'Invalid Super Admin credentials.',
@@ -940,6 +955,56 @@ export const authService = {
     // Never fall back to logging in with stored or demo credentials: a session that cannot be
     // refreshed must sign in again.
     return null
+  },
+
+  async getOwnerLoginLink(slug: string): Promise<{ url: string | null; revoked: boolean; error?: string }> {
+    try {
+      const token = await this.getValidAdminToken()
+      const response = await fetch(`${API_BASE}/admin/tenants/${encodeURIComponent(slug)}/credentials`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (response.ok) {
+        const data = await response.json()
+        return {
+          url: typeof data.ownerLoginUrl === 'string' ? data.ownerLoginUrl : null,
+          revoked: Boolean(data.ownerLoginRevoked),
+        }
+      }
+      if (DEMO_MODE && response.status >= 500) throw new Error('auth server unavailable')
+      const data = await response.json().catch(() => ({}))
+      return { url: null, revoked: false, error: data.error || 'Could not load the store owner login URL.' }
+    } catch {
+      if (!DEMO_MODE) return { url: null, revoked: false, error: 'Could not load the store owner login URL.' }
+    }
+    const link = demoOwnerLogin(slug)
+    return { url: absoluteOwnerLoginUrl(link.key), revoked: link.revoked }
+  },
+
+  async updateOwnerLoginLink(
+    slug: string,
+    action: 'rotate' | 'revoke' | 'restore'
+  ): Promise<{ success: boolean; url?: string | null; revoked?: boolean; error?: string }> {
+    try {
+      const token = await this.getValidAdminToken()
+      const response = await fetch(`${API_BASE}/admin/tenants/${encodeURIComponent(slug)}/owner-login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ action }),
+      })
+      if (DEMO_MODE && response.status >= 500) throw new Error('auth server unavailable')
+      const data = await response.json().catch(() => ({}))
+      if (response.ok) {
+        return { success: true, url: data.ownerLoginUrl ?? null, revoked: Boolean(data.ownerLoginRevoked) }
+      }
+      return { success: false, error: data.error || 'Could not update the store owner login URL.' }
+    } catch {
+      if (!DEMO_MODE) return { success: false, error: 'Could not reach the server.' }
+    }
+    const link = updateDemoOwnerLogin(slug, action)
+    return { success: true, url: absoluteOwnerLoginUrl(link.key), revoked: link.revoked }
   },
 
   async getValidAdminToken(): Promise<string | null> {

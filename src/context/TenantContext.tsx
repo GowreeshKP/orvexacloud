@@ -77,7 +77,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     setLayer(currentLayer)
     const slug = customSlug || resolveTenantSlug()
 
-    if (currentLayer === 'admin' && !slug) {
+    if (currentLayer === 'owner-login' || (currentLayer === 'admin' && !slug)) {
       setTenant(null)
       setError(null)
       setLoading(false)

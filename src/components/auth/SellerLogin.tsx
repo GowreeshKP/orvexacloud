@@ -1,216 +1,253 @@
-import { useState, useEffect } from 'react'
-import { authService, type StoreCredentialInfo, type SellerSession } from '@/api/auth'
-import type { TenantConfig } from '@/types/tenant'
+import { useState } from 'react'
+import { authService, type SellerSession } from '@/api/auth'
+import { API_BASE } from '@/api/base'
 
 interface SellerLoginProps {
-  tenant?: TenantConfig | null
+  brandName: string
+  boundSlug: string
+  ownerLoginKey: string
   onLoginSuccess: (session: SellerSession) => void
 }
 
-export default function SellerLogin({ tenant, onLoginSuccess }: SellerLoginProps) {
-  const [credentialsList, setCredentialsList] = useState<StoreCredentialInfo[]>(() =>
-    authService.getStoreCredentialsList()
-  )
+type View = 'login' | 'forgot' | 'sent'
 
-  // Prefer this store's slug (always works once Super Admin set a password). Avoid autofilling
-  // stale demo passwords from localStorage — those cause "Invalid login credentials" against the API.
-  const storedCred = tenant ? authService.getStoreCredential(tenant.slug) : null
-  const [loginId, setLoginId] = useState(
-    () => storedCred?.loginId || tenant?.slug || tenant?.ownerEmail || credentialsList[0]?.loginId || ''
-  )
+export default function SellerLogin({ brandName, boundSlug, ownerLoginKey, onLoginSuccess }: SellerLoginProps) {
+  const [view, setView] = useState<View>('login')
+  const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [rememberMe, setRememberMe] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotError, setForgotError] = useState<string | null>(null)
+  const [forgotLoading, setForgotLoading] = useState(false)
 
-  useEffect(() => {
-    const handleUpdate = () => {
-      setCredentialsList(authService.getStoreCredentialsList())
-    }
-    window.addEventListener('orvexa:credentials-updated', handleUpdate)
-    window.addEventListener('orvexa:store-updated', handleUpdate)
-    return () => {
-      window.removeEventListener('orvexa:credentials-updated', handleUpdate)
-      window.removeEventListener('orvexa:store-updated', handleUpdate)
-    }
-  }, [])
-
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submitting) return
     setError(null)
-
-    if (!loginId.trim()) {
-      setError('Please enter your Merchant Login ID or Email.')
+    setSubmitting(true)
+    const res = await authService.loginSeller(loginId, password, ownerLoginKey)
+    setSubmitting(false)
+    if (!res.success || !res.session) {
+      setPassword('')
+      setError(res.error || 'Invalid login credentials. Please check your email or password.')
       return
     }
-    if (!password.trim()) {
-      setError('Please enter your password.')
+    if (res.session.tenantSlug !== boundSlug) {
+      authService.logoutSeller()
+      setPassword('')
+      setError('These credentials are not authorized for this store.')
       return
     }
-
-    setLoading(true)
-    const res = await authService.loginSeller(loginId, password)
-    setLoading(false)
-    if (res.success && res.session) {
-      onLoginSuccess(res.session)
-    } else {
-      setError(res.error || 'Invalid credentials. Please verify your Login ID and password.')
-    }
+    onLoginSuccess(res.session)
   }
 
-  const handleSelectDemo = (demo: StoreCredentialInfo) => {
-    setLoginId(demo.loginId)
-    setPassword(demo.password)
-    setError(null)
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setForgotError(null)
+    setForgotLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/auth/seller/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail.trim() }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setForgotError(data.error || 'Could not send a reset link.')
+      } else {
+        setView('sent')
+      }
+    } catch {
+      setForgotError('Could not reach the server. Please try again in a moment.')
+    } finally {
+      setForgotLoading(false)
+    }
   }
 
   return (
-    <div className="min-h-screen bg-stone-950 flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden font-sans">
-      {/* Ambient background glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-10 right-10 w-80 h-80 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
-
-      {/* Main Login Card */}
-      <div className="w-full max-w-md bg-stone-900/90 border border-white/10 rounded-2xl shadow-2xl p-6 sm:p-8 backdrop-blur-xl relative z-10 animate-fade-in text-white">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-stone-800 to-stone-700 border border-white/20 mb-3 shadow-inner">
-            <span className="text-2xl">🛍️</span>
-          </div>
-          <p className="text-[10px] font-mono tracking-[0.25em] text-amber-400 uppercase font-bold">
-            ORVEXATECH MERCHANT PARTNER PORTAL
-          </p>
-          <h1 className="text-2xl font-serif text-white mt-1">Seller Dashboard Login</h1>
-          <p className="text-xs text-white/50 mt-1">
-            Access catalog management, homepage picture customizer, and order fulfillment.
-          </p>
+    <div className="auth">
+      <aside className="auth-side">
+        <img className="logo" src="/brand/logo-white.svg" alt="Orvexa Cloud" />
+        <div>
+          <h2>
+            Run your store from one <em>command centre</em>.
+          </h2>
+          <p>Sign in to manage {brandName}. This page is only for the store owner link issued by Orvexa Cloud.</p>
         </div>
-
-        {/* Error Alert */}
-        {error && (
-          <div className="mb-5 p-3.5 bg-red-950/80 border border-red-500/40 rounded-xl text-red-200 text-xs flex items-center gap-2 animate-shake">
-            <span>⚠️</span>
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleLogin} className="space-y-4">
+        <div className="auth-points">
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-white/70 mb-1.5">
-              Store slug or owner email
-            </label>
-            <div className="relative">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M20 6 9 17l-5-5" /></svg>
+            Catalog, orders, and store settings
+          </div>
+          <div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M20 6 9 17l-5-5" /></svg>
+            Isolated to this store only
+          </div>
+          <div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M20 6 9 17l-5-5" /></svg>
+            Separate from customer sign-in
+          </div>
+        </div>
+        <img className="mark-bg" src="/brand/logo-white.svg" alt="" aria-hidden />
+      </aside>
+
+      <div className="auth-main">
+        {view === 'login' && (
+          <form className="auth-card" onSubmit={handleSubmit}>
+            <div>
+              <p className="eyebrow">Store owner</p>
+              <h1>Sign in</h1>
+              <p className="muted" style={{ marginTop: 6 }}>{brandName}</p>
+            </div>
+
+            <label className="field">
+              <span className="label">Email</span>
               <input
+                id="owner-login-id"
+                className="input"
                 type="text"
+                autoComplete="username"
+                required
+                autoFocus
                 value={loginId}
                 onChange={(e) => setLoginId(e.target.value)}
-                placeholder={tenant?.slug ? `e.g. ${tenant.slug} or ${tenant.ownerEmail}` : 'e.g. fashion or owner@brand.com'}
-                className="w-full bg-black/50 border border-white/15 focus:border-amber-400/80 rounded-xl px-4 py-3 text-xs text-white placeholder-white/25 outline-none transition-all"
-                required
+                placeholder="you@store.com"
               />
-              <span className="absolute right-3.5 top-3.5 text-white/40 text-xs">✉️</span>
-            </div>
-            {tenant?.slug && (
-              <p className="mt-1.5 text-[10px] text-white/45">
-                Use store slug <span className="font-mono text-amber-300/90">{tenant.slug}</span>
-                {tenant.ownerEmail ? <> or email <span className="font-mono text-amber-300/90">{tenant.ownerEmail}</span></> : null}.
-                Password is set by Super Admin under Store Credentials.
-              </p>
-            )}
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-white/70">
-                Password
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="text-[10px] text-amber-400/80 hover:text-amber-300 transition-colors uppercase tracking-wider font-semibold cursor-pointer"
-              >
-                {showPassword ? 'Hide' : 'Show'}
-              </button>
-            </div>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your seller password"
-                className="w-full bg-black/50 border border-white/15 focus:border-amber-400/80 rounded-xl px-4 py-3 text-xs text-white placeholder-white/25 outline-none transition-all font-mono"
-                required
-              />
-              <span className="absolute right-3.5 top-3.5 text-white/40 text-xs">🔒</span>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between text-xs pt-1">
-            <label className="flex items-center gap-2 text-white/60 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="rounded accent-amber-400"
-              />
-              <span>Remember session</span>
             </label>
-            <span className="text-[11px] text-white/40">Secure 256-Bit SSL</span>
-          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full mt-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-bold text-xs uppercase tracking-widest py-3.5 rounded-xl transition-all shadow-lg shadow-amber-500/20 active:scale-[0.99] cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <>
-                <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                <span>Verifying Credentials...</span>
-              </>
-            ) : (
-              <span>Sign In to Seller Portal →</span>
-            )}
-          </button>
-        </form>
+            <label className="field">
+              <span className="label">Password</span>
+              <div className="row" style={{ gap: 8 }}>
+                <input
+                  id="owner-password"
+                  className="input grow"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                />
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowPassword((v) => !v)}>
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </label>
 
-        {/* Demo Merchant Quick Fill */}
-        <div className="mt-8 pt-6 border-t border-white/10">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-white/50">
-              Active Store Accounts
-            </p>
-            <span className="text-[10px] bg-white/10 px-2 py-0.5 rounded-full text-white/70">1-Click Fill</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {credentialsList.slice(0, 6).map((demo) => (
+            <div className="row between">
               <button
-                key={demo.tenantSlug}
                 type="button"
-                onClick={() => handleSelectDemo(demo)}
-                className={`text-left p-2.5 rounded-xl border text-[11px] transition-all cursor-pointer ${
-                  loginId === demo.loginId || loginId === demo.tenantSlug
-                    ? 'bg-amber-400/15 border-amber-400/50 text-white shadow-xs'
-                    : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10 hover:text-white'
-                }`}
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  setForgotError(null)
+                  setForgotEmail(loginId.includes('@') ? loginId : '')
+                  setView('forgot')
+                }}
               >
-                <p className="font-bold truncate">{demo.tenantName}</p>
-                <p className="text-[9px] text-white/40 truncate">{demo.ownerName}</p>
+                Forgot password?
               </button>
-            ))}
-          </div>
-        </div>
+            </div>
 
-        {/* Back Link */}
-        <div className="mt-6 text-center">
-          <a
-            href={tenant?.slug ? `/t/${tenant.slug}` : '/admin'}
-            className="text-xs text-white/40 hover:text-white transition-colors inline-flex items-center gap-1.5"
-          >
-            <span>← Return to Customer Storefront</span>
-          </a>
+            {error && (
+              <p role="alert" className="error">{error}</p>
+            )}
+
+            <button type="submit" className="btn btn-primary btn-lg" disabled={submitting} style={{ width: '100%' }}>
+              {submitting ? 'Verifying…' : 'Sign in'}
+            </button>
+
+            <p className="center muted small">© {new Date().getFullYear()} Orvexa Tech Private Limited</p>
+          </form>
+        )}
+
+        {view === 'forgot' && (
+          <form className="auth-card" onSubmit={handleForgot}>
+            <div>
+              <p className="eyebrow">Store owner</p>
+              <h1>Reset password</h1>
+              <p className="muted" style={{ marginTop: 6 }}>We will email a reset link if this address belongs to {brandName}.</p>
+            </div>
+            <label className="field">
+              <span className="label">Email</span>
+              <input
+                className="input"
+                type="email"
+                required
+                autoFocus
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                placeholder="you@store.com"
+              />
+            </label>
+            {forgotError && <p role="alert" className="error">{forgotError}</p>}
+            <button type="submit" className="btn btn-primary btn-lg" disabled={forgotLoading} style={{ width: '100%' }}>
+              {forgotLoading ? 'Sending…' : 'Send reset link'}
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={() => setView('login')}>
+              Back to sign in
+            </button>
+          </form>
+        )}
+
+        {view === 'sent' && (
+          <div className="auth-card">
+            <div>
+              <p className="eyebrow">Store owner</p>
+              <h1>Check your email</h1>
+              <p className="muted" style={{ marginTop: 6 }}>
+                If an account for {brandName} uses {forgotEmail}, a reset link is on its way.
+              </p>
+            </div>
+            <button type="button" className="btn btn-primary btn-lg" style={{ width: '100%' }} onClick={() => setView('login')}>
+              Return to sign in
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function StoreDashboardGate({
+  brandName,
+  otherStore,
+  onSignOut,
+}: {
+  brandName?: string
+  otherStore?: string
+  onSignOut?: () => void
+}) {
+  return (
+    <div className="auth">
+      <aside className="auth-side">
+        <img className="logo" src="/brand/logo-white.svg" alt="Orvexa Cloud" />
+        <div>
+          <h2>
+            Store owner access is <em>by invitation</em>.
+          </h2>
+          <p>Management for {brandName || 'this store'} opens from the private login link issued by Orvexa Cloud.</p>
+        </div>
+        <img className="mark-bg" src="/brand/logo-white.svg" alt="" aria-hidden />
+      </aside>
+      <div className="auth-main">
+        <div className="auth-card">
+          <div>
+            <p className="eyebrow">Store owner</p>
+            <h1>Private sign-in</h1>
+            <p className="muted" style={{ marginTop: 6 }}>
+              {otherStore
+                ? `You are signed in to ${otherStore}. This address belongs to a different store.`
+                : 'Use the store owner login URL from your Orvexa administrator. Customer sign-in does not open this dashboard.'}
+            </p>
+          </div>
+          {onSignOut && (
+            <button type="button" className="btn btn-outline" onClick={onSignOut}>
+              Sign out
+            </button>
+          )}
+          <p className="center muted small">© {new Date().getFullYear()} Orvexa Tech Private Limited</p>
         </div>
       </div>
     </div>

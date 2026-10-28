@@ -1,4 +1,5 @@
 // --- Master Database: Tenant Store Registry Model ---
+import crypto from 'crypto'
 import { Schema, type Connection, type Model, type Document } from 'mongoose'
 
 // read_only: storefront still shows products but takes no new orders (e.g. after failed payment);
@@ -32,6 +33,9 @@ export interface ITenant extends Document {
   passwordResetRequestedAt?: string
   /** Owner access tokens issued before this instant are rejected. */
   passwordChangedAt?: Date
+  /** Unguessable path segment for /owner/:key. Stable until an admin rotates or revokes it. */
+  ownerLoginKey?: string
+  ownerLoginRevoked?: boolean
   logo?: string
   customDomain?: string
   customDomainVerified?: boolean
@@ -90,6 +94,13 @@ export const TenantSchema = new Schema<ITenant>(
     passwordResetPending: { type: Boolean, default: false },
     passwordResetRequestedAt: { type: String, default: '' },
     passwordChangedAt: { type: Date },
+    ownerLoginKey: {
+      type: String,
+      unique: true,
+      sparse: true,
+      default: () => crypto.randomBytes(24).toString('base64url'),
+    },
+    ownerLoginRevoked: { type: Boolean, default: false },
     logo: { type: String, default: '' },
     customDomain: { type: String, default: '', index: true },
     customDomainVerified: { type: Boolean, default: false },
@@ -176,6 +187,7 @@ export const TenantSchema = new Schema<ITenant>(
       transform: (_doc, ret: Record<string, any>) => {
         ret.hasPassword = Boolean(ret.passwordHash) && !String(ret.passwordHash).startsWith('$2a$12$REVOKED_')
         delete ret.passwordHash
+        delete ret.ownerLoginKey
         ret.hasCustomDatabase = Boolean(ret.customMongoUri)
         delete ret.customMongoUri
         if (Array.isArray(ret.staffMembers)) {

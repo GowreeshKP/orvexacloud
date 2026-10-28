@@ -16,6 +16,35 @@ interface Props {
   onSuccess?: (msg: string) => void
 }
 
+async function copyPlainText(text: string): Promise<boolean> {
+  try {
+    const area = document.createElement('textarea')
+    area.value = text
+    area.setAttribute('readonly', '')
+    area.style.position = 'fixed'
+    area.style.top = '0'
+    area.style.left = '0'
+    area.style.opacity = '0'
+    document.body.appendChild(area)
+    area.focus()
+    area.select()
+    const selected = document.execCommand('copy')
+    document.body.removeChild(area)
+    if (selected) return true
+  } catch {
+    // Selection copy can be blocked. Try the async clipboard API next.
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // Both copy paths failed.
+  }
+  return false
+}
+
 export default function StoreCredentialsModal({ tenant, isOpen, onClose, onSuccess }: Props) {
   const [credInfo, setCredInfo] = useState<StoreCredentialInfo | null>(null)
   const [ownerEmail, setOwnerEmail] = useState('')
@@ -23,6 +52,12 @@ export default function StoreCredentialsModal({ tenant, isOpen, onClose, onSucce
   const [ownerPhone, setOwnerPhone] = useState('')
   const [copied, setCopied] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [copiedLoginUrl, setCopiedLoginUrl] = useState(false)
+  const [ownerLoginUrl, setOwnerLoginUrl] = useState<string | null>(null)
+  const [ownerLoginRevoked, setOwnerLoginRevoked] = useState(false)
+  const [ownerLoginError, setOwnerLoginError] = useState<string | null>(null)
+  const [ownerLoginBusy, setOwnerLoginBusy] = useState<'rotate' | 'revoke' | 'restore' | null>(null)
+  const [confirmRotate, setConfirmRotate] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
   const [resetSuccess, setResetSuccess] = useState<string | null>(null)
@@ -57,6 +92,13 @@ export default function StoreCredentialsModal({ tenant, isOpen, onClose, onSucce
         setResetDetails(null)
         setResetSuccess(null)
       }
+
+      authService.getOwnerLoginLink(tenant.slug).then((link) => {
+        setOwnerLoginUrl(link.url)
+        setOwnerLoginRevoked(link.revoked)
+        setOwnerLoginError(link.error || null)
+        setConfirmRotate(false)
+      })
 
       // Fetch staff from backend
       authService.getValidAdminToken().then((token) => {
@@ -202,8 +244,8 @@ Store Name: ${tenant.brandName}
 Store portal: ${storeAddress(tenant.slug)}
 Storefront URL: ${window.location.origin}/t/${tenant.slug}
 
-🔑 MERCHANT PORTAL LOGIN DETAILS:
-Dashboard URL: ${window.location.origin}/t/${tenant.slug}/dashboard
+🔑 STORE OWNER LOGIN:
+Store Owner Login URL: ${ownerLoginUrl || '(not issued)'}
 Login ID / Email: ${ownerEmail || tenant.ownerEmail}
 Login Username: ${tenant.slug}
 Password Status: ${passwordStatusDescription}
@@ -217,6 +259,40 @@ Security Level: Dedicated Database Isolation
     navigator.clipboard.writeText(accessPassText)
     setCopied(true)
     setTimeout(() => setCopied(false), 2500)
+  }
+
+  const handleCopyLoginUrl = async () => {
+    if (!ownerLoginUrl) return
+    const copiedText = await copyPlainText(ownerLoginUrl)
+    if (!copiedText) {
+      setOwnerLoginError('Could not copy the URL. Select it and copy manually.')
+      return
+    }
+    setOwnerLoginError(null)
+    setCopiedLoginUrl(true)
+    setTimeout(() => setCopiedLoginUrl(false), 2500)
+  }
+
+  const handleOwnerLoginAction = async (action: 'rotate' | 'revoke' | 'restore') => {
+    if (!tenant) return
+    setOwnerLoginBusy(action)
+    setOwnerLoginError(null)
+    const res = await authService.updateOwnerLoginLink(tenant.slug, action)
+    setOwnerLoginBusy(null)
+    setConfirmRotate(false)
+    if (!res.success) {
+      setOwnerLoginError(res.error || 'Could not update the store owner login URL.')
+      return
+    }
+    setOwnerLoginUrl(res.url ?? null)
+    setOwnerLoginRevoked(Boolean(res.revoked))
+    onSuccess?.(
+      action === 'rotate'
+        ? 'Store owner login URL replaced. Share the new link with the store owner.'
+        : action === 'revoke'
+          ? 'Store owner login URL revoked.'
+          : 'Store owner login URL restored.'
+    )
   }
 
   const handleCopyResetLink = () => {
@@ -312,6 +388,80 @@ Security Level: Dedicated Database Isolation
           ───────────────────────────────────────────────────────────── */}
           {activeTab === 'credentials' && (
             <div className="space-y-5">
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-slate-500 font-bold">Store Owner Login URL</p>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Share this link with the store owner. It stays the same when other store details are saved.
+                    </p>
+                  </div>
+                  {ownerLoginRevoked ? (
+                    <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">Revoked</span>
+                  ) : (
+                    <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">Active</span>
+                  )}
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <code className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-[11px] text-slate-800 break-all">
+                    {ownerLoginUrl || 'Loading…'}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={handleCopyLoginUrl}
+                    disabled={!ownerLoginUrl}
+                    className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 text-white disabled:opacity-50 cursor-pointer"
+                  >
+                    {copiedLoginUrl ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                {ownerLoginError && <p className="text-xs text-rose-600">{ownerLoginError}</p>}
+                <div className="flex flex-wrap gap-2">
+                  {confirmRotate ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={ownerLoginBusy !== null}
+                        onClick={() => handleOwnerLoginAction('rotate')}
+                        className="px-3 py-2 rounded-xl text-xs font-bold bg-amber-600 text-white cursor-pointer disabled:opacity-50"
+                      >
+                        {ownerLoginBusy === 'rotate' ? 'Replacing…' : 'Confirm new URL'}
+                      </button>
+                      <button type="button" onClick={() => setConfirmRotate(false)} className="px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 cursor-pointer">
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmRotate(true)}
+                      className="px-3 py-2 rounded-xl text-xs font-bold border border-slate-300 text-slate-800 cursor-pointer"
+                    >
+                      Replace URL
+                    </button>
+                  )}
+                  {ownerLoginRevoked ? (
+                    <button
+                      type="button"
+                      disabled={ownerLoginBusy !== null}
+                      onClick={() => handleOwnerLoginAction('restore')}
+                      className="px-3 py-2 rounded-xl text-xs font-bold border border-emerald-300 text-emerald-800 cursor-pointer disabled:opacity-50"
+                    >
+                      {ownerLoginBusy === 'restore' ? 'Restoring…' : 'Restore URL'}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={ownerLoginBusy !== null}
+                      onClick={() => handleOwnerLoginAction('revoke')}
+                      className="px-3 py-2 rounded-xl text-xs font-bold border border-rose-300 text-rose-700 cursor-pointer disabled:opacity-50"
+                    >
+                      {ownerLoginBusy === 'revoke' ? 'Revoking…' : 'Revoke URL'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Current Active Credentials Banner */}
               <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4.5 space-y-3">
                 <div className="flex items-center justify-between">
@@ -606,15 +756,14 @@ Security Level: Dedicated Database Isolation
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
                   <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">MERCHANT LOGIN URL</span>
-                    <a
-                      href={`/t/${tenant.slug}/dashboard`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-blue-600 hover:underline font-semibold break-all"
-                    >
-                      /t/{tenant.slug}/dashboard
-                    </a>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">STORE OWNER LOGIN URL</span>
+                    {ownerLoginUrl ? (
+                      <a href={ownerLoginUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline font-semibold break-all">
+                        {ownerLoginUrl}
+                      </a>
+                    ) : (
+                      <span className="text-slate-500">Not issued</span>
+                    )}
                   </div>
 
                   <div>

@@ -1,7 +1,21 @@
 import { PLATFORM_ROOT_DOMAIN } from '@/data/plans'
 import { tenantPortalPath } from '@/lib/store-urls'
 
-export type ApplicationLayer = 'storefront' | 'dashboard' | 'admin'
+export type ApplicationLayer = 'storefront' | 'dashboard' | 'admin' | 'owner-login'
+
+const OWNER_LOGIN_KEY = /^[A-Za-z0-9_-]{16,80}$/
+
+export function parseOwnerLoginKey(pathname = typeof window !== 'undefined' ? window.location.pathname : ''): string | null {
+  const parts = pathname.split('/').filter(Boolean)
+  if (parts[0] !== 'owner' || parts.length !== 2) return null
+  let key = parts[1]
+  try {
+    key = decodeURIComponent(key)
+  } catch {
+    return null
+  }
+  return OWNER_LOGIN_KEY.test(key) ? key : null
+}
 
 export const RESERVED_SUBDOMAINS = [
   'www', 'admin', 'api', 'app', 'mail', 'shop', 'staging', 'seller', 'merchant', 'dashboard', 'store', 'stores',
@@ -36,6 +50,8 @@ function isPreviewHost(host: string): boolean {
  */
 export function resolveApplicationLayer(): ApplicationLayer {
   if (typeof window === 'undefined') return 'admin'
+
+  if (parseOwnerLoginKey(window.location.pathname)) return 'owner-login'
 
   const params = new URLSearchParams(window.location.search)
   const panel = params.get('panel') || params.get('layer') || params.get('view')
@@ -78,6 +94,7 @@ export function resolveApplicationLayer(): ApplicationLayer {
  */
 export function resolveTenantSlug(): string {
   if (typeof window === 'undefined') return ''
+  if (parseOwnerLoginKey(window.location.pathname)) return ''
 
   const fromPath = parseTenantPath(window.location.pathname).slug
   if (fromPath) return fromPath

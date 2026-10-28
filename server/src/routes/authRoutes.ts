@@ -113,7 +113,9 @@ async function staffSession(masterDb: Connection, tenant: ITenant, staff: ITenan
 }
 
 /** Store-owner login result: a session, or an HTTP status + message. */
-async function attemptSellerLogin(masterDb: Connection, loginId: string, password: string) {
+const SIGN_IN_REVOKED = 'Sign-in for this store has been revoked. Contact your Orvexa administrator.'
+
+async function attemptSellerLogin(masterDb: Connection, loginId: string, password: string, restrictSlug?: string) {
   const Tenant = getTenantModel(masterDb)
   const email = loginId.includes('@') ? loginId : null
 
@@ -138,15 +140,16 @@ async function attemptSellerLogin(masterDb: Connection, loginId: string, passwor
       ).sort({ createdAt: -1 })
     : []
 
-  if (candidates.length === 0) return null
+  const scoped = restrictSlug ? candidates.filter((tenant) => tenant.slug === restrictSlug) : candidates
+  if (scoped.length === 0) return null
 
-  const pending = candidates.find((t) => isResetPending(t))
-  if (pending && candidates.every((t) => isResetPending(t))) {
+  const pending = scoped.find((t) => isResetPending(t))
+  if (pending && scoped.every((t) => isResetPending(t))) {
     return { status: 401, body: { error: RESET_PENDING, passwordResetPending: true } }
   }
 
-  let matched = null as (typeof candidates)[number] | null
-  for (const tenant of candidates) {
+  let matched = null as (typeof scoped)[number] | null
+  for (const tenant of scoped) {
     if (isResetPending(tenant) || !tenant.passwordHash) continue
     if (await bcrypt.compare(password, tenant.passwordHash)) {
       matched = tenant
@@ -155,7 +158,7 @@ async function attemptSellerLogin(masterDb: Connection, loginId: string, passwor
   }
 
   if (!matched) {
-    if (candidates.every((t) => !t.passwordHash || isResetPending(t))) {
+    if (scoped.every((t) => !t.passwordHash || isResetPending(t))) {
       return {
         status: 401,
         body: {
@@ -164,17 +167,18 @@ async function attemptSellerLogin(masterDb: Connection, loginId: string, passwor
       }
     }
     // Ambiguous email + wrong password: nudge merchants to use the store slug.
-    if (email && candidates.length > 1) {
+    if (!restrictSlug && email && scoped.length > 1) {
       return {
         status: 401,
         body: {
-          error: `That email is used on more than one store (${candidates.map((t) => t.slug).join(', ')}). Sign in with the store slug instead.`,
+          error: `That email is used on more than one store (${scoped.map((t) => t.slug).join(', ')}). Sign in with the store slug instead.`,
         },
       }
     }
     return null
   }
 
+  if (matched.ownerLoginRevoked) return { status: 403, body: { error: SIGN_IN_REVOKED } }
   if (matched.status === 'suspended') return { status: 403, body: { error: 'Your store has been suspended. Please contact support.' } }
   if (matched.status === 'pending') return { status: 403, body: { error: 'Your store application is still under review.' } }
   if (matched.status === 'cancelled') return { status: 403, body: { error: 'This store has been closed. Please contact support.' } }
@@ -211,6 +215,10 @@ router.post('/login', async (req: Request, res: Response) => {
     const tenantWithStaff = await getTenantModel(masterDb).findOne({ 'staffMembers.email': loginId })
     const staff = tenantWithStaff?.staffMembers.find((s) => s.email.toLowerCase() === loginId)
     if (staff && tenantWithStaff && (await bcrypt.compare(password, staff.passwordHash))) {
+      if (tenantWithStaff.ownerLoginRevoked) {
+        res.status(403).json({ error: SIGN_IN_REVOKED })
+        return
+      }
       if (!tenantAllowsSignIn(tenantWithStaff.status)) {
         res.status(403).json({ error: 'This store is not active.' })
         return
@@ -232,12 +240,23 @@ router.post('/seller/login', async (req: Request, res: Response) => {
   try {
     const loginId = credential(req.body?.loginId)?.toLowerCase()
     const password = credential(req.body?.password, MAX_PASSWORD)
+    const ownerLoginKey = credential(req.body?.ownerLoginKey, 80)
     if (!loginId || !password) {
       res.status(400).json({ error: 'Please enter your Login ID and password.' })
       return
     }
     const masterDb = await connectMasterDatabase()
-    const result = await attemptSellerLogin(masterDb, loginId, password)
+    let restrictSlug: string | undefined
+    if (ownerLoginKey) {
+      const bound = await getTenantModel(masterDb).findOne({ ownerLoginKey })
+      if (!bound || bound.ownerLoginRevoked) {
+        await bcrypt.compare(password, DUMMY_HASH)
+        res.status(401).json({ error: INVALID_LOGIN })
+        return
+      }
+      restrictSlug = bound.slug
+    }
+    const result = await attemptSellerLogin(masterDb, loginId, password, restrictSlug)
     if (!result) {
       res.status(401).json({ error: INVALID_LOGIN })
       return
@@ -294,6 +313,10 @@ router.post('/staff/login', async (req: Request, res: Response) => {
       res.status(401).json({ error: 'Invalid store or staff credentials.' })
       return
     }
+    if (tenant.ownerLoginRevoked) {
+      res.status(403).json({ error: SIGN_IN_REVOKED })
+      return
+    }
     if (!tenantAllowsSignIn(tenant.status)) {
       res.status(403).json({ error: 'This store is not active.' })
       return
@@ -342,7 +365,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
     }
 
     const tenant = await getTenantModel(masterDb).findOne({ slug: decoded.tenantSlug, id: decoded.tenantId })
-    if (!tenant || !tenantAllowsSignIn(tenant.status)) return void revoked()
+    if (!tenant || !tenantAllowsSignIn(tenant.status) || tenant.ownerLoginRevoked) return void revoked()
     if (decoded.role === 'seller') {
       if (isResetPending(tenant)) return void revoked()
       res.json(await sellerSession(masterDb, tenant))

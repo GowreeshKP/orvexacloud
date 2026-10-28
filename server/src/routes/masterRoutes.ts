@@ -22,6 +22,7 @@ import { PLAN_CATALOG, PLATFORM_ROOT_DOMAIN, TRIAL_DAYS, normalizePlanId, planPr
 import { sendEmail } from '../services/mailer.js'
 import { RESERVED_SLUGS } from './publicRoutes.js'
 import { issueOwnerPasswordLink, publicAppUrl } from '../services/ownerPasswordLink.js'
+import { ensureOwnerLoginKey, newOwnerLoginKey, ownerLoginUrl } from '../lib/ownerLogin.js'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import fs from 'fs'
@@ -684,12 +685,14 @@ router.get('/tenants/:slug/credentials', async (req: Request, res: Response) => 
   try {
     const masterDb = await connectMasterDatabase()
     const Tenant = getTenantModel(masterDb)
-    const tenant = await Tenant.findOne({ slug: String(req.params.slug).toLowerCase() })
+    const found = await Tenant.findOne({ slug: String(req.params.slug).toLowerCase() })
 
-    if (!tenant) {
+    if (!found) {
       res.status(404).json({ error: 'Tenant not found.' })
       return
     }
+    const tenant = await ensureOwnerLoginKey(Tenant, found)
+    const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined
 
     res.json({
       id: tenant.id,
@@ -706,9 +709,75 @@ router.get('/tenants/:slug/credentials', async (req: Request, res: Response) => 
       customDomainVerified: Boolean(tenant.customDomainVerified),
       dashboardUrl: `/t/${tenant.slug}/dashboard`,
       storefrontUrl: `/t/${tenant.slug}`,
+      ownerLoginRevoked: Boolean(tenant.ownerLoginRevoked),
+      ownerLoginUrl: tenant.ownerLoginKey ? ownerLoginUrl(tenant.ownerLoginKey, publicAppUrl(origin)) : null,
     })
   } catch (err) {
     serverError(res, 'credentials', err, 'Failed to fetch credentials')
+  }
+})
+
+// ─────────────────────────────────────────────────────────
+// POST /api/admin/tenants/:slug/owner-login
+// Rotate, revoke, or restore the dedicated store-owner login link.
+// Body: { action: 'rotate' | 'revoke' | 'restore' }
+// Saving other store details never changes this link.
+// ─────────────────────────────────────────────────────────
+router.post('/tenants/:slug/owner-login', async (req: Request, res: Response) => {
+  try {
+    const action = fieldReq(req.body ?? {}, 'action', 20)
+    if (action !== 'rotate' && action !== 'revoke' && action !== 'restore') {
+      res.status(400).json({ error: "action must be 'rotate', 'revoke', or 'restore'." })
+      return
+    }
+    const masterDb = await connectMasterDatabase()
+    const Tenant = getTenantModel(masterDb)
+    const currentSlug = String(req.params.slug).toLowerCase()
+    const found = await Tenant.findOne({ slug: currentSlug })
+    if (!found) {
+      res.status(404).json({ error: 'Tenant not found.' })
+      return
+    }
+    const tenant = await ensureOwnerLoginKey(Tenant, found)
+    if (action === 'rotate') {
+      tenant.ownerLoginKey = newOwnerLoginKey()
+      tenant.ownerLoginRevoked = false
+    } else if (action === 'revoke') {
+      tenant.ownerLoginRevoked = true
+    } else {
+      tenant.ownerLoginRevoked = false
+    }
+    await tenant.save()
+    if (action === 'revoke') {
+      await getRefreshTokenModel(masterDb).deleteMany({ tenantSlug: currentSlug })
+    }
+    await getAuditLogModel(masterDb).create({
+      id: `log_${crypto.randomUUID()}`,
+      actorId: req.authUser?.userId || 'admin',
+      actorName: req.authUser?.email || 'Super Admin',
+      actorRole: 'super_admin',
+      tenantSlug: tenant.slug,
+      tenantName: tenant.brandName,
+      action: action === 'rotate' ? 'OWNER_LOGIN_URL_ROTATED' : action === 'revoke' ? 'OWNER_LOGIN_URL_REVOKED' : 'OWNER_LOGIN_URL_RESTORED',
+      category: 'security',
+      severity: action === 'revoke' ? 'warning' : 'info',
+      details:
+        action === 'rotate'
+          ? `Store owner login URL replaced for ${tenant.brandName}. The previous link no longer works.`
+          : action === 'revoke'
+            ? `Store owner login URL revoked for ${tenant.brandName}.`
+            : `Store owner login URL restored for ${tenant.brandName}.`,
+      ipAddress: req.ip || '',
+      userAgent: req.get('user-agent') || '',
+    })
+    const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined
+    res.json({
+      success: true,
+      ownerLoginRevoked: Boolean(tenant.ownerLoginRevoked),
+      ownerLoginUrl: tenant.ownerLoginKey ? ownerLoginUrl(tenant.ownerLoginKey, publicAppUrl(origin)) : null,
+    })
+  } catch (err) {
+    serverError(res, 'owner login link', err, 'Failed to update the store owner login URL')
   }
 })
 
