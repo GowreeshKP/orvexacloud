@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTenant } from '@/context/TenantContext'
 import { mockStore } from '@/api/mock-store'
-import { authService } from '@/api/auth'
+import { authService, DEMO_MODE } from '@/api/auth'
 import { apiClient } from '@/api/client'
 import { createStoreFolder } from '@/tenants/scaffold'
 import type { Product, Review, TrackedOrder } from '@/types'
@@ -292,7 +292,7 @@ export function useAdminTenants(): {
       if (!res.ok) return
       const remote = await res.json()
       if (Array.isArray(remote)) {
-        mockStore.mergeTenants(remote.map(fromBackendTenant))
+        mockStore.replaceTenants(remote.map(fromBackendTenant))
         refresh()
       }
     } catch {
@@ -457,7 +457,8 @@ async function sendApplicationDecision(
   if (!app) return 'Application not found.'
   try {
     const res = await adminApiFetch(`/admin/applications/${app.id}/status`, { method: 'PUT', body: JSON.stringify(body) })
-    if (res.ok || (app.channel !== 'website' && (res.status === 404 || res.status === 401))) return null
+    if (res.ok) return null
+    if (DEMO_MODE && app.channel !== 'website' && (res.status === 404 || res.status === 401)) return null
     const data = await res.json().catch(() => ({}))
     return data.error || `The server refused this change (HTTP ${res.status}).`
   } catch {
@@ -501,7 +502,7 @@ export function useAdminApplications(): {
       }
       const remote: BackendApplication[] = await res.json()
       if (Array.isArray(remote)) {
-        mockStore.mergeApplications(remote.map(fromBackendApplication))
+        mockStore.replaceApplications(remote.map(fromBackendApplication))
         setSyncError(null)
         refresh()
       }

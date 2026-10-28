@@ -9,6 +9,8 @@ import { MOCK_TENANTS, MOCK_APPLICATIONS, MOCK_TENANT_DATABASES, type TenantData
 import { buildTenantCategories, getNichePreset, inferStoreType } from '@/data/store-niches'
 import { PLAN_CATALOG, TRIAL_DAYS, normalizePlanId } from '@/data/plans'
 
+const DEMO_MODE = import.meta.env.DEV || import.meta.env.VITE_DEMO_MODE === 'true'
+
 const STORAGE_KEY_TENANTS = 'orvexa_tenants_v1'
 const STORAGE_KEY_DATABASES = 'orvexa_databases_v1'
 const STORAGE_KEY_APPLICATIONS = 'orvexa_applications_v1'
@@ -26,23 +28,24 @@ class MockPlatformStore {
   private tenantDatabases: Map<string, TenantDatabase>
 
   constructor() {
-    // Initialize master database
-    this.tenants = new Map(MOCK_TENANTS.map((t) => [t.id, { ...t }]))
-    this.applications = new Map(MOCK_APPLICATIONS.map((a) => [a.id, { ...a }]))
-
-    // Initialize isolated tenant databases (deep copy)
+    this.tenants = new Map()
+    this.applications = new Map()
     this.tenantDatabases = new Map()
-    MOCK_TENANT_DATABASES.forEach((db, tenantId) => {
-      this.tenantDatabases.set(tenantId, {
-        products: [...db.products],
-        reviews: [...db.reviews],
-        orders: [...db.orders],
-        customers: [...db.customers],
-      })
-    })
 
-    // Hydrate from localStorage if running in browser
-    this.reloadFromStorage()
+    // Sample stores exist only for offline demo. A live admin must show the master database.
+    if (DEMO_MODE) {
+      MOCK_TENANTS.forEach((t) => this.tenants.set(t.id, { ...t }))
+      MOCK_APPLICATIONS.forEach((a) => this.applications.set(a.id, { ...a }))
+      MOCK_TENANT_DATABASES.forEach((db, tenantId) => {
+        this.tenantDatabases.set(tenantId, {
+          products: [...db.products],
+          reviews: [...db.reviews],
+          orders: [...db.orders],
+          customers: [...db.customers],
+        })
+      })
+      this.reloadFromStorage()
+    }
 
     if (isBrowser()) {
       window.addEventListener('storage', (e) => {
@@ -141,6 +144,25 @@ class MockPlatformStore {
 
   getPendingApplications(): TenantApplication[] {
     return Array.from(this.applications.values()).filter((a) => a.status === 'pending')
+  }
+
+  // The master database is the list. Local sample stores are not kept beside it.
+  replaceApplications(remote: TenantApplication[]): void {
+    this.applications = new Map(remote.map((a) => [a.id, { ...a }]))
+    this.persist()
+  }
+
+  replaceTenants(remote: TenantConfig[]): void {
+    const next = new Map<string, TenantConfig>()
+    remote.forEach((t) => {
+      next.set(t.id, { ...t })
+      this.ensureTenantDatabase(t.id)
+    })
+    for (const id of [...this.tenantDatabases.keys()]) {
+      if (!next.has(id)) this.tenantDatabases.delete(id)
+    }
+    this.tenants = next
+    this.persist()
   }
 
   // Applications loaded from the backend (website signups included) replace local copies by id.

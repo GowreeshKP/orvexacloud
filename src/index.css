@@ -1,6 +1,7 @@
-/* Orvexa portals demo design system (Bricolage / Hanken / Plex Mono) */
-@import './styles/portals-demo.css';
+/* Portal styles sit in the components layer so Tailwind utilities (button and form
+   colors, backgrounds) still win. Unlayered portal CSS was wiping those colors. */
 @import 'tailwindcss';
+@import './styles/portals-demo.css' layer(components);
 
 @theme {
   --font-display: 'Bricolage Grotesque', 'Helvetica Neue', Arial, sans-serif;
@@ -87,7 +88,13 @@
   color: var(--on-ink-2, #b9bee6) !important;
 }
 .shell .sidebar .nav-item.active {
-  color: #ffffff !important;
+  color: var(--ink, #12163a) !important;
+  background: #ffffff !important;
+}
+
+/* Full-screen dialogs must paint above the sticky sidebar (z-index 70). */
+.shell .fixed.inset-0 {
+  z-index: 100;
 }
 
 * {
