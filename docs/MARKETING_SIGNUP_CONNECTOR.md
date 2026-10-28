@@ -38,9 +38,9 @@ PUBLIC_APP_URL=https://app.orvexacloud.in
 SUPER_ADMIN_SIGNUP_URL=http://localhost:5000/api/public/signups
 SUPER_ADMIN_SLUG_CHECK_URL=http://localhost:5000/api/public/slug-available
 
-# Production (Render multi-tenant API custom domain)
-# SUPER_ADMIN_SIGNUP_URL=https://api.orvexacloud.in/api/public/signups
-# SUPER_ADMIN_SLUG_CHECK_URL=https://api.orvexacloud.in/api/public/slug-available
+# Production — use the app host API proxy (api.orvexacloud.in DNS is optional)
+# SUPER_ADMIN_SIGNUP_URL=https://app.orvexacloud.in/api/public/signups
+# SUPER_ADMIN_SLUG_CHECK_URL=https://app.orvexacloud.in/api/public/slug-available
 SUPER_ADMIN_SIGNING_SECRET=<same-secret-as-SIGNUP_SIGNING_SECRETS>
 CORS_ORIGINS=https://orvexacloud.in,http://localhost:3000
 SITE_URL=https://orvexacloud.in

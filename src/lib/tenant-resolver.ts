@@ -76,8 +76,9 @@ export function resolveApplicationLayer(): ApplicationLayer {
     const parts = host.split('.')
     if (parts.length >= 3) {
       const sub = parts[0]
-      if (sub === 'admin') return 'admin'
-      if (sub === 'app' || sub === 'seller' || sub === 'merchant') return 'dashboard'
+      // app.orvexacloud.in is the platform control plane (Super Admin), not a seller portal.
+      if (sub === 'admin' || sub === 'app') return 'admin'
+      if (sub === 'seller' || sub === 'merchant') return 'dashboard'
       if (!RESERVED_SUBDOMAINS.includes(sub)) return 'storefront'
     }
     if (host !== PLATFORM_ROOT_DOMAIN && host !== `www.${PLATFORM_ROOT_DOMAIN}` && !host.endsWith(`.${PLATFORM_ROOT_DOMAIN}`)) {

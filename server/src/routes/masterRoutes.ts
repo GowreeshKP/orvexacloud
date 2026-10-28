@@ -360,7 +360,11 @@ router.put('/applications/:id/status', requireAdmin, async (req: Request, res: R
       return
     }
 
-    let passwordLink: { url: string; expiresAt: Date } | null = null
+    let accessLinks: {
+      storefrontUrl: string
+      ownerLoginUrl: string
+      passwordLink: { url: string; expiresAt: Date } | null
+    } | null = null
 
     // If approved, automatically provision new tenant in Master DB and create dedicated client folder
     if (status === 'approved') {
@@ -437,17 +441,29 @@ router.put('/applications/:id/status', requireAdmin, async (req: Request, res: R
         console.warn('[Tenant Provisioner Warning on Approval]', provisionErr)
       }
 
-      passwordLink = await issueOwnerPasswordLink(
+      const appBase = publicAppUrl(req.headers.origin)
+      const TenantModel = getTenantModel(masterDb)
+      const provisioned = await TenantModel.findOne({ slug: updated.requestedSubdomain })
+      const withLoginKey = provisioned ? await ensureOwnerLoginKey(TenantModel, provisioned) : null
+      const passwordLink = await issueOwnerPasswordLink(
         masterDb,
         updated.requestedSubdomain,
-        publicAppUrl(req.headers.origin),
+        appBase,
         7 * 24 * 60 * 60 * 1000
       )
+      const ownerKey = withLoginKey?.ownerLoginKey || newTenant.ownerLoginKey
+      accessLinks = {
+        storefrontUrl: `${appBase.replace(/\/+$/, '')}/t/${updated.requestedSubdomain}`,
+        ownerLoginUrl: ownerKey
+          ? ownerLoginUrl(ownerKey, appBase)
+          : `${appBase.replace(/\/+$/, '')}/t/${updated.requestedSubdomain}/dashboard`,
+        passwordLink,
+      }
     }
 
     res.json(updated)
 
-    sendApplicationDecision(updated, passwordLink).catch((err) =>
+    sendApplicationDecision(updated, accessLinks).catch((err) =>
       console.error('[Applications] Decision email failed for', updated.id, err.message)
     )
   } catch (err) {
@@ -522,29 +538,46 @@ router.post('/waitlist/notify', requireAdmin, async (req: Request, res: Response
 
 async function sendApplicationDecision(
   app: { id: string; brandName: string; ownerName: string; ownerEmail: string; requestedSubdomain: string; status: string; reviewNotes?: string; requestedPlan?: { id?: string } },
-  passwordLink: { url: string; expiresAt: Date } | null
+  accessLinks: {
+    storefrontUrl: string
+    ownerLoginUrl: string
+    passwordLink: { url: string; expiresAt: Date } | null
+  } | null
 ): Promise<void> {
   const greeting = `Hi ${app.ownerName || 'there'},`
-  if (app.status === 'approved' && passwordLink) {
+  if (app.status === 'approved' && accessLinks) {
     const plan = PLAN_CATALOG[normalizePlanId(app.requestedPlan?.id)]
+    const lines = [
+      greeting,
+      '',
+      `Good news: ${app.brandName} is approved on Orvexa Cloud.`,
+      '',
+      'Your storefront (customer shopping site):',
+      accessLinks.storefrontUrl,
+      '',
+      'Your store owner admin sign-in (keep this private):',
+      accessLinks.ownerLoginUrl,
+    ]
+    if (accessLinks.passwordLink) {
+      lines.push(
+        '',
+        'Set your password once with this link (expires in 7 days):',
+        accessLinks.passwordLink.url,
+      )
+    }
+    lines.push(
+      '',
+      `Your ${TRIAL_DAYS}-day free trial of ${plan.label} starts today. Nothing is charged before it ends, and you can cancel any time before then.`,
+      '',
+      `Reference: ${app.id}`,
+      '',
+      'The Orvexa Cloud team',
+    )
     await sendEmail({
       to: app.ownerEmail,
       subject: `${app.brandName} is approved on Orvexa Cloud`,
       idempotencyKey: `decision-${app.id}-approved`,
-      text: [
-        greeting,
-        '',
-        `Good news: ${app.brandName} is approved and your store is ready at https://${app.requestedSubdomain}.${PLATFORM_ROOT_DOMAIN}.`,
-        '',
-        'Set your password to sign in (this link works once and expires in 7 days):',
-        passwordLink.url,
-        '',
-        `Your ${TRIAL_DAYS}-day free trial of ${plan.label} starts today. Nothing is charged before it ends, and you can cancel any time before then.`,
-        '',
-        `Reference: ${app.id}`,
-        '',
-        'The Orvexa Cloud team',
-      ].join('\n'),
+      text: lines.join('\n'),
     })
   } else if (app.status === 'needs_info') {
     await sendEmail({
