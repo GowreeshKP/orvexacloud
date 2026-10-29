@@ -261,6 +261,8 @@ function fromBackendTenant(t: Record<string, any>): TenantConfig {
 
 export function useAdminTenants(): {
   tenants: TenantConfig[]
+  syncing: boolean
+  syncError: string | null
   suspend: (id: string) => void
   reactivate: (id: string) => void
   changePlan: (id: string, plan: 'starter' | 'pro' | 'enterprise') => void
@@ -281,33 +283,48 @@ export function useAdminTenants(): {
   refresh: () => void
 } {
   const [tenants, setTenants] = useState<TenantConfig[]>([])
+  const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState<string | null>(null)
 
   const refresh = useCallback(() => {
     setTenants([...mockStore.getAllTenants()])
   }, [])
 
   const syncFromBackend = useCallback(async () => {
+    setSyncing(true)
     try {
       // Never hit protected admin APIs without a JWT — the login screen mounts this hook too.
       const token = await authService.getValidAdminToken()
-      if (!token) return
+      if (!token) {
+        setSyncError('Sign in again to load allocated tenants from the platform API.')
+        return
+      }
       const res = await adminApiFetch('/admin/tenants')
-      if (!res.ok) return
+      if (res.status === 401 || res.status === 403) {
+        setSyncError('Admin session expired. Sign out and sign in again.')
+        return
+      }
+      if (!res.ok) {
+        setSyncError(`Could not load tenants (HTTP ${res.status}).`)
+        return
+      }
       const remote = await res.json()
       if (Array.isArray(remote)) {
-        mockStore.replaceTenants(remote.map(fromBackendTenant))
-        refresh()
+        const mapped = remote.map(fromBackendTenant)
+        mockStore.replaceTenants(mapped)
+        setTenants(mapped)
+        setSyncError(null)
       }
     } catch {
-      // Backend offline: keep local tenants.
+      setSyncError('Platform API unreachable. Allocated tenants will appear when the server is online.')
+    } finally {
+      setSyncing(false)
     }
-  }, [refresh])
+  }, [])
 
   useEffect(() => {
-    refresh()
     void syncFromBackend()
     const onProvisioned = () => {
-      refresh()
       void syncFromBackend()
     }
     const onFocus = () => { void syncFromBackend() }
@@ -319,7 +336,7 @@ export function useAdminTenants(): {
       window.removeEventListener('focus', onFocus)
       window.clearInterval(poll)
     }
-  }, [refresh, syncFromBackend])
+  }, [syncFromBackend])
 
   const suspend = useCallback((id: string) => {
     mockStore.suspendTenant(id)
@@ -387,7 +404,12 @@ export function useAdminTenants(): {
     [refresh]
   )
 
-  return { tenants, suspend, reactivate, changePlan, provisionTenant, refresh }
+  const reload = useCallback(() => {
+    refresh()
+    void syncFromBackend()
+  }, [refresh, syncFromBackend])
+
+  return { tenants, syncing, syncError, suspend, reactivate, changePlan, provisionTenant, refresh: reload }
 }
 
 const ADMIN_API_BASE = API_BASE

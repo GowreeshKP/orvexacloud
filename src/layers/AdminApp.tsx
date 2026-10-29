@@ -293,9 +293,6 @@ function AdminPortal({
           <span className="muted">/</span>
           <strong style={{ fontFamily: 'var(--font-display)' }}>{ADMIN_NAV.find((n) => n.id === activeView)?.label}</strong>
           <div className="right row" style={{ gap: 10 }}>
-            <a href="/t/lunar" target="_blank" rel="noreferrer" className="btn btn-outline btn-sm">
-              Storefront demo
-            </a>
             <span className="pill gold">
               <span className="dot" />
               Session active
@@ -1036,17 +1033,66 @@ function ClientLeadsCRM({ onSwitchView }: { onSwitchView: (v: AdminView) => void
 // =====================================================
 // 4. Tenant Directory & Store Access Management
 // =====================================================
+type TenantProbe = {
+  storefront: 'idle' | 'ok' | 'fail' | 'checking'
+  products: 'idle' | 'ok' | 'fail' | 'checking'
+  detail?: string
+}
+
 function TenantDirectory({ onOpenProvisionModal }: { onOpenProvisionModal?: () => void }) {
-  const { tenants, suspend, reactivate, changePlan, refresh } = useAdminTenants()
+  const { tenants, syncing, syncError, suspend, reactivate, changePlan, refresh } = useAdminTenants()
   const [search, setSearch] = useState('')
   const [inspectTenant, setInspectTenant] = useState<TenantConfig | null>(null)
   const [credentialsTenant, setCredentialsTenant] = useState<TenantConfig | null>(null)
   const [copiedEnv, setCopiedEnv] = useState(false)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const [probes, setProbes] = useState<Record<string, TenantProbe>>({})
 
   const showToast = (msg: string) => {
     setToastMsg(msg)
     setTimeout(() => setToastMsg(null), 3500)
+  }
+
+  const testTenantApis = async (slug: string) => {
+    setProbes((prev) => ({
+      ...prev,
+      [slug]: { storefront: 'checking', products: 'checking' },
+    }))
+    const storefrontUrl = `/t/${encodeURIComponent(slug)}`
+    const productsUrl = `${API_BASE}/stores/${encodeURIComponent(slug)}/products`
+    try {
+      const [storeRes, prodRes] = await Promise.all([
+        fetch(storefrontUrl, { method: 'GET', cache: 'no-store' }),
+        fetch(productsUrl, { method: 'GET', cache: 'no-store' }),
+      ])
+      let productCount: number | undefined
+      if (prodRes.ok) {
+        const body = await prodRes.json().catch(() => null)
+        if (Array.isArray(body)) productCount = body.length
+        else if (body && Array.isArray(body.products)) productCount = body.products.length
+      }
+      setProbes((prev) => ({
+        ...prev,
+        [slug]: {
+          storefront: storeRes.ok ? 'ok' : 'fail',
+          products: prodRes.ok ? 'ok' : 'fail',
+          detail: prodRes.ok
+            ? `Storefront ${storeRes.status} · Products API ${prodRes.status}${productCount != null ? ` (${productCount} items)` : ''}`
+            : `Storefront ${storeRes.status} · Products API ${prodRes.status}`,
+        },
+      }))
+      showToast(
+        prodRes.ok && storeRes.ok
+          ? `${slug}: storefront + products API OK`
+          : `${slug}: check failed (storefront ${storeRes.status}, products ${prodRes.status})`,
+      )
+    } catch (err) {
+      setProbes((prev) => ({
+        ...prev,
+        [slug]: { storefront: 'fail', products: 'fail', detail: String((err as Error)?.message || err) },
+      }))
+      showToast(`${slug}: could not reach storefront/API`)
+    }
   }
 
   const filtered = tenants.filter((t) =>
@@ -1126,7 +1172,16 @@ ENABLE_CUSTOMER_REVIEWS=${t.theme.enableReviews}`
           />
         </div>
         <div className="flex items-center gap-3">
-          <p className="text-xs font-mono text-slate-500 hidden sm:block">{filtered.length} Active Stores Provisioned</p>
+          <p className="text-xs font-mono text-slate-500 hidden sm:block">
+            {syncing ? 'Syncing…' : `${filtered.length} allocated store${filtered.length === 1 ? '' : 's'}`}
+          </p>
+          <button
+            type="button"
+            onClick={() => refresh()}
+            className="px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer"
+          >
+            Refresh from API
+          </button>
           {onOpenProvisionModal && (
             <button
               onClick={onOpenProvisionModal}
@@ -1139,30 +1194,68 @@ ENABLE_CUSTOMER_REVIEWS=${t.theme.enableReviews}`
         </div>
       </div>
 
+      {syncError && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+          {syncError}
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-500 uppercase tracking-wider font-mono text-[10px]">
                 <th className="text-left px-5 py-3">Store Name & Slug</th>
-                <th className="text-left px-4 py-3">Dedicated Database</th>
+                <th className="text-left px-4 py-3">Portals</th>
                 <th className="text-left px-4 py-3">Owner Contact</th>
                 <th className="text-left px-4 py-3">Plan Tier</th>
-                <th className="text-left px-4 py-3">Status</th>
+                <th className="text-left px-4 py-3">Status / API</th>
                 <th className="text-right px-5 py-3">Credentials & Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filtered.map((tenant) => (
+              {!syncing && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
+                    No allocated tenants yet. Approve a marketing application or provision a store — they appear here from the live master API.
+                  </td>
+                </tr>
+              )}
+              {filtered.map((tenant) => {
+                const probe = probes[tenant.slug]
+                return (
                 <tr key={tenant.id} className="hover:bg-slate-50/60 transition-colors">
                   <td className="px-5 py-3.5">
                     <p className="font-bold text-slate-900">{tenant.brandName}</p>
                     <code className="text-[11px] font-mono text-indigo-600">{storeAddress(tenant.slug)}</code>
+                    <p className="text-[10px] font-mono text-slate-400 mt-1">db: orvexa_tenant_{tenant.slug}</p>
                   </td>
                   <td className="px-4 py-3.5">
-                    <span className="font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-[11px]">
-                      orvexa_tenant_{tenant.slug}
-                    </span>
+                    <div className="flex flex-col gap-1 items-start">
+                      <a
+                        href={`/t/${tenant.slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] font-semibold text-indigo-700 hover:underline"
+                      >
+                        Storefront ↗
+                      </a>
+                      <a
+                        href={`/t/${tenant.slug}/dashboard`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] font-semibold text-slate-700 hover:underline"
+                      >
+                        Tenant dashboard ↗
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setCredentialsTenant(tenant)}
+                        className="text-[11px] font-semibold text-amber-800 hover:underline cursor-pointer bg-transparent border-0 p-0"
+                      >
+                        Owner login / credentials
+                      </button>
+                    </div>
                   </td>
                   <td className="px-4 py-3.5">
                     <p className="font-medium text-slate-800">{tenant.ownerName}</p>
@@ -1185,10 +1278,28 @@ ENABLE_CUSTOMER_REVIEWS=${t.theme.enableReviews}`
                     }`}>
                       {tenant.status}
                     </span>
+                    {probe && (
+                      <p className={`text-[10px] font-mono mt-1.5 ${
+                        probe.storefront === 'ok' && probe.products === 'ok'
+                          ? 'text-emerald-700'
+                          : probe.storefront === 'checking'
+                            ? 'text-slate-500'
+                            : 'text-rose-600'
+                      }`}>
+                        {probe.detail || `${probe.storefront}/${probe.products}`}
+                      </p>
+                    )}
                   </td>
                   <td className="px-5 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      {/* Prominent Credentials Button */}
+                    <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => void testTenantApis(tenant.slug)}
+                        className="px-2.5 py-1 text-[11px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-900 rounded border border-emerald-300 transition-colors cursor-pointer"
+                        title="Probe storefront page and /api/stores/{slug}/products"
+                      >
+                        {probe?.storefront === 'checking' ? 'Testing…' : 'Test APIs'}
+                      </button>
                       <button
                         onClick={() => setCredentialsTenant(tenant)}
                         className="px-2.5 py-1 text-[11px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 rounded border border-amber-300 transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
@@ -1205,13 +1316,6 @@ ENABLE_CUSTOMER_REVIEWS=${t.theme.enableReviews}`
                       >
                         .env
                       </button>
-                      <a
-                        href={`/t/${tenant.slug}`}
-                        target="_blank"
-                        className="px-2 py-1 text-[11px] font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded border border-indigo-200 transition-colors"
-                      >
-                        Visit ↗
-                      </a>
                       {tenant.status === 'active' ? (
                         <button
                           onClick={() => suspend(tenant.id)}
@@ -1230,7 +1334,8 @@ ENABLE_CUSTOMER_REVIEWS=${t.theme.enableReviews}`
                     </div>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>
