@@ -596,8 +596,42 @@ export function usePlatformStats(): { stats: PlatformStats | null; loading: bool
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
     setStats(mockStore.getPlatformStats())
-    setLoading(false)
+    void (async () => {
+      try {
+        const token = await authService.getValidAdminToken()
+        if (!token || cancelled) {
+          setLoading(false)
+          return
+        }
+        const res = await adminApiFetch('/admin/overview')
+        if (!res.ok || cancelled) {
+          setLoading(false)
+          return
+        }
+        const remote = await res.json()
+        if (cancelled || !remote || typeof remote !== 'object') {
+          setLoading(false)
+          return
+        }
+        setStats({
+          totalGMV: Number(remote.totalGmv ?? remote.totalGMV ?? 0),
+          activeStores: Number(remote.activeStores ?? 0),
+          pendingApplications: Number(remote.pendingApplications ?? 0),
+          monthlyRecurringRevenue: Number(remote.mrr ?? remote.monthlyRecurringRevenue ?? 0),
+          totalCustomers: Number(remote.totalCustomers ?? 0),
+          newApplicationsThisWeek: Number(remote.newApplicationsThisWeek ?? remote.pendingApplications ?? 0),
+        })
+      } catch {
+        // Keep mock/local fallback already set.
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return { stats, loading }

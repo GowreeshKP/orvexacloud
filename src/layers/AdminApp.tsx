@@ -1059,11 +1059,13 @@ function TenantDirectory({ onOpenProvisionModal }: { onOpenProvisionModal?: () =
       ...prev,
       [slug]: { storefront: 'checking', products: 'checking' },
     }))
-    const frontUrl = storefrontUrl(slug)
+    // Same-origin API probes only — fetching orvexacloud.in HTML from app.orvexacloud.in
+    // is cross-origin and shows as a CORS / Failed to fetch console error.
+    const resolveUrl = `${API_BASE}/public/resolve?slug=${encodeURIComponent(slug)}`
     const productsUrl = `${API_BASE}/stores/${encodeURIComponent(slug)}/products`
     try {
-      const [storeRes, prodRes] = await Promise.all([
-        fetch(frontUrl, { method: 'GET', cache: 'no-store', redirect: 'follow' }),
+      const [resolveRes, prodRes] = await Promise.all([
+        fetch(resolveUrl, { method: 'GET', cache: 'no-store' }),
         fetch(productsUrl, { method: 'GET', cache: 'no-store' }),
       ])
       let productCount: number | undefined
@@ -1072,20 +1074,22 @@ function TenantDirectory({ onOpenProvisionModal }: { onOpenProvisionModal?: () =
         if (Array.isArray(body)) productCount = body.length
         else if (body && Array.isArray(body.products)) productCount = body.products.length
       }
+      const storeOk = resolveRes.ok
+      const productsOk = prodRes.ok
       setProbes((prev) => ({
         ...prev,
         [slug]: {
-          storefront: storeRes.ok ? 'ok' : 'fail',
-          products: prodRes.ok ? 'ok' : 'fail',
-          detail: prodRes.ok
-            ? `Storefront ${storeRes.status} · Products API ${prodRes.status}${productCount != null ? ` (${productCount} items)` : ''}`
-            : `Storefront ${storeRes.status} · Products API ${prodRes.status}`,
+          storefront: storeOk ? 'ok' : 'fail',
+          products: productsOk ? 'ok' : 'fail',
+          detail: productsOk
+            ? `Resolve ${resolveRes.status} · Products ${prodRes.status}${productCount != null ? ` (${productCount} items)` : ''} · ${storefrontUrl(slug)}`
+            : `Resolve ${resolveRes.status} · Products ${prodRes.status}`,
         },
       }))
       showToast(
-        prodRes.ok && storeRes.ok
-          ? `${slug}: storefront + products API OK`
-          : `${slug}: check failed (storefront ${storeRes.status}, products ${prodRes.status})`,
+        storeOk && productsOk
+          ? `${slug}: storefront resolve + products API OK`
+          : `${slug}: check failed (resolve ${resolveRes.status}, products ${prodRes.status})`,
       )
     } catch (err) {
       setProbes((prev) => ({

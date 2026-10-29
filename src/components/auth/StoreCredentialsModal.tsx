@@ -100,10 +100,11 @@ export default function StoreCredentialsModal({ tenant, isOpen, onClose, onSucce
         setConfirmRotate(false)
       })
 
-      // Fetch staff from backend
+      // Fetch staff from backend (skip when there is no admin JWT — avoids console 401 noise)
       authService.getValidAdminToken().then((token) => {
-        fetch(`${API_BASE}/admin/tenants/${tenant.slug}/staff`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        if (!token) return
+        return fetch(`${API_BASE}/admin/tenants/${tenant.slug}/staff`, {
+          headers: { Authorization: `Bearer ${token}` },
         })
           .then((r) => (r.ok ? r.json() : null))
           .then((data) => {
