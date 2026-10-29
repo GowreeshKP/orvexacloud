@@ -49,9 +49,45 @@ function legacyPortalRedirect(request, url) {
   return Response.redirect(target, 302)
 }
 
+function corsAllowOrigin(request, fallbackOrigin) {
+  const reqOrigin = request.headers.get('Origin') || ''
+  if (!reqOrigin) return fallbackOrigin
+  try {
+    const host = new URL(reqOrigin).hostname.toLowerCase()
+    if (
+      host === ROOT_DOMAIN ||
+      host === `www.${ROOT_DOMAIN}` ||
+      host === `app.${ROOT_DOMAIN}` ||
+      host.endsWith(`.${ROOT_DOMAIN}`)
+    ) {
+      return reqOrigin
+    }
+  } catch {
+    /* ignore */
+  }
+  return fallbackOrigin
+}
+
 async function proxyApi(request, url, env) {
   const origin = String(env.RENDER_API_ORIGIN || DEFAULT_ORIGIN).replace(/\/+$/, '')
   const target = `${origin}${url.pathname}${url.search}`
+  const allowOrigin = corsAllowOrigin(request, url.origin)
+
+  // Browser preflight from marketing storefronts (orvexacloud.in → app /api).
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'access-control-allow-origin': allowOrigin,
+        'access-control-allow-methods': 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS',
+        'access-control-allow-headers':
+          request.headers.get('Access-Control-Request-Headers') || 'content-type,authorization',
+        'access-control-allow-credentials': 'true',
+        'access-control-max-age': '86400',
+        vary: 'Origin',
+      },
+    })
+  }
 
   const headers = new Headers(request.headers)
   headers.delete('host')
@@ -72,7 +108,8 @@ async function proxyApi(request, url, env) {
 
   const upstream = await fetch(target, init)
   const out = new Headers(upstream.headers)
-  out.set('access-control-allow-origin', url.origin)
+  out.set('access-control-allow-origin', allowOrigin)
+  out.set('access-control-allow-credentials', 'true')
   out.set('vary', 'Origin')
   return new Response(upstream.body, { status: upstream.status, headers: out })
 }
