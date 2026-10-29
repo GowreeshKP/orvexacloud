@@ -1,4 +1,4 @@
-import { Router, type Request, type Response } from 'express'
+import { Router, type Request, type Response, type NextFunction } from 'express'
 import { connectMasterDatabase, getTenantConnection } from '../config/db.js'
 import { TENANT_STATUSES, getTenantModel, tenantAllowsSignIn } from '../models/master/Tenant.js'
 import { getRefreshTokenModel } from '../models/master/RefreshToken.js'
@@ -6,7 +6,7 @@ import { getApplicationModel } from '../models/master/Application.js'
 import { getAuditLogModel } from '../models/master/AuditLog.js'
 import { getTenantOrderModel } from '../models/tenant/Order.js'
 import { provisionTenantFolders } from '../services/tenantProvisioner.js'
-import { optionalAuth, requireAdmin } from '../middleware/authMiddleware.js'
+import { optionalAuth, requireAdmin, verifyToken } from '../middleware/authMiddleware.js'
 import {
   EMAIL_PATTERN,
   SLUG_PATTERN,
@@ -53,13 +53,40 @@ function serverError(res: Response, context: string, err: unknown, message: stri
   res.status(500).json({ error: message })
 }
 
+// Staff routes: Super Admin OR the seller whose JWT tenantSlug matches :slug
+function requireAdminOrStoreSeller(req: Request, res: Response, next: NextFunction): void {
+  verifyToken(req, res, () => {
+    const user = req.authUser
+    if (!user) return
+    if (user.role === 'super_admin') {
+      next()
+      return
+    }
+    if (user.role === 'seller') {
+      const match = /^\/tenants\/([^/]+)\/staff(?:\/|$)/.exec(req.path)
+      const slug = match?.[1]?.toLowerCase()
+      if (slug && user.tenantSlug === slug) {
+        next()
+        return
+      }
+      res.status(403).json({ error: 'Access denied. You can only manage staff for your own store.' })
+      return
+    }
+    res.status(403).json({ error: 'Access denied. Super Admin or store owner credentials required.' })
+  })
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// ALL routes in this router require Super Admin JWT, except write-only event logging.
+// ALL routes in this router require Super Admin JWT, except write-only event logging
+// and store-owner staff management for the authenticated seller's own slug.
 // ─────────────────────────────────────────────────────────────────────────────
 router.use((req, res, next) => {
   // Client apps record events here; identity is taken from the token, never from the body.
   if (req.path === '/audit-logs' && req.method === 'POST') {
     return optionalAuth(req, res, next)
+  }
+  if (/^\/tenants\/[^/]+\/staff(?:\/|$)/.test(req.path)) {
+    return requireAdminOrStoreSeller(req, res, next)
   }
   return requireAdmin(req, res, next)
 })

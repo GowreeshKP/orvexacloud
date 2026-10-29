@@ -3064,13 +3064,18 @@ function StoreSettings({ onNavigate, onToast }: { onNavigate?: (view: DashboardV
       setOwnerEmail(tenant.ownerEmail || '')
       setOwnerPhone(tenant.ownerPhone || '')
 
-      // Fetch staff from backend API if available
-      fetch(`${API_BASE}/admin/tenants/${tenant.slug}/staff`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (data?.staff) setStaffList(data.staff)
+      // Fetch staff from backend API if available (seller or super-admin JWT)
+      void authService.getStoreAccessToken().then((token) => {
+        if (!token) return
+        return fetch(`${API_BASE}/admin/tenants/${tenant.slug}/staff`, {
+          headers: { Authorization: `Bearer ${token}` },
         })
-        .catch(() => {})
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (data?.staff) setStaffList(data.staff)
+          })
+          .catch(() => {})
+      })
     }
   }, [tenant])
 
@@ -3168,9 +3173,13 @@ function StoreSettings({ onNavigate, onToast }: { onNavigate?: (view: DashboardV
     setStaffMsg(null)
 
     try {
+      const token = await authService.getStoreAccessToken()
       const res = await fetch(`${API_BASE}/admin/tenants/${tenant.slug}/staff`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           name: staffName,
           email: staffEmail,
@@ -3209,8 +3218,10 @@ function StoreSettings({ onNavigate, onToast }: { onNavigate?: (view: DashboardV
 
   const handleDeleteStaff = async (staffId: string) => {
     try {
+      const token = await authService.getStoreAccessToken()
       await fetch(`${API_BASE}/admin/tenants/${tenant.slug}/staff/${staffId}`, {
         method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
     } catch {}
     setStaffList((prev) => prev.filter((s) => s.id !== staffId))

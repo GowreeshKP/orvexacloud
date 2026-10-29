@@ -126,14 +126,30 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     void loadTenant(customSlug)
   }, [loadTenant])
 
+  /** pushState only works same-origin; storefront lives on orvexacloud.in while the dashboard is on app. */
+  const navigateLayerUrl = (url: string): 'external' | 'internal' => {
+    try {
+      const next = new URL(url, window.location.href)
+      if (next.origin !== window.location.origin) {
+        window.location.assign(next.href)
+        return 'external'
+      }
+      window.history.pushState({}, '', `${next.pathname}${next.search}${next.hash}`)
+      return 'internal'
+    } catch {
+      window.history.pushState({}, '', url)
+      return 'internal'
+    }
+  }
+
   const switchTenant = (slug: string) => {
-    window.history.pushState({}, '', locationForLayer('storefront', slug))
+    if (navigateLayerUrl(locationForLayer('storefront', slug)) === 'external') return
     void loadTenant(slug)
   }
 
   const switchLayer = (newLayer: ApplicationLayer, tenantSlug?: string) => {
     const targetSlug = tenantSlug || tenant?.slug || resolveTenantSlug()
-    window.history.pushState({}, '', locationForLayer(newLayer, targetSlug || undefined))
+    if (navigateLayerUrl(locationForLayer(newLayer, targetSlug || undefined)) === 'external') return
     setLayer(newLayer)
     if (newLayer !== 'admin') void loadTenant(targetSlug)
   }
