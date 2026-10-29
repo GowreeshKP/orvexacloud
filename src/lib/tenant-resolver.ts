@@ -4,6 +4,7 @@ import { tenantPortalPath } from '@/lib/store-urls'
 export type ApplicationLayer = 'storefront' | 'dashboard' | 'admin' | 'owner-login'
 
 const OWNER_LOGIN_KEY = /^[A-Za-z0-9_-]{16,80}$/
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/
 
 export function parseOwnerLoginKey(pathname = typeof window !== 'undefined' ? window.location.pathname : ''): string | null {
   const parts = pathname.split('/').filter(Boolean)
@@ -19,21 +20,37 @@ export function parseOwnerLoginKey(pathname = typeof window !== 'undefined' ? wi
 
 export const RESERVED_SUBDOMAINS = [
   'www', 'admin', 'api', 'app', 'mail', 'shop', 'staging', 'seller', 'merchant', 'dashboard', 'store', 'stores',
-  'support', 'help', 'billing', 'status', 'docs', 'blog', 'cdn', 'assets', 'cname', 't',
+  'support', 'help', 'billing', 'status', 'docs', 'blog', 'cdn', 'assets', 'cname', 't', 'pricing', 'apply',
+  'legal', 'terms', 'privacy', 'refunds', 'compare', 'brand',
 ]
 
 const PREVIEW_PLATFORM_DOMAINS = ['vercel.app', 'netlify.app', 'github.io', 'pages.dev', 'cloudflareapps.com']
 const PRIVATE_HOST = /^(localhost|127\.0\.0\.1)$|^192\.168\.|^10\./
 
+/** Legacy /t/{slug}[/dashboard] plus production /{slug} and /dashboard/{slug}. */
 export function parseTenantPath(pathname = typeof window !== 'undefined' ? window.location.pathname : ''): {
   slug: string | null
   layer: 'storefront' | 'dashboard' | null
 } {
   const parts = pathname.toLowerCase().split('/').filter(Boolean)
-  if (parts[0] !== 't' || !parts[1]) return { slug: null, layer: null }
-  const slug = parts[1]
-  if (!/^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(slug)) return { slug: null, layer: null }
-  return { slug, layer: parts[2] === 'dashboard' ? 'dashboard' : 'storefront' }
+  if (!parts.length) return { slug: null, layer: null }
+
+  // Legacy: /t/{slug}[/dashboard]
+  if (parts[0] === 't' && parts[1] && SLUG_RE.test(parts[1])) {
+    return { slug: parts[1], layer: parts[2] === 'dashboard' ? 'dashboard' : 'storefront' }
+  }
+
+  // Production tenant admin: /dashboard/{slug}
+  if (parts[0] === 'dashboard' && parts[1] && SLUG_RE.test(parts[1])) {
+    return { slug: parts[1], layer: 'dashboard' }
+  }
+
+  // Production storefront on marketing host: /{slug}
+  if (parts.length >= 1 && SLUG_RE.test(parts[0]) && !RESERVED_SUBDOMAINS.includes(parts[0])) {
+    return { slug: parts[0], layer: 'storefront' }
+  }
+
+  return { slug: null, layer: null }
 }
 
 function hostname(): string {
@@ -45,8 +62,10 @@ function isPreviewHost(host: string): boolean {
 }
 
 /**
- * Layer from the URL only. A signed-in seller visiting /t/lunar still sees the storefront;
- * they open /t/lunar/dashboard for the seller portal.
+ * Layer from the URL only.
+ * - app.orvexacloud.in → Super Admin (unless /dashboard/{slug} or /owner/…)
+ * - orvexacloud.in/{slug} → storefront
+ * - app.orvexacloud.in/dashboard/{slug} → tenant admin
  */
 export function resolveApplicationLayer(): ApplicationLayer {
   if (typeof window === 'undefined') return 'admin'
@@ -72,12 +91,15 @@ export function resolveApplicationLayer(): ApplicationLayer {
   if (params.get('tenant') || params.get('store')) return 'storefront'
 
   const host = hostname()
+  // Platform control plane
+  if (host === `app.${PLATFORM_ROOT_DOMAIN}` || host === `admin.${PLATFORM_ROOT_DOMAIN}`) return 'admin'
+  // Marketing apex without a store slug → not a storefront shell (marketing site handles it)
+  if (host === PLATFORM_ROOT_DOMAIN || host === `www.${PLATFORM_ROOT_DOMAIN}`) return 'admin'
+
   if (!isPreviewHost(host) && !PRIVATE_HOST.test(host)) {
     const parts = host.split('.')
     if (parts.length >= 3) {
       const sub = parts[0]
-      // app.orvexacloud.in is the platform control plane (Super Admin), not a seller portal.
-      if (sub === 'admin' || sub === 'app') return 'admin'
       if (sub === 'seller' || sub === 'merchant') return 'dashboard'
       if (!RESERVED_SUBDOMAINS.includes(sub)) return 'storefront'
     }
@@ -89,10 +111,6 @@ export function resolveApplicationLayer(): ApplicationLayer {
   return 'admin'
 }
 
-/**
- * Store slug from /t/<slug>, ?tenant=, a store subdomain, or a custom domain hostname.
- * Custom-domain hostnames are returned as-is so the resolver API can look them up.
- */
 export function resolveTenantSlug(): string {
   if (typeof window === 'undefined') return ''
   if (parseOwnerLoginKey(window.location.pathname)) return ''
@@ -123,18 +141,18 @@ export function isReservedSubdomain(slug: string): boolean {
 }
 
 export function locationForLayer(layer: ApplicationLayer, slug?: string): string {
-  if (layer === 'admin') return '/admin'
-  if (!slug) return '/admin'
-  // Prefer absolute subdomain URLs in production so store + tenant admin stay on {slug}.orvexacloud.in
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname.toLowerCase()
-    const local = /^(localhost|127\.0\.0\.1)$|^192\.168\.|^10\./.test(host)
-    if (!local) {
-      const subHost = `${slug.trim().toLowerCase()}.${PLATFORM_ROOT_DOMAIN}`
-      if (layer === 'dashboard') return `https://${subHost}/dashboard`
-      if (layer === 'storefront') return `https://${subHost}/`
-      if (layer === 'owner-login') return `https://${subHost}/dashboard`
+  if (layer === 'admin') return typeof window !== 'undefined' && !PRIVATE_HOST.test(hostname())
+    ? `https://app.${PLATFORM_ROOT_DOMAIN}/`
+    : '/'
+  if (!slug) return locationForLayer('admin')
+  if (layer === 'dashboard' || layer === 'owner-login') {
+    if (typeof window !== 'undefined' && !PRIVATE_HOST.test(hostname())) {
+      return `https://app.${PLATFORM_ROOT_DOMAIN}/dashboard/${slug.trim().toLowerCase()}`
     }
+    return tenantPortalPath(slug, 'dashboard')
   }
-  return tenantPortalPath(slug, layer === 'dashboard' ? 'dashboard' : 'storefront')
+  if (typeof window !== 'undefined' && !PRIVATE_HOST.test(hostname())) {
+    return `https://${PLATFORM_ROOT_DOMAIN}/${slug.trim().toLowerCase()}`
+  }
+  return tenantPortalPath(slug, 'storefront')
 }

@@ -122,10 +122,10 @@ function publicTenant(t: ITenant) {
     theme: t.theme,
     subscription: t.subscription,
     createdAt: t.createdAt,
-    portalPath: `/t/${t.slug}`,
-    dashboardPath: `/t/${t.slug}/dashboard`,
-    storefrontUrl: `https://${t.slug}.${PLATFORM_ROOT_DOMAIN}/`,
-    dashboardUrl: `https://${t.slug}.${PLATFORM_ROOT_DOMAIN}/dashboard`,
+    portalPath: `/${t.slug}`,
+    dashboardPath: `/dashboard/${t.slug}`,
+    storefrontUrl: `https://${PLATFORM_ROOT_DOMAIN}/${t.slug}`,
+    dashboardUrl: `https://app.${PLATFORM_ROOT_DOMAIN}/dashboard/${t.slug}`,
   }
 }
 

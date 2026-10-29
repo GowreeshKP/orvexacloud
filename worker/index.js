@@ -1,11 +1,10 @@
 /**
- * Cloudflare Worker in front of the Vite build.
- * Static files and the SPA shell come from the assets binding.
- * /api/* is proxied to the Render API. Workers static assets otherwise
- * answer POST /api with 405, so platform admin sign-in never reaches the server.
- *
- * Path portals /t/{slug} redirect to https://{slug}.orvexacloud.in so each
- * approved store runs on its own subdomain (storefront + /dashboard admin).
+ * Cloudflare Worker in front of the Vite build (app.orvexacloud.in).
+ * - Super Admin at /
+ * - Tenant admin at /dashboard/{slug}
+ * - Owner sign-in at /owner/{key}
+ * - /api/* proxied to Render
+ * - Legacy /t/{slug} → https://orvexacloud.in/{slug}
  */
 
 const DEFAULT_ORIGIN = 'https://orvexa-api-nskw.onrender.com'
@@ -16,7 +15,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url)
 
-    const redirected = pathPortalRedirect(url)
+    const redirected = legacyPortalRedirect(request, url)
     if (redirected) return redirected
 
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
@@ -26,26 +25,28 @@ export default {
   },
 }
 
-/** /t/{slug}[/dashboard][/…] → https://{slug}.orvexacloud.in[/dashboard][/…] */
-function pathPortalRedirect(url) {
+/** /t/{slug}[/dashboard] → production portals (skipped when marketing already proxies /{slug}). */
+function legacyPortalRedirect(request, url) {
   const host = url.hostname.toLowerCase()
   if (host === 'localhost' || host === '127.0.0.1') return null
+  // Marketing worker fetches /t/{slug} on behalf of https://orvexacloud.in/{slug} — do not bounce back.
+  if (request.headers.get('x-orvexa-storefront-proxy') === '1') return null
+  const fwd = (request.headers.get('x-forwarded-host') || '').toLowerCase()
+  if (fwd === ROOT_DOMAIN || fwd === `www.${ROOT_DOMAIN}`) return null
 
   const parts = url.pathname.toLowerCase().split('/').filter(Boolean)
   if (parts[0] !== 't' || !parts[1] || !SLUG_RE.test(parts[1])) return null
 
   const slug = parts[1]
-  // Already on the tenant subdomain — do not loop.
-  if (host === `${slug}.${ROOT_DOMAIN}`) return null
-
   const onDashboard = parts[2] === 'dashboard'
+  const dest = onDashboard
+    ? `https://app.${ROOT_DOMAIN}/dashboard/${slug}`
+    : `https://${ROOT_DOMAIN}/${slug}`
   const rest = onDashboard ? parts.slice(3) : parts.slice(2)
-  let dest = `https://${slug}.${ROOT_DOMAIN}${onDashboard ? '/dashboard' : '/'}`
-  if (rest.length) {
-    dest = `${dest.replace(/\/+$/, '')}/${rest.join('/')}`
-  }
-  if (url.search) dest += url.search
-  return Response.redirect(dest, 302)
+  let target = dest
+  if (rest.length) target = `${dest}/${rest.join('/')}`
+  if (url.search) target += url.search
+  return Response.redirect(target, 302)
 }
 
 async function proxyApi(request, url, env) {
