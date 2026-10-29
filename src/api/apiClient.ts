@@ -9,11 +9,16 @@
 
 import { useCallback } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-import { API_ORIGIN } from '@/api/base'
-
-const API_BASE = API_ORIGIN
+import { API_BASE, API_ORIGIN } from '@/api/base'
 
 type FetchOptions = Omit<RequestInit, 'body'> & { body?: unknown }
+
+/** Accept either `/api/...` absolute API paths or paths relative to API_BASE (e.g. `/auth/refresh`). */
+function resolveUrl(path: string): string {
+  if (path.startsWith('http')) return path
+  if (path.startsWith('/api/') || path === '/api') return `${API_ORIGIN}${path}`
+  return `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`
+}
 
 function buildRequest(
   method: string,
@@ -49,7 +54,7 @@ export function useApiClient() {
 
   const request = useCallback(
     async <T = unknown>(method: string, path: string, options: FetchOptions = {}): Promise<T> => {
-      const url = path.startsWith('http') ? path : `${API_BASE}${path}`
+      const url = resolveUrl(path)
       const init = buildRequest(method, accessToken, options)
       const res = await fetch(url, init)
 
@@ -87,7 +92,7 @@ export async function apiRequest<T = unknown>(
   accessToken: string | null,
   body?: unknown
 ): Promise<T> {
-  const url = path.startsWith('http') ? path : `${API_BASE}${path}`
+  const url = resolveUrl(path)
   const init = buildRequest(method, accessToken, body !== undefined ? { body } : {})
   const res = await fetch(url, init)
 

@@ -18,7 +18,7 @@ import {
   type ReactNode,
 } from 'react'
 import { authService } from '@/api/auth'
-import { API_ORIGIN } from '@/api/base'
+import { API_BASE } from '@/api/base'
 
 // ─────────────────────────────────────────────────────────
 // Types
@@ -65,7 +65,6 @@ export interface LoginCredentials {
 // ─────────────────────────────────────────────────────────
 
 const STORAGE_KEY_REFRESH = 'orvexa_refresh_token'
-const API_BASE = API_ORIGIN
 
 // Access token expires in 15 min — auto-refresh 60s before expiry
 const REFRESH_BEFORE_MS = 60 * 1000
