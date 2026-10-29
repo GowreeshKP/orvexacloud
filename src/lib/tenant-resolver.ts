@@ -125,5 +125,16 @@ export function isReservedSubdomain(slug: string): boolean {
 export function locationForLayer(layer: ApplicationLayer, slug?: string): string {
   if (layer === 'admin') return '/admin'
   if (!slug) return '/admin'
+  // Prefer absolute subdomain URLs in production so store + tenant admin stay on {slug}.orvexacloud.in
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname.toLowerCase()
+    const local = /^(localhost|127\.0\.0\.1)$|^192\.168\.|^10\./.test(host)
+    if (!local) {
+      const subHost = `${slug.trim().toLowerCase()}.${PLATFORM_ROOT_DOMAIN}`
+      if (layer === 'dashboard') return `https://${subHost}/dashboard`
+      if (layer === 'storefront') return `https://${subHost}/`
+      if (layer === 'owner-login') return `https://${subHost}/dashboard`
+    }
+  }
   return tenantPortalPath(slug, layer === 'dashboard' ? 'dashboard' : 'storefront')
 }

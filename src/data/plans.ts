@@ -28,7 +28,7 @@ export function formatPlanPrice(pricePerMonth: number): string {
   return pricePerMonth > 0 ? `₹${pricePerMonth.toLocaleString('en-IN')}/mo` : 'Custom'
 }
 
-/** Public store address on the platform (ClinicOS-style path portal). */
+/** Public store address on the platform (approved tenant subdomain). */
 export function storeAddress(slug: string): string {
-  return `${PLATFORM_ROOT_DOMAIN}/t/${slug}`
+  return `${slug.trim().toLowerCase()}.${PLATFORM_ROOT_DOMAIN}`
 }

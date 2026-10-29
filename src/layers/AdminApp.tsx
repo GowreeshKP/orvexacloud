@@ -10,6 +10,7 @@ import ProvisionStoreModal from '@/components/platform/ProvisionStoreModal'
 import PlatformAuditLogs from '@/components/platform/PlatformAuditLogs'
 import type { TenantConfig } from '@/types/tenant'
 import { PLAN_CATALOG, PLAN_IDS, formatPlanPrice, normalizePlanId, storeAddress } from '@/data/plans'
+import { sellerPortalUrl, storefrontUrl } from '@/lib/store-urls'
 
 const ADMIN_NAV = [
   { id: 'dashboard', label: 'Platform Overview', icon: 'overview' },
@@ -505,7 +506,7 @@ function PlatformOverview({
                   </div>
                   <div className="row">
                     <span className="money">{formatPlanPrice(t.subscription.pricePerMonth)}</span>
-                    <a href={`/t/${t.slug}`} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm">
+                    <a href={storefrontUrl(t.slug)} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm">
                       Open
                     </a>
                   </div>
@@ -1058,11 +1059,11 @@ function TenantDirectory({ onOpenProvisionModal }: { onOpenProvisionModal?: () =
       ...prev,
       [slug]: { storefront: 'checking', products: 'checking' },
     }))
-    const storefrontUrl = `/t/${encodeURIComponent(slug)}`
+    const frontUrl = storefrontUrl(slug)
     const productsUrl = `${API_BASE}/stores/${encodeURIComponent(slug)}/products`
     try {
       const [storeRes, prodRes] = await Promise.all([
-        fetch(storefrontUrl, { method: 'GET', cache: 'no-store' }),
+        fetch(frontUrl, { method: 'GET', cache: 'no-store', redirect: 'follow' }),
         fetch(productsUrl, { method: 'GET', cache: 'no-store' }),
       ])
       let productCount: number | undefined
@@ -1233,7 +1234,7 @@ ENABLE_CUSTOMER_REVIEWS=${t.theme.enableReviews}`
                   <td className="px-4 py-3.5">
                     <div className="flex flex-col gap-1 items-start">
                       <a
-                        href={`/t/${tenant.slug}`}
+                        href={storefrontUrl(tenant.slug)}
                         target="_blank"
                         rel="noreferrer"
                         className="text-[11px] font-semibold text-indigo-700 hover:underline"
@@ -1241,7 +1242,7 @@ ENABLE_CUSTOMER_REVIEWS=${t.theme.enableReviews}`
                         Storefront ↗
                       </a>
                       <a
-                        href={`/t/${tenant.slug}/dashboard`}
+                        href={sellerPortalUrl(tenant.slug)}
                         target="_blank"
                         rel="noreferrer"
                         className="text-[11px] font-semibold text-slate-700 hover:underline"
@@ -1483,7 +1484,7 @@ function DomainManager() {
               <tr key={tenant.id} className="hover:bg-slate-50/60">
                 <td className="px-5 py-3.5 font-bold text-slate-900">{tenant.brandName}</td>
                 <td className="px-4 py-3.5">
-                  <a href={`/t/${tenant.slug}`} target="_blank" rel="noreferrer" className="text-indigo-600 font-mono hover:underline">
+                  <a href={storefrontUrl(tenant.slug)} target="_blank" rel="noreferrer" className="text-indigo-600 font-mono hover:underline">
                     {storeAddress(tenant.slug)}
                   </a>
                 </td>

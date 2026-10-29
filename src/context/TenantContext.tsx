@@ -9,6 +9,7 @@ import {
   locationForLayer,
   type ApplicationLayer,
 } from '@/lib/tenant-resolver'
+import { pathPortalRedirectUrl } from '@/lib/store-urls'
 import { mockStore } from '@/api/mock-store'
 import { DEMO_MODE } from '@/api/auth'
 import { API_BASE } from '@/api/base'
@@ -138,9 +139,21 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    // Path portals (/t/slug) redirect to the approved subdomain ({slug}.orvexacloud.in).
+    const redirectTo = pathPortalRedirectUrl()
+    if (redirectTo && redirectTo !== window.location.href) {
+      window.location.replace(redirectTo)
+      return
+    }
+
     void loadTenant()
 
     const handleLocationChange = () => {
+      const next = pathPortalRedirectUrl()
+      if (next && next !== window.location.href) {
+        window.location.replace(next)
+        return
+      }
       void loadTenant()
     }
     const handleStoreUpdated = () => {

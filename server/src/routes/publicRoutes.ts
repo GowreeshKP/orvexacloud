@@ -124,6 +124,8 @@ function publicTenant(t: ITenant) {
     createdAt: t.createdAt,
     portalPath: `/t/${t.slug}`,
     dashboardPath: `/t/${t.slug}/dashboard`,
+    storefrontUrl: `https://${t.slug}.${PLATFORM_ROOT_DOMAIN}/`,
+    dashboardUrl: `https://${t.slug}.${PLATFORM_ROOT_DOMAIN}/dashboard`,
   }
 }
 

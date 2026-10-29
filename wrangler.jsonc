@@ -6,8 +6,15 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api", "/api/*"]
+    // Worker must run first so /t/{slug} can 302 to https://{slug}.orvexacloud.in
+    "run_worker_first": ["/t", "/t/*", "/api", "/api/*"]
   },
+  // Tenant stores: {slug}.orvexacloud.in → this Worker (apex marketing stays on its own Worker).
+  // Requires DNS: CNAME * → the same target as app.orvexacloud.in (Cloudflare proxy on).
+  "routes": [
+    { "pattern": "app.orvexacloud.in/*", "zone_name": "orvexacloud.in" },
+    { "pattern": "*.orvexacloud.in/*", "zone_name": "orvexacloud.in" }
+  ],
   "vars": {
     "RENDER_API_ORIGIN": "https://orvexa-api-nskw.onrender.com"
   }

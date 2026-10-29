@@ -153,7 +153,7 @@ router.get('/tenants/:slug/env', async (req: Request, res: Response) => {
       res.json({
         slug,
         folderPath: `src/tenants/${slug}`,
-        envContent: `# Tenant environment for ${slug}\nTENANT_SLUG=${slug}\nMONGODB_DB_NAME=orvexa_tenant_${slug}\nMONGODB_URI=mongodb://localhost:27017/orvexa_tenant_${slug}\nSTORE_PORTAL=${PLATFORM_ROOT_DOMAIN}/t/${slug}\nSELLER_PORTAL=${PLATFORM_ROOT_DOMAIN}/t/${slug}/dashboard`,
+        envContent: `# Tenant environment for ${slug}\nTENANT_SLUG=${slug}\nMONGODB_DB_NAME=orvexa_tenant_${slug}\nMONGODB_URI=mongodb://localhost:27017/orvexa_tenant_${slug}\nSTORE_PORTAL=${slug}.${PLATFORM_ROOT_DOMAIN}\nSELLER_PORTAL=${slug}.${PLATFORM_ROOT_DOMAIN}/dashboard`,
         dbName: `orvexa_tenant_${slug}`,
       })
     }
@@ -452,11 +452,12 @@ router.put('/applications/:id/status', requireAdmin, async (req: Request, res: R
         7 * 24 * 60 * 60 * 1000
       )
       const ownerKey = withLoginKey?.ownerLoginKey || newTenant.ownerLoginKey
+      const slug = updated.requestedSubdomain
+      const tenantOrigin = `https://${slug}.${PLATFORM_ROOT_DOMAIN}`
       accessLinks = {
-        storefrontUrl: `${appBase.replace(/\/+$/, '')}/t/${updated.requestedSubdomain}`,
-        ownerLoginUrl: ownerKey
-          ? ownerLoginUrl(ownerKey, appBase)
-          : `${appBase.replace(/\/+$/, '')}/t/${updated.requestedSubdomain}/dashboard`,
+        storefrontUrl: `${tenantOrigin}/`,
+        // Tenant admin dashboard on the approved subdomain; private owner key still works as a direct sign-in.
+        ownerLoginUrl: ownerKey ? ownerLoginUrl(ownerKey, appBase) : `${tenantOrigin}/dashboard`,
         passwordLink,
       }
     }
@@ -555,7 +556,10 @@ async function sendApplicationDecision(
       'Your storefront (customer shopping site):',
       accessLinks.storefrontUrl,
       '',
-      'Your store owner admin sign-in (keep this private):',
+      'Your tenant admin dashboard (on your store subdomain):',
+      `https://${app.requestedSubdomain}.${PLATFORM_ROOT_DOMAIN}/dashboard`,
+      '',
+      'Private owner sign-in link (keep this private):',
       accessLinks.ownerLoginUrl,
     ]
     if (accessLinks.passwordLink) {
@@ -737,11 +741,11 @@ router.get('/tenants/:slug/credentials', async (req: Request, res: Response) => 
       hasPassword: !!tenant.passwordHash,
       status: tenant.status,
       staffCount: tenant.staffMembers?.length || 0,
-      subdomain: `${PLATFORM_ROOT_DOMAIN}/t/${tenant.slug}`,
+      subdomain: `${tenant.slug}.${PLATFORM_ROOT_DOMAIN}`,
       customDomain: tenant.customDomain || null,
       customDomainVerified: Boolean(tenant.customDomainVerified),
-      dashboardUrl: `/t/${tenant.slug}/dashboard`,
-      storefrontUrl: `/t/${tenant.slug}`,
+      dashboardUrl: `https://${tenant.slug}.${PLATFORM_ROOT_DOMAIN}/dashboard`,
+      storefrontUrl: `https://${tenant.slug}.${PLATFORM_ROOT_DOMAIN}/`,
       ownerLoginRevoked: Boolean(tenant.ownerLoginRevoked),
       ownerLoginUrl: tenant.ownerLoginKey ? ownerLoginUrl(tenant.ownerLoginKey, publicAppUrl(origin)) : null,
     })
