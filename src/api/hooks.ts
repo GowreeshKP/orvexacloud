@@ -288,6 +288,9 @@ export function useAdminTenants(): {
 
   const syncFromBackend = useCallback(async () => {
     try {
+      // Never hit protected admin APIs without a JWT — the login screen mounts this hook too.
+      const token = await authService.getValidAdminToken()
+      if (!token) return
       const res = await adminApiFetch('/admin/tenants')
       if (!res.ok) return
       const remote = await res.json()
@@ -302,17 +305,18 @@ export function useAdminTenants(): {
 
   useEffect(() => {
     refresh()
-    syncFromBackend()
+    void syncFromBackend()
     const onProvisioned = () => {
       refresh()
       void syncFromBackend()
     }
+    const onFocus = () => { void syncFromBackend() }
     window.addEventListener('orvexa:tenant-provisioned', onProvisioned)
-    window.addEventListener('focus', syncFromBackend)
-    const poll = window.setInterval(syncFromBackend, 30_000)
+    window.addEventListener('focus', onFocus)
+    const poll = window.setInterval(onFocus, 30_000)
     return () => {
       window.removeEventListener('orvexa:tenant-provisioned', onProvisioned)
-      window.removeEventListener('focus', syncFromBackend)
+      window.removeEventListener('focus', onFocus)
       window.clearInterval(poll)
     }
   }, [refresh, syncFromBackend])
@@ -442,9 +446,15 @@ function fromBackendApplication(a: BackendApplication): TenantApplication {
 
 async function adminApiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const token = await authService.getValidAdminToken()
+  if (!token) {
+    return new Response(JSON.stringify({ error: 'Not authenticated.' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
   return fetch(`${ADMIN_API_BASE}${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...init.headers },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...init.headers },
   })
 }
 

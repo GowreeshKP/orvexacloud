@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import { useAdminTenants, useAdminApplications, usePlatformStats } from '@/api/hooks'
 import { authService, type AdminSession } from '@/api/auth'
 import { auditLogger } from '@/api/audit-logger'
@@ -119,7 +119,6 @@ export default function AdminApp() {
   const [isProvisionModalOpen, setIsProvisionModalOpen] = useState(false)
   const [adminToast, setAdminToast] = useState<string | null>(null)
   const [navOpen, setNavOpen] = useState(false)
-  const { provisionTenant, refresh: refreshTenants } = useAdminTenants()
 
   // URL Reset Token Detection for Store Owners
   const [resetToken, setResetToken] = useState<string | null>(null)
@@ -183,6 +182,7 @@ export default function AdminApp() {
     />
   )
 
+  // Do not mount admin data hooks on the login screen — they would poll /admin/* without a JWT.
   if (!session || session.role !== 'super_admin') {
     return (
       <>
@@ -191,6 +191,50 @@ export default function AdminApp() {
       </>
     )
   }
+
+  return (
+    <AdminPortal
+      session={session}
+      activeView={activeView}
+      setActiveView={setActiveView}
+      isProvisionModalOpen={isProvisionModalOpen}
+      setIsProvisionModalOpen={setIsProvisionModalOpen}
+      adminToast={adminToast}
+      setAdminToast={setAdminToast}
+      navOpen={navOpen}
+      setNavOpen={setNavOpen}
+      handleLogout={handleLogout}
+      resetPasswordModal={resetPasswordModal}
+    />
+  )
+}
+
+function AdminPortal({
+  session,
+  activeView,
+  setActiveView,
+  isProvisionModalOpen,
+  setIsProvisionModalOpen,
+  adminToast,
+  setAdminToast,
+  navOpen,
+  setNavOpen,
+  handleLogout,
+  resetPasswordModal,
+}: {
+  session: AdminSession
+  activeView: AdminView
+  setActiveView: (v: AdminView) => void
+  isProvisionModalOpen: boolean
+  setIsProvisionModalOpen: (v: boolean) => void
+  adminToast: string | null
+  setAdminToast: (v: string | null) => void
+  navOpen: boolean
+  setNavOpen: (v: boolean) => void
+  handleLogout: () => void
+  resetPasswordModal: ReactNode
+}) {
+  const { provisionTenant, refresh: refreshTenants } = useAdminTenants()
 
   return (
     <div className="shell">
@@ -229,7 +273,7 @@ export default function AdminApp() {
             <span className="avatar sm">{session.name?.charAt(0).toUpperCase() || 'A'}</span>
             <div className="grow min-w-0">
               <p className="nm truncate">{session.name || 'Super Admin'}</p>
-              <p className="rl truncate">master@orvexatech.com</p>
+              <p className="rl truncate">{session.email}</p>
             </div>
             <button type="button" className="btn btn-ghost btn-icon" onClick={handleLogout} title="Sign out" style={{ color: 'var(--on-ink-2)' }}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -292,17 +336,7 @@ export default function AdminApp() {
         }}
       />
 
-      {/* Password Reset Modal in Console */}
-      <ResetPasswordModal
-        isOpen={isResetOpen}
-        resetToken={resetToken || undefined}
-        tenantSlug={resetSlug || undefined}
-        onClose={() => {
-          setIsResetOpen(false)
-          setResetToken(null)
-          setResetSlug(null)
-        }}
-      />
+      {resetPasswordModal}
 
       {/* Global Admin Toast */}
       {adminToast && (
