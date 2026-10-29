@@ -23,9 +23,13 @@ export async function issueOwnerPasswordLink(
   return { rawToken, url, expiresAt }
 }
 
+const CANONICAL_APP_URL = 'https://app.orvexacloud.in'
+
 /** Base URL for links in emails. Production uses PUBLIC_APP_URL only; request headers are attacker-controlled. */
 export function publicAppUrl(fallbackOrigin?: string): string {
-  if (process.env.PUBLIC_APP_URL) return process.env.PUBLIC_APP_URL
-  if (process.env.NODE_ENV === 'production') throw new Error('PUBLIC_APP_URL must be set in production.')
-  return fallbackOrigin || 'http://localhost:8443'
+  const raw = process.env.PUBLIC_APP_URL || (process.env.NODE_ENV === 'production' ? '' : fallbackOrigin || 'http://localhost:8443')
+  if (!raw) throw new Error('PUBLIC_APP_URL must be set in production.')
+  // Stale Vercel production hostname still set on some API deploys — never email or show that host.
+  if (/orvexacloud\.vercel\.app/i.test(raw)) return CANONICAL_APP_URL
+  return raw.replace(/\/+$/, '')
 }

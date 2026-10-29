@@ -82,7 +82,7 @@ export default function CommonLoginModal({ isOpen, onClose, onSuccess }: Props) 
       setForgotLoading(true)
 
       try {
-        const res = await fetch(`${API_BASE}/api/auth/seller/forgot-password`, {
+        const res = await fetch(`${API_BASE}/auth/seller/forgot-password`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: forgotEmail.trim() }),

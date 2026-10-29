@@ -152,7 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!storedRefresh) return null
 
     try {
-      const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken: storedRefresh }),
@@ -271,14 +271,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let endpoint = ''
         let body: Record<string, string> = {}
 
+        // API_BASE already includes `/api` (e.g. `/api` or `https://host/api`).
         if (credentials.type === 'seller') {
-          endpoint = `/api/auth/seller/login`
+          endpoint = `/auth/seller/login`
           body = { loginId: credentials.loginId!, password: credentials.password }
         } else if (credentials.type === 'admin') {
-          endpoint = `/api/auth/admin/login`
+          endpoint = `/auth/admin/login`
           body = { loginId: credentials.loginId!, password: credentials.password }
         } else if (credentials.type === 'staff') {
-          endpoint = `/api/auth/staff/login`
+          endpoint = `/auth/staff/login`
           body = {
             tenantSlug: credentials.tenantSlug!,
             email: credentials.email!,
@@ -391,7 +392,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Fire-and-forget server-side revocation
     if (storedRefresh) {
       try {
-        await fetch(`${API_BASE}/api/auth/logout`, {
+        await fetch(`${API_BASE}/auth/logout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refreshToken: storedRefresh }),
