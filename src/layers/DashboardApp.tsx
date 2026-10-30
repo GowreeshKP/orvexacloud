@@ -1,4 +1,11 @@
 import { useState, useRef, useMemo, useEffect } from 'react'
+import {
+  LayoutDashboard, Package, Tag, Users, MessageSquare,
+  Store, Settings, Database, Shield, LogOut, Bell, Search,
+  ExternalLink, Menu, TrendingUp, TrendingDown, Minus,
+  CheckCircle2, Circle, ChevronRight, Plus, BarChart2,
+  ShoppingBag, AlertCircle, Clock,
+} from 'lucide-react'
 import { useTenant, useSwitchLayer } from '@/context/TenantContext'
 import { useDashboardStats, useDashboardProducts, useTenantOrders, useThemeCustomizer } from '@/api/hooks'
 import { authService, type SellerSession } from '@/api/auth'
@@ -31,19 +38,58 @@ import {
 import type { Product } from '@/types'
 import type { TenantConfig, ThemeConfig, TrackedOrder } from '@/types/tenant'
 
+// ─── Small UI helpers ───────────────────────────────────────────────
+/** Deterministic pastel/hue colour from a string (for avatars, etc.) */
+function hashColor(s: string): string {
+  let h = 0
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
+  const hue = h % 360
+  return `hsl(${hue},55%,42%)`
+}
+
+/** Tiny inline SVG sparkline for KPI cards */
+function Spark({ data, color = 'currentColor', width = 72, height = 32 }: { data: number[]; color?: string; width?: number; height?: number }) {
+  if (!data.length) return null
+  const max = Math.max(...data) || 1
+  const min = Math.min(...data)
+  const range = max - min || 1
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width
+    const y = height - ((v - min) / range) * (height - 4) - 2
+    return `${x},${y}`
+  })
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} fill="none">
+      <polyline points={pts.join(' ')} stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** Coloured status pill using portals-demo.css .pill classes */
+function StatusPill({ status }: { status: string }) {
+  const s = status.toLowerCase()
+  let cls = 'pill'
+  if (s === 'delivered') cls += ' leaf'
+  else if (s === 'processing') cls += ' gold'
+  else if (s === 'in transit' || s === 'out for delivery') cls += ' indigo'
+  else cls += ' outline'
+  return <span className={cls}>{status}</span>
+}
+
 // Store owner portal nav — matches orvexa-portals-demo layout
 const PRIMARY_NAV = [
-  { id: 'overview', label: 'Dashboard', icon: '📊' },
-  { id: 'orders', label: 'Orders', icon: '📦' },
-  { id: 'products', label: 'Products', icon: '🏷️' },
-  { id: 'inbox', label: 'Messages', icon: '✉️' },
+  { id: 'overview',   label: 'Dashboard', Icon: LayoutDashboard, badge: 0 },
+  { id: 'orders',     label: 'Orders',    Icon: Package,         badge: 0 },
+  { id: 'products',   label: 'Products',  Icon: Tag,             badge: 0 },
+  { id: 'customers',  label: 'Customers', Icon: Users,           badge: 0 },
+  { id: 'inbox',      label: 'Messages',  Icon: MessageSquare,   badge: 0 },
 ] as const
 
 const STORE_NAV = [
-  { id: 'storefront', label: 'Storefront', icon: '🎨' },
-  { id: 'settings', label: 'Settings', icon: '⚙️' },
-  { id: 'database', label: 'Database', icon: '🗄️' },
-  { id: 'audit', label: 'Audit log', icon: '🛡️' },
+  { id: 'storefront', label: 'Storefront', Icon: Store,     badge: 0 },
+  { id: 'settings',   label: 'Settings',   Icon: Settings,  badge: 0 },
+  { id: 'database',   label: 'Database',   Icon: Database,  badge: 0 },
+  { id: 'audit',      label: 'Audit log',  Icon: Shield,    badge: 0 },
 ] as const
 
 const NAV_ITEMS = [...PRIMARY_NAV, ...STORE_NAV] as const
@@ -128,7 +174,6 @@ export default function DashboardApp() {
   const switchLayer = useSwitchLayer()
   const [session, setSession] = useState<SellerSession | null>(() => authService.getSellerSession())
   const [activeView, setActiveView] = useState<DashboardView>('overview')
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
@@ -206,110 +251,135 @@ export default function DashboardApp() {
     )
   }
 
+  // Derive badge counts from live data for nav items
+  const { orders: allOrders } = useTenantOrders()
+  const { messages: _msgs } = useMemo(() => {
+    const tenantId = tenant?.id || ''
+    return { messages: storeInbox.getMessages(tenantId) }
+  }, [tenant?.id])
+  const unreadOrders = allOrders.filter((o) => o.status === 'Processing').length
+  const unreadMsgs = _msgs.filter((m) => !m.read).length
+
+  const navBadge = (id: string) => {
+    if (id === 'orders') return unreadOrders
+    if (id === 'inbox') return unreadMsgs
+    return 0
+  }
+
   return (
     <div className="shell">
       {toastMessage && (
         <div className="toasts">
           <div className="toast">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6 9 17l-5-5" /></svg>
+            <CheckCircle2 size={16} />
             {toastMessage}
           </div>
         </div>
       )}
 
       {navOpen && <div className="scrim" onClick={() => setNavOpen(false)} aria-hidden />}
-      <aside
-        className={`sidebar${navOpen ? ' open' : ''}${sidebarCollapsed ? ' is-collapsed' : ''}`}
-        style={sidebarCollapsed ? { width: 76 } : undefined}
-      >
+      <aside className={`sidebar${navOpen ? ' open' : ''}`}>
+        {/* Logo */}
         <div className="brand-row">
           <img src="/brand/logo-white.svg" alt="Orvexa" style={{ height: 28 }} />
-          {!sidebarCollapsed && <span className="portal-chip">Store Owner</span>}
+          <span className="portal-chip">Store Owner</span>
         </div>
 
+        {/* Store card */}
         <div className="store-card">
-          <span className="avatar sm" style={{ background: 'var(--indigo)', color: '#fff' }}>
+          <span className="avatar sm" style={{ background: hashColor(tenant?.brandName || 'S') }}>
             {(tenant?.brandName || 'S').slice(0, 2).toUpperCase()}
           </span>
-          {!sidebarCollapsed && (
-            <div className="grow min-w-0">
-              <p className="nm truncate">{tenant?.brandName || 'My Store'}</p>
-              <p className="sub truncate">{storeAddress(tenant?.slug || '')}</p>
-            </div>
-          )}
-          <button type="button" className="btn btn-ghost btn-icon" style={{ color: 'var(--on-ink-2)' }} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title={sidebarCollapsed ? 'Expand' : 'Collapse'} aria-label={sidebarCollapsed ? 'Expand menu' : 'Collapse menu'}>
-            {sidebarCollapsed ? '→' : '←'}
-          </button>
+          <div className="grow min-w-0">
+            <p className="nm truncate">{tenant?.brandName || 'My Store'}</p>
+            <p className="sub truncate">{storeAddress(tenant?.slug || '')}</p>
+          </div>
         </div>
 
-        <nav className="col" style={{ gap: 4 }} aria-label="Store owner sections">
+        {/* Primary nav */}
+        <nav className="col" style={{ gap: 2 }} aria-label="Store owner sections">
           {PRIMARY_NAV.map((item) => {
             const isActive = activeView === item.id
+            const badge = navBadge(item.id)
             return (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => {
-                  setActiveView(item.id)
-                  setNavOpen(false)
-                }}
+                onClick={() => { setActiveView(item.id as DashboardView); setNavOpen(false) }}
                 className={`nav-item${isActive ? ' active' : ''}`}
-                title={item.label}
                 aria-current={isActive ? 'page' : undefined}
               >
-                <span aria-hidden>{item.icon}</span>
-                {!sidebarCollapsed && <span className="grow">{item.label}</span>}
+                <item.Icon size={19} strokeWidth={2.1} />
+                <span className="grow">{item.label}</span>
+                {badge > 0 && <span className="nav-badge">{badge}</span>}
               </button>
             )
           })}
-          <p className="nav-group">{!sidebarCollapsed && 'Your store'}</p>
+
+          <p className="nav-group">Your store</p>
+
           {STORE_NAV.map((item) => {
             const isActive = activeView === item.id
             return (
               <button
                 key={item.id}
                 type="button"
-                onClick={() => {
-                  setActiveView(item.id)
-                  setNavOpen(false)
-                }}
+                onClick={() => { setActiveView(item.id as DashboardView); setNavOpen(false) }}
                 className={`nav-item${isActive ? ' active' : ''}`}
-                title={item.label}
                 aria-current={isActive ? 'page' : undefined}
               >
-                <span aria-hidden>{item.icon}</span>
-                {!sidebarCollapsed && <span className="grow">{item.label}</span>}
+                <item.Icon size={19} strokeWidth={2.1} />
+                <span className="grow">{item.label}</span>
               </button>
             )
           })}
         </nav>
 
+        {/* User card */}
         <div className="sidebar-foot">
           <div className="user-card">
-            <span className="avatar sm">{(session.name || 'O').slice(0, 2).toUpperCase()}</span>
-            {!sidebarCollapsed && (
-              <div className="grow min-w-0">
-                <p className="nm truncate">{session.name || tenant?.ownerName || 'Store owner'}</p>
-                <p className="rl">Store owner</p>
-              </div>
-            )}
-            <button type="button" onClick={handleLogout} className="btn btn-ghost btn-icon" style={{ color: 'var(--on-ink-2)' }} title="Sign out" aria-label="Sign out">
-              🚪
+            <span className="avatar sm" style={{ background: 'var(--gold)', color: 'var(--ink)' }}>
+              {(session.name || tenant?.ownerName || 'O').slice(0, 2).toUpperCase()}
+            </span>
+            <div className="grow min-w-0">
+              <p className="nm truncate">{session.name || tenant?.ownerName || 'Store owner'}</p>
+              <p className="rl">Store owner</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="btn btn-ghost btn-icon"
+              style={{ color: 'var(--on-ink-2)' }}
+              title="Sign out"
+              aria-label="Sign out"
+            >
+              <LogOut size={16} strokeWidth={2.1} />
             </button>
           </div>
         </div>
       </aside>
 
+      {/* Main column */}
       <div className="min-w-0 flex flex-col min-h-screen">
         <header className="topbar">
           <button type="button" className="menu-btn btn btn-outline btn-icon" onClick={() => setNavOpen(true)} aria-label="Open menu">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+            <Menu size={18} strokeWidth={2} />
           </button>
-          <span className="crumb">Store</span>
-          <span className="muted">/</span>
-          <strong key={activeView} style={{ fontFamily: 'var(--font-display)' }}>
-            {NAV_ITEMS.find((n) => n.id === activeView)?.label || 'Dashboard'}
-          </strong>
+
+          {/* Stacked crumb + title */}
+          <div className="col" style={{ gap: 1 }}>
+            <span className="crumb">STORE</span>
+            <strong style={{ fontFamily: 'var(--font-display)', fontSize: 15, letterSpacing: '-.01em' }}>
+              {NAV_ITEMS.find((n) => n.id === activeView)?.label || 'Dashboard'}
+            </strong>
+          </div>
+
+          {/* Search */}
+          <div className="search grow" style={{ maxWidth: 340 }}>
+            <Search size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', pointerEvents: 'none' }} />
+            <input className="input" placeholder="Search…" style={{ height: 40, background: '#fff', paddingLeft: 40 }} />
+          </div>
+
           <div className="right row" style={{ gap: 8 }}>
             <a
               href={tenantPortalPath(tenant?.slug || '')}
@@ -317,25 +387,31 @@ export default function DashboardApp() {
               rel="noopener noreferrer"
               className="btn btn-outline btn-sm"
             >
+              <ExternalLink size={14} strokeWidth={2} />
               View store
             </a>
-            <button type="button" className="btn btn-gold btn-sm" onClick={() => switchLayer('storefront', tenant?.slug || 'lunar')}>
-              Open storefront
-            </button>
+            {/* Notifications bell */}
+            <div style={{ position: 'relative' }}>
+              <button type="button" className="btn btn-ghost btn-icon">
+                <Bell size={18} strokeWidth={2.1} />
+              </button>
+              <span style={{ position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: '50%', background: 'var(--gold)', border: '1.5px solid var(--paper)' }} />
+            </div>
           </div>
         </header>
 
         <main className="main">
           <div className="page">
             <PortalView viewKey={activeView}>
-              {activeView === 'overview' && <DashboardOverview onNavigate={(view) => setActiveView(view)} />}
-              {activeView === 'products' && <ProductManager onToast={showToast} />}
-              {activeView === 'orders' && <OrderManager onToast={showToast} />}
-              {activeView === 'inbox' && <InboxManager onToast={showToast} />}
+              {activeView === 'overview'   && <DashboardOverview onNavigate={(view) => setActiveView(view)} />}
+              {activeView === 'products'   && <ProductManager onToast={showToast} />}
+              {activeView === 'orders'     && <OrderManager onToast={showToast} />}
+              {activeView === 'customers'  && <CustomersView onToast={showToast} />}
+              {activeView === 'inbox'      && <InboxManager onToast={showToast} />}
               {activeView === 'storefront' && <StorefrontCustomizer onToast={showToast} />}
-              {activeView === 'database' && <DatabaseManager onToast={showToast} />}
-              {activeView === 'audit' && tenant && <StoreAuditLogs tenant={tenant} onToast={showToast} />}
-              {activeView === 'settings' && <StoreSettings onNavigate={(view) => setActiveView(view)} onToast={showToast} />}
+              {activeView === 'database'   && <DatabaseManager onToast={showToast} />}
+              {activeView === 'audit'      && tenant && <StoreAuditLogs tenant={tenant} onToast={showToast} />}
+              {activeView === 'settings'   && <StoreSettings onNavigate={(view) => setActiveView(view)} onToast={showToast} />}
             </PortalView>
           </div>
         </main>
@@ -345,240 +421,285 @@ export default function DashboardApp() {
 }
 
 // =====================================================
-// 1. Dashboard Overview
+// 1. Dashboard Overview — portals-demo design system
 // =====================================================
 function DashboardOverview({ onNavigate }: { onNavigate: (view: DashboardView) => void }) {
   const { stats, loading } = useDashboardStats()
   const { tenant } = useTenant()
-  const [traffic, setTraffic] = useState<{ pageViews: number; visitors: number; signIns: number; orders: number } | null>(null)
-
-  useEffect(() => {
-    if (!tenant?.slug) return
-    fetchStoreAnalytics(tenant.slug, 7).then((data) => {
-      if (data) setTraffic({ pageViews: data.pageViews, visitors: data.visitors, signIns: data.signIns, orders: data.orders })
-    }).catch(() => undefined)
-  }, [tenant?.slug])
+  const [chartRange, setChartRange] = useState<'7d' | '30d'>('7d')
 
   if (loading || !stats) {
     return (
-      <div className="space-y-6">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-32 rounded-2xl shimmer-bg" />
+      <div className="stack">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="card" style={{ height: 120 }} />
         ))}
       </div>
     )
   }
 
   const isTemplate = isTemplateStore(tenant)
+  const now = new Date()
+  const hour = now.getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const firstName = (tenant?.ownerName || 'there').split(' ')[0]
+  const dateStr = now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
   const dailyRevenue = stats.revenueByDay.map((d) => d.amount)
   const dailyOrders = stats.revenueByDay.map((d) => d.orders || 0)
-  const dailyAov = stats.revenueByDay.map((d) => (d.orders ? d.amount / d.orders : 0))
-  const kpis = isTemplate
-    ? [
-        { label: 'Total Revenue', value: `₹${stats.revenue.toLocaleString()}`, change: '', icon: '💰', trend: 'neutral', glowClass: 'kpi-card-glow-green', sparkData: dailyRevenue },
-        { label: 'Total Orders', value: stats.orderCount.toString(), change: '', icon: '📦', trend: 'neutral', glowClass: 'kpi-card-glow-blue', sparkData: dailyOrders },
-        { label: 'Avg Order Value', value: `₹${Math.round(stats.averageOrderValue).toLocaleString()}`, change: '', icon: '📈', trend: 'neutral', glowClass: 'kpi-card-glow-violet', sparkData: dailyAov },
-        { label: 'Total Customers', value: stats.customerCount.toString(), change: '', icon: '👥', trend: 'neutral', glowClass: 'kpi-card-glow-amber', sparkData: dailyOrders },
-      ]
-    : [
-        { label: 'Total Revenue', value: `₹${stats.revenue.toLocaleString()}`, change: `+${stats.revenueChange}%`, icon: '💰', trend: 'up', glowClass: 'kpi-card-glow-green', sparkData: [40,55,42,70,58,80,95] },
-        { label: 'Total Orders', value: stats.orderCount.toString(), change: `+${stats.orderCountChange}%`, icon: '📦', trend: 'up', glowClass: 'kpi-card-glow-blue', sparkData: [20,35,28,45,38,55,62] },
-        { label: 'Avg Order Value', value: `₹${Math.round(stats.averageOrderValue).toLocaleString()}`, change: 'Healthy', icon: '📈', trend: 'neutral', glowClass: 'kpi-card-glow-violet', sparkData: [65,70,68,72,70,75,78] },
-        { label: 'Total Customers', value: (stats.customerCount || 28).toString(), change: '+4 this week', icon: '👥', trend: 'up', glowClass: 'kpi-card-glow-amber', sparkData: [10,14,12,18,15,22,28] },
-      ]
+  const dailyAov = stats.revenueByDay.map((d) => (d.orders ? Math.round(d.amount / d.orders) : 0))
+
+  // Bar chart data
+  const chartData = stats.revenueByDay.slice(chartRange === '7d' ? -7 : -30)
+  const maxBar = Math.max(...chartData.map((d) => d.amount)) || 1
+  const ySteps = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(maxBar * f))
+
+  // Setup checklist (static demo items)
+  const checklist = [
+    { label: 'Add your first product', done: stats.orderCount > 0 || !isTemplate },
+    { label: 'Customise your storefront', done: !isTemplate },
+    { label: 'Set up your custom domain', done: !!tenant?.customDomain },
+    { label: 'Receive your first order', done: stats.orderCount > 0 },
+  ]
+  const doneCount = checklist.filter((c) => c.done).length
+  const pct = Math.round((doneCount / checklist.length) * 100)
+
+  // Today's to-do attention items
+  const attnItems = [
+    stats.orderCount > 0
+      ? { icon: <Package size={18} strokeWidth={2} />, color: 'var(--gold-soft)', iconColor: 'var(--gold-ink)', text: `${stats.orderCount} order${stats.orderCount !== 1 ? 's' : ''} received`, sub: 'Review and update fulfilment' }
+      : { icon: <ShoppingBag size={18} strokeWidth={2} />, color: 'var(--indigo-soft)', iconColor: 'var(--indigo)', text: 'No orders yet', sub: 'Share your store link to start selling' },
+    { icon: <BarChart2 size={18} strokeWidth={2} />, color: 'var(--leaf-soft)', iconColor: 'var(--leaf)', text: `₹${stats.revenue.toLocaleString()} total revenue`, sub: 'Growing steadily this month' },
+    { icon: <Users size={18} strokeWidth={2} />, color: 'var(--indigo-soft)', iconColor: 'var(--indigo)', text: `${stats.customerCount || 0} customers`, sub: 'View profiles and order history' },
+  ]
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Welcome Banner */}
-      <div className="page-head" style={{ marginBottom: 8 }}>
+    <div className="stack">
+      {/* ── Page head ── */}
+      <div className="page-head">
         <div>
-          <p className="eyebrow">Store owner</p>
-          <h1>Welcome back, {tenant?.ownerName || 'there'}</h1>
-          <p className="sub">
-            Orders, products and your storefront for <strong>{storeAddress(tenant?.slug || '')}</strong>
-            {tenant?.customDomain ? ` · ${tenant.customDomain}` : ''}
-          </p>
+          <h1>{greeting}, {firstName}</h1>
+          <p className="sub">{dateStr}</p>
         </div>
-        <div className="row wrap" style={{ gap: 8 }}>
+        <div className="row" style={{ gap: 8 }}>
           <button type="button" className="btn btn-primary" onClick={() => onNavigate('products')}>
-            + Add product
-          </button>
-          <button type="button" className="btn btn-gold" onClick={() => onNavigate('storefront')}>
-            Edit storefront
+            <Plus size={15} strokeWidth={2.5} /> Add product
           </button>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {kpis.map((kpi) => (
-          <div key={kpi.label} className={`bg-white rounded-2xl p-5 border border-black/6 shadow-sm ${kpi.glowClass} card-hover`}>
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xl">{kpi.icon}</span>
-              {kpi.change && (
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                  kpi.trend === 'up' ? 'text-emerald-700 bg-emerald-50 border border-emerald-100' :
-                  kpi.trend === 'down' ? 'text-red-600 bg-red-50 border border-red-100' :
-                  'text-blue-700 bg-blue-50 border border-blue-100'
-                }`}>
-                  {kpi.trend === 'up' ? '↑' : kpi.trend === 'down' ? '↓' : '→'} {kpi.change}
-                </span>
-              )}
+      {/* ── Setup checklist ── */}
+      {pct < 100 && (
+        <div className="card card-pad">
+          <div className="row between" style={{ marginBottom: 12 }}>
+            <div>
+              <p className="card-title">Set up your store</p>
+              <p className="card-sub">{doneCount} of {checklist.length} complete</p>
             </div>
-            {/* Sparkline mini chart */}
-            <div className="flex items-end gap-0.5 h-8 mb-3">
-              {kpi.sparkData.map((val, idx) => {
-                const max = Math.max(...kpi.sparkData)
-                return (
-                  <div
-                    key={idx}
-                    className="flex-1 rounded-sm sparkline-bar"
-                    style={{ height: `${max > 0 ? Math.max((val / max) * 100, 6) : 6}%`, background: val > 0 && idx === kpi.sparkData.length - 1 ? '#6366f1' : 'rgba(99,102,241,0.2)' }}
-                  />
-                )
-              })}
-            </div>
-            <p className="text-2xl font-bold text-black animate-count-up">{kpi.value}</p>
-            <p className="text-[10px] text-black/40 font-bold tracking-widest uppercase mt-0.5">{kpi.label}</p>
+            <span className="eyebrow">{pct}%</span>
           </div>
-        ))}
-      </div>
-
-      {traffic && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {[
-            { label: 'Storefront visits (7d)', value: traffic.visitors },
-            { label: 'Page views (7d)', value: traffic.pageViews },
-            { label: 'Shopper sign-ins (7d)', value: traffic.signIns },
-            { label: 'Orders from storefront (7d)', value: traffic.orders },
-          ].map((row) => (
-            <div key={row.label} className="bg-white rounded-2xl p-4 border border-black/6 shadow-sm">
-              <p className="text-2xl font-bold text-black">{row.value.toLocaleString()}</p>
-              <p className="text-[10px] text-black/40 font-bold tracking-widest uppercase mt-1">{row.label}</p>
-            </div>
-          ))}
+          <div className="bar gold" style={{ marginBottom: 16 }}>
+            <i style={{ width: `${pct}%` }} />
+          </div>
+          <div className="col" style={{ gap: 8 }}>
+            {checklist.map((item) => (
+              <div key={item.label} className="row" style={{ gap: 10 }}>
+                {item.done
+                  ? <CheckCircle2 size={17} strokeWidth={2} style={{ color: 'var(--leaf)', flexShrink: 0 }} />
+                  : <Circle size={17} strokeWidth={2} style={{ color: 'var(--field-edge)', flexShrink: 0 }} />}
+                <span style={{ fontSize: 13.5, fontWeight: item.done ? 400 : 600, color: item.done ? 'var(--muted)' : 'var(--ink)', textDecoration: item.done ? 'line-through' : 'none' }}>{item.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Revenue Chart - Full Width SVG Area Chart */}
-      <div className="bg-white rounded-2xl p-6 border border-black/6 shadow-sm">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <p className="text-[10px] font-bold tracking-widest uppercase text-black/40">Revenue Trend</p>
-            <h3 className="text-sm font-bold text-black mt-0.5">Last 7 Days Performance</h3>
+      {/* ── 4 KPI cards ── */}
+      <div className="grid cols-4">
+        {/* Revenue — gold */}
+        <div className="card kpi gold">
+          <p className="kpi-label"><BarChart2 size={13} /> Revenue</p>
+          <p className="kpi-value money">₹{stats.revenue.toLocaleString()}</p>
+          <div className="kpi-foot">
+            {!isTemplate && <span className="delta"><TrendingUp size={11} />+{stats.revenueChange}%</span>}
+            <span>vs last period</span>
           </div>
-          <div className="flex items-center gap-3">
-            {!isTemplate && (
-              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full">
-                ↑ +18.4% vs last period
-              </span>
-            )}
-          </div>
+          <div className="spark"><Spark data={dailyRevenue} color="var(--ink)" /></div>
         </div>
-        {/* SVG Bar Chart with gradient */}
-        <div className="flex items-end gap-3 h-52 pt-6">
-          {stats.revenueByDay.map((day, idx) => {
-            const maxAmount = Math.max(...stats.revenueByDay.map((d) => d.amount)) || 1
-            const height = Math.max(isTemplate ? 2 : 8, (day.amount / maxAmount) * 100)
-            const isLast = idx === stats.revenueByDay.length - 1
-            return (
-              <div key={day.date} className="flex-1 flex flex-col items-center gap-2 group cursor-default">
-                <span className="text-[10px] font-bold text-black/0 group-hover:text-black/70 transition-colors">
-                  ₹{(day.amount / 1000).toFixed(1)}k
-                </span>
-                <div className="w-full flex flex-col justify-end flex-1 relative">
-                  <div
-                    className="w-full rounded-t-lg transition-all duration-500 relative overflow-hidden"
-                    style={{ height: `${height}%`, background: isLast ? 'linear-gradient(to top, #6366f1, #8b5cf6)' : 'linear-gradient(to top, rgba(99,102,241,0.5), rgba(139,92,246,0.3))' }}
-                  >
-                    {/* Shimmer on hover */}
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-40 transition-opacity" style={{ background: 'linear-gradient(to top, rgba(255,255,255,0.3), transparent)' }} />
-                  </div>
-                </div>
-                <span className="text-[10px] text-black/50 font-medium">{day.date}</span>
-              </div>
-            )
-          })}
+
+        {/* Orders */}
+        <div className="card kpi">
+          <p className="kpi-label"><Package size={13} /> Orders</p>
+          <p className="kpi-value">{stats.orderCount}</p>
+          <div className="kpi-foot">
+            {!isTemplate && <span className="delta"><TrendingUp size={11} />+{stats.orderCountChange}%</span>}
+            <span>total orders</span>
+          </div>
+          <div className="spark"><Spark data={dailyOrders} color="var(--indigo)" /></div>
+        </div>
+
+        {/* AOV */}
+        <div className="card kpi">
+          <p className="kpi-label"><TrendingUp size={13} /> Avg order value</p>
+          <p className="kpi-value money">₹{Math.round(stats.averageOrderValue).toLocaleString()}</p>
+          <div className="kpi-foot">
+            <span className="delta"><Minus size={11} />Stable</span>
+            <span>per order</span>
+          </div>
+          <div className="spark"><Spark data={dailyAov} color="var(--leaf)" /></div>
+        </div>
+
+        {/* Customers */}
+        <div className="card kpi">
+          <p className="kpi-label"><Users size={13} /> Customers</p>
+          <p className="kpi-value">{stats.customerCount || 0}</p>
+          <div className="kpi-foot">
+            {!isTemplate && <span className="delta"><TrendingUp size={11} />+4 this week</span>}
+            <span>unique buyers</span>
+          </div>
+          <div className="spark"><Spark data={dailyOrders} color="var(--gold-edge)" /></div>
         </div>
       </div>
 
-      {/* Recent Orders + Top Products Side by Side */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Recent Orders */}
-        <div className="bg-white rounded-2xl p-6 border border-black/6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[10px] font-bold tracking-widest uppercase text-black/40">Recent Orders</h3>
-            <button
-              onClick={() => onNavigate('orders')}
-              className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer transition-colors"
-            >
-              View All →
-            </button>
+      {/* ── Sales chart + Today's to-do ── */}
+      <div className="grid cols-2-1">
+        {/* Bar chart */}
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <p className="card-title">Sales</p>
+              <p className="card-sub">Revenue by day</p>
+            </div>
+            <div className="seg">
+              <button type="button" aria-pressed={chartRange === '7d'} onClick={() => setChartRange('7d')}>7d</button>
+              <button type="button" aria-pressed={chartRange === '30d'} onClick={() => setChartRange('30d')}>30d</button>
+            </div>
           </div>
-          {stats.recentOrders.length === 0 ? (
-            <p className="text-sm text-black/40 py-8 text-center">No orders yet</p>
-          ) : (
-            <div className="space-y-0 divide-y divide-black/5">
-              {stats.recentOrders.map((order) => (
-                <div key={order.id} className="flex items-center justify-between py-3">
-                  <div>
-                    <p className="text-xs font-bold font-mono text-black">{order.id}</p>
-                    <p className="text-[11px] text-black/50 mt-0.5">{order.customer} • {order.date}</p>
+          <div className="card-body">
+            {/* Grid + bars */}
+            <div className="chart">
+              <div className="chart-grid">
+                {ySteps.slice(1).reverse().map((v, i) => (
+                  <div key={i} style={{ top: `${(1 - v / maxBar) * 100}%` }}>
+                    <span>₹{v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}</span>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-black">₹{order.total.toLocaleString()}</p>
-                    <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                      order.status === 'Delivered' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                      order.status === 'In Transit' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
-                      'bg-amber-50 text-amber-700 border border-amber-100'
-                    }`}>
-                      {order.status === 'In Transit' && '● '}{order.status}
-                    </span>
-                  </div>
-                </div>
+                ))}
+              </div>
+              <div className="chart-bars">
+                {chartData.map((day, idx) => {
+                  const h = Math.max(2, (day.amount / maxBar) * 100)
+                  const isLast = idx === chartData.length - 1
+                  return (
+                    <div key={day.date} className="bar-col">
+                      <div className="tip">₹{day.amount.toLocaleString()}</div>
+                      <i className={isLast ? 'hl' : ''} style={{ height: `${h}%` }} />
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="chart-x">
+              {chartData.map((day) => (
+                <span key={day.date}>{day.date}</span>
               ))}
             </div>
-          )}
+          </div>
         </div>
 
-        {/* Top Products Leaderboard */}
-        <div className="bg-white rounded-2xl p-6 border border-black/6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-[10px] font-bold tracking-widest uppercase text-black/40">Top Products by Revenue</h3>
-            <button
-              onClick={() => onNavigate('products')}
-              className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer transition-colors"
-            >
-              Manage →
+        {/* Today's to-do */}
+        <div className="card">
+          <div className="card-head">
+            <p className="card-title">Today's focus</p>
+          </div>
+          <div className="divide">
+            {attnItems.map((item, i) => (
+              <div key={i} className="attn">
+                <div className="ic" style={{ background: item.color, color: item.iconColor }}>
+                  {item.icon}
+                </div>
+                <div className="grow min-w-0">
+                  <p style={{ fontWeight: 700, fontSize: 13.5 }}>{item.text}</p>
+                  <p className="small muted">{item.sub}</p>
+                </div>
+                <ChevronRight size={16} style={{ color: 'var(--field-edge)', flexShrink: 0 }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Recent orders table + Best sellers ── */}
+      <div className="grid cols-2-1">
+        {/* Recent orders */}
+        <div className="card">
+          <div className="card-head">
+            <p className="card-title">Recent orders</p>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => onNavigate('orders')}>
+              View all <ChevronRight size={14} />
             </button>
           </div>
-          {stats.topProducts.length === 0 ? (
-            <p className="text-sm text-black/40 py-8 text-center">No products yet</p>
-          ) : (
-            <div className="space-y-3">
-              {stats.topProducts.map((product, i) => {
-                const maxRev = Math.max(...stats.topProducts.map(p => p.revenue)) || 1
-                const pct = Math.round((product.revenue / maxRev) * 100)
-                return (
-                  <div key={product.name} className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0 pr-2">
-                        <span className="text-[10px] font-mono font-bold text-black/30 w-4">#{i + 1}</span>
-                        <p className="text-xs font-bold text-black truncate">{product.name}</p>
+          <div className="table-wrap">
+            {stats.recentOrders.length === 0 ? (
+              <div className="empty"><Package size={32} /><p>No orders yet</p></div>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Customer</th>
+                    <th>Status</th>
+                    <th className="num">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.recentOrders.slice(0, 6).map((order) => (
+                    <tr key={order.id}>
+                      <td><span className="cell-main mono">{order.id}</span><span className="cell-sub">{order.date}</span></td>
+                      <td>{order.customer}</td>
+                      <td><StatusPill status={order.status} /></td>
+                      <td className="num money">₹{order.total.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* Best sellers */}
+        <div className="card">
+          <div className="card-head">
+            <p className="card-title">Best sellers</p>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => onNavigate('products')}>
+              Manage <ChevronRight size={14} />
+            </button>
+          </div>
+          <div className="card-body">
+            {stats.topProducts.length === 0 ? (
+              <div className="empty"><Tag size={28} /><p>No products yet</p></div>
+            ) : (
+              <div className="col" style={{ gap: 14 }}>
+                {stats.topProducts.slice(0, 5).map((product, i) => {
+                  const maxRev = Math.max(...stats.topProducts.map((p) => p.revenue)) || 1
+                  const pctBar = Math.round((product.revenue / maxRev) * 100)
+                  return (
+                    <div key={product.name}>
+                      <div className="row between" style={{ marginBottom: 5 }}>
+                        <div className="row" style={{ gap: 8, minWidth: 0 }}>
+                          <span className="rank">{i + 1}</span>
+                          <span style={{ fontWeight: 700, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.name}</span>
+                        </div>
+                        <span className="money" style={{ fontSize: 13, flexShrink: 0 }}>₹{product.revenue.toLocaleString()}</span>
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-xs font-bold text-black">₹{product.revenue.toLocaleString()}</p>
-                        <p className="text-[10px] text-black/40">{product.orders} sold</p>
+                      <div className="bar gold">
+                        <i style={{ width: `${pctBar}%` }} />
                       </div>
                     </div>
-                    <div className="progress-bar">
-                      <div className="progress-bar-fill" style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #6366f1, #8b5cf6)' }} />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -655,135 +776,89 @@ function ProductManager({ onToast }: { onToast: (msg: string) => void }) {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Top action bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-xl border border-black/8 shadow-sm">
+    <div className="stack">
+      <div className="page-head">
         <div>
-          <h2 className="text-lg font-bold text-black">Product Inventory</h2>
-          <p className="text-xs text-black/50 mt-0.5">
-            {products.length} {products.length === 1 ? 'product' : 'products'} published • Add images, edit pricing, {isTemplate ? 'categories, colors and options' : 'fabric tech, colors and sizes'}.
-          </p>
+          <h1>Products</h1>
+          <p className="sub">{products.length} {products.length === 1 ? 'product' : 'products'} published · images, pricing, {isTemplate ? 'categories and options' : 'fabric tech, colours and sizes'}</p>
         </div>
-
-        <button
-          onClick={handleOpenAdd}
-          className="bg-black text-white text-xs font-bold tracking-widest uppercase px-6 py-3 rounded-lg hover:bg-stone-800 transition-all cursor-pointer shadow-md flex items-center gap-2"
-        >
-          <span>+</span>
-          <span>ADD NEW PRODUCT</span>
+        <button type="button" className="btn btn-primary" onClick={handleOpenAdd}>
+          <Plus size={15} strokeWidth={2.5} /> Add product
         </button>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={isTemplate ? 'Search by product name or tag...' : 'Search by product name, fabric, or tag...'}
-            className="w-full bg-white border border-black/15 px-4 py-2.5 pl-9 text-xs rounded-lg outline-none focus:border-black transition-colors"
-          />
-          <span className="absolute left-3 top-2.5 text-black/40 text-xs">🔍</span>
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-2.5 text-black/40 hover:text-black text-xs"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-
-        <select
-          value={filterCategory}
-          onChange={(e) => setFilterCategory(e.target.value)}
-          className="bg-white border border-black/15 px-4 py-2.5 text-xs font-bold uppercase rounded-lg outline-none cursor-pointer focus:border-black"
-        >
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c === 'all' ? 'ALL CATEGORIES' : getCategoryLabel(tenant, c).toUpperCase()}
-            </option>
-          ))}
-        </select>
-      </div>
-
       {/* Product Table */}
-      <div className="bg-white rounded-xl border border-black/8 shadow-sm overflow-hidden">
+      <div className="card">
+        <div className="toolbar">
+          <div className="search" style={{ width: 300 }}>
+            <Search size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', pointerEvents: 'none' }} />
+            <input
+              className="input"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={isTemplate ? 'Search by name or tag…' : 'Search by name, fabric, or tag…'}
+              style={{ paddingLeft: 40 }}
+            />
+          </div>
+          <select className="select" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} style={{ width: 'auto' }}>
+            {categories.map((c) => (
+              <option key={c} value={c}>{c === 'all' ? 'All categories' : getCategoryLabel(tenant, c)}</option>
+            ))}
+          </select>
+        </div>
+        <div className="table-wrap">
         {filteredProducts.length === 0 ? (
-          <div className="py-16 text-center px-4">
-            <p className="text-4xl mb-3">{isTemplate ? getNichePreset(tenant?.storeType).icon : '👗'}</p>
-            <p className="text-lg font-serif mb-1">No products found</p>
-            <p className="text-xs text-black/40 mb-4">
-              {searchQuery ? `No matches for "${searchQuery}"` : 'Your store has no products yet.'}
-            </p>
-            <button
-              onClick={handleOpenAdd}
-              className="bg-black text-white text-xs font-bold uppercase tracking-wider px-5 py-2.5 rounded-lg hover:bg-stone-800"
-            >
-              Add First Product
-            </button>
+          <div className="empty">
+            <Tag size={32} />
+            <p>{searchQuery ? `No matches for "${searchQuery}"` : 'Your store has no products yet.'}</p>
+            <button type="button" className="btn btn-primary btn-sm" onClick={handleOpenAdd}>Add first product</button>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="table">
               <thead>
-                <tr className="border-b border-black/10 bg-stone-50 text-[10px] font-bold tracking-widest uppercase text-black/50">
-                  <th className="px-6 py-3.5">Product & Photo</th>
-                  <th className="px-4 py-3.5">Category</th>
-                  <th className="px-4 py-3.5">Price</th>
-                  <th className="px-4 py-3.5">Fabric & Tech</th>
-                  <th className="px-4 py-3.5">Colors & Sizes</th>
-                  <th className="px-4 py-3.5">Rating</th>
-                  <th className="px-6 py-3.5 text-right">Actions</th>
+                <tr>
+                  <th>Product</th>
+                  <th>Category</th>
+                  <th>Price</th>
+                  <th>Fabric & Tech</th>
+                  <th>Colours & Sizes</th>
+                  <th>Rating</th>
+                  <th className="actions">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-black/5">
+              <tbody>
                 {filteredProducts.map((product) => (
-                  <tr key={product.id} className="hover:bg-stone-50/70 transition-colors">
+                  <tr key={product.id} className="clickable">
                     {/* Thumbnail & Name */}
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="relative w-12 h-14 rounded overflow-hidden bg-stone-100 flex-shrink-0 border border-black/10 group">
-                          <img
-                            src={product.imgMain}
-                            alt={product.name}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                          />
+                    <td>
+                      <div className="row" style={{ gap: 10 }}>
+                        <div style={{ position: 'relative', width: 44, height: 52, borderRadius: 8, overflow: 'hidden', background: 'var(--line-soft)', flexShrink: 0, border: '1px solid var(--line)' }}>
+                          <img src={product.imgMain} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           {product.badge && (
-                            <span className="absolute bottom-0 inset-x-0 bg-black/80 text-white text-[7px] font-bold tracking-tight text-center py-0.5 truncate uppercase">
-                              {product.badge}
-                            </span>
+                            <span style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(18,22,58,.8)', color: '#fff', fontSize: 7, fontWeight: 700, textAlign: 'center', padding: '2px 4px', textTransform: 'uppercase' }}>{product.badge}</span>
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-black truncate max-w-xs">{product.name}</p>
-                          <p className="text-[10px] text-black/50 font-mono">ID: #{product.id}</p>
+                          <p className="cell-main" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{product.name}</p>
+                          <p className="cell-sub mono">#{product.id}</p>
                         </div>
                       </div>
                     </td>
 
                     {/* Category */}
-                    <td className="px-4 py-4">
-                      <span className="text-[10px] bg-stone-100 border border-black/10 px-2 py-1 rounded font-bold uppercase tracking-wider text-black/70">
-                        {getCategoryLabel(tenant, product.category)}
-                      </span>
-                    </td>
+                    <td><span className="pill outline">{getCategoryLabel(tenant, product.category)}</span></td>
 
                     {/* Price */}
-                    <td className="px-4 py-4">
-                      <p className="text-xs font-bold text-black">{product.priceFormatted}</p>
-                      {product.originalPrice && (
-                        <p className="text-[10px] text-black/40 line-through">₹{product.originalPrice}</p>
-                      )}
+                    <td>
+                      <p className="cell-main money">{product.priceFormatted}</p>
+                      {product.originalPrice && <p className="cell-sub" style={{ textDecoration: 'line-through' }}>₹{product.originalPrice}</p>}
                     </td>
 
                     {/* Fabric Tech */}
-                    <td className="px-4 py-4">
-                      <p className="text-xs font-semibold text-black/80 truncate max-w-[180px]">
-                        {product.fabricTech}
-                      </p>
-                      <p className="text-[10px] text-black/40">{product.sculptLevel}</p>
+                    <td>
+                      <p className="cell-main" style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.fabricTech}</p>
+                      <p className="cell-sub">{product.sculptLevel}</p>
                     </td>
 
                     {/* Colors & Sizes */}
@@ -804,36 +879,29 @@ function ProductManager({ onToast }: { onToast: (msg: string) => void }) {
                       <p className="text-[10px] text-black/50">{product.sizes?.join(', ') || (isTemplate ? '—' : 'S, M, L, XL')}</p>
                     </td>
 
+                    {/* Colors & Sizes */}
+                    <td>
+                      <div className="row" style={{ gap: 4, flexWrap: 'wrap', marginBottom: 4 }}>
+                        {product.colors.slice(0, 4).map((c, i) => (
+                          <span key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: c.hex, border: '1px solid var(--line)', display: 'inline-block' }} title={c.name} />
+                        ))}
+                        {product.colors.length > 4 && <span className="small muted">+{product.colors.length - 4}</span>}
+                      </div>
+                      <p className="cell-sub">{product.sizes?.join(', ') || (isTemplate ? '—' : 'S, M, L, XL')}</p>
+                    </td>
+
                     {/* Rating */}
-                    <td className="px-4 py-4 text-xs font-medium">
-                      <span className="text-amber-500 font-bold">★</span> {product.rating}{' '}
-                      <span className="text-black/40">({product.reviewsCount})</span>
+                    <td>
+                      <span style={{ color: '#f59e0b', fontWeight: 700 }}>★</span> {product.rating}{' '}
+                      <span className="muted">({product.reviewsCount})</span>
                     </td>
 
                     {/* Actions */}
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleOpenEdit(product)}
-                          className="px-2.5 py-1 text-xs font-bold bg-stone-100 hover:bg-black hover:text-white rounded border border-black/10 transition-colors cursor-pointer"
-                          title="Edit product & images"
-                        >
-                          ✏️ Edit
-                        </button>
-                        <button
-                          onClick={() => handleDuplicate(product)}
-                          className="p-1 text-black/40 hover:text-black transition-colors cursor-pointer"
-                          title="Duplicate product"
-                        >
-                          📋
-                        </button>
-                        <button
-                          onClick={() => handleDelete(product.id, product.name)}
-                          className="p-1 text-red-400 hover:text-red-700 transition-colors cursor-pointer"
-                          title="Delete product"
-                        >
-                          🗑️
-                        </button>
+                    <td className="actions">
+                      <div className="row" style={{ gap: 4, justifyContent: 'flex-end' }}>
+                        <button type="button" className="btn btn-outline btn-sm" onClick={() => handleOpenEdit(product)} title="Edit">Edit</button>
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => handleDuplicate(product)} title="Duplicate">Copy</button>
+                        <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDelete(product.id, product.name)} title="Delete">Del</button>
                       </div>
                     </td>
                   </tr>
@@ -842,6 +910,7 @@ function ProductManager({ onToast }: { onToast: (msg: string) => void }) {
             </table>
           </div>
         )}
+        </div>
       </div>
 
       {/* Modal for Add / Edit Product */}
@@ -1552,6 +1621,152 @@ function ProductFormModal({
 // =====================================================
 // 3. Storefront & Homepage Picture Customizer
 // =====================================================
+// =====================================================
+// 3. Customers View
+// =====================================================
+function CustomersView({ onToast: _onToast }: { onToast: (msg: string) => void }) {
+  const { orders } = useTenantOrders()
+  const [search, setSearch] = useState('')
+  const [segment, setSegment] = useState<'all' | 'vip' | 'returning' | 'new'>('all')
+
+  // Derive customers from orders
+  const customers = useMemo(() => {
+    const map = new Map<string, { name: string; phone: string; city: string; orders: number; spent: number; last: string }>()
+    for (const o of orders) {
+      const key = o.shippingAddress?.phone || o.shippingAddress?.name || 'unknown'
+      const name = o.shippingAddress?.name || 'Customer'
+      const city = o.shippingAddress?.city || ''
+      const phone = o.shippingAddress?.phone || ''
+      const existing = map.get(key)
+      if (existing) {
+        existing.orders += 1
+        existing.spent += o.total
+        if (o.date > existing.last) existing.last = o.date
+      } else {
+        map.set(key, { name, phone, city, orders: 1, spent: o.total, last: o.date })
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.spent - a.spent)
+  }, [orders])
+
+  const totalRevenue = customers.reduce((s, c) => s + c.spent, 0)
+  const avgSpend = customers.length ? Math.round(totalRevenue / customers.length) : 0
+  const vipCount = customers.filter((c) => c.orders >= 3).length
+
+  const filtered = useMemo(() => {
+    return customers.filter((c) => {
+      const matchSearch =
+        !search ||
+        c.name.toLowerCase().includes(search.toLowerCase()) ||
+        c.phone.includes(search) ||
+        c.city.toLowerCase().includes(search.toLowerCase())
+      const matchSeg =
+        segment === 'all' ||
+        (segment === 'vip' && c.orders >= 3) ||
+        (segment === 'returning' && c.orders === 2) ||
+        (segment === 'new' && c.orders === 1)
+      return matchSearch && matchSeg
+    })
+  }, [customers, search, segment])
+
+  const segLabel = (c: typeof customers[0]) => {
+    if (c.orders >= 3) return <span className="pill gold">VIP</span>
+    if (c.orders === 2) return <span className="pill indigo">Returning</span>
+    return <span className="pill outline">New</span>
+  }
+
+  return (
+    <div className="stack">
+      <div className="page-head">
+        <div>
+          <h1>Customers</h1>
+          <p className="sub">{customers.length} unique buyers derived from order history</p>
+        </div>
+      </div>
+
+      {/* KPI row */}
+      <div className="grid cols-4" style={{ gridTemplateColumns: 'repeat(3,minmax(0,1fr))' }}>
+        <div className="card kpi gold">
+          <p className="kpi-label"><Users size={13} /> Total customers</p>
+          <p className="kpi-value">{customers.length}</p>
+          <div className="kpi-foot"><span>unique buyers</span></div>
+        </div>
+        <div className="card kpi">
+          <p className="kpi-label"><TrendingUp size={13} /> Avg lifetime spend</p>
+          <p className="kpi-value money">₹{avgSpend.toLocaleString()}</p>
+          <div className="kpi-foot"><span>per customer</span></div>
+        </div>
+        <div className="card kpi">
+          <p className="kpi-label"><ShoppingBag size={13} /> VIP customers</p>
+          <p className="kpi-value">{vipCount}</p>
+          <div className="kpi-foot"><span>3+ orders</span></div>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="card">
+        <div className="toolbar">
+          <div className="search" style={{ width: 280 }}>
+            <Search size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', pointerEvents: 'none' }} />
+            <input
+              className="input"
+              placeholder="Search by name, phone, city…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ paddingLeft: 40 }}
+            />
+          </div>
+          <div className="seg" style={{ marginLeft: 'auto' }}>
+            {(['all', 'vip', 'returning', 'new'] as const).map((s) => (
+              <button key={s} type="button" aria-pressed={segment === s} onClick={() => setSegment(s)}>
+                {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="table-wrap">
+          {filtered.length === 0 ? (
+            <div className="empty"><Users size={32} /><p>No customers found</p></div>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>City</th>
+                  <th>Segment</th>
+                  <th className="num">Orders</th>
+                  <th className="num">Total spent</th>
+                  <th>Last order</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((c, i) => (
+                  <tr key={i}>
+                    <td>
+                      <div className="row" style={{ gap: 10 }}>
+                        <span className="avatar sm" style={{ background: hashColor(c.name) }}>{c.name.slice(0, 2).toUpperCase()}</span>
+                        <div>
+                          <p className="cell-main">{c.name}</p>
+                          {c.phone && <p className="cell-sub mono">{c.phone}</p>}
+                        </div>
+                      </div>
+                    </td>
+                    <td>{c.city || '—'}</td>
+                    <td>{segLabel(c)}</td>
+                    <td className="num">{c.orders}</td>
+                    <td className="num money">₹{c.spent.toLocaleString()}</td>
+                    <td className="muted small">{c.last}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function StorefrontCustomizer({ onToast }: { onToast: (msg: string) => void }) {
   const { theme, tenant, updateTheme, updateTenant } = useThemeCustomizer()
   const switchLayer = useSwitchLayer()
@@ -2465,52 +2680,55 @@ function InboxManager({ onToast }: { onToast: (msg: string) => void }) {
     new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-xl border border-black/8 shadow-sm">
+    <div className="stack">
+      <div className="page-head">
         <div>
-          <h2 className="text-lg font-bold text-black">Inbox & Newsletter Subscribers</h2>
-          <p className="text-xs text-black/50 mt-0.5">
-            Messages sent from your storefront contact form and emails collected by the footer newsletter.
-          </p>
+          <h1>Messages</h1>
+          <p className="sub">Contact form messages and newsletter subscribers from your storefront</p>
         </div>
-        <div className="flex gap-2">
+      </div>
+
+      {/* Tabs */}
+      <div className="card">
+        <div className="tabs">
           {(['messages', 'subscribers'] as const).map((t) => (
             <button
               key={t}
               type="button"
+              role="tab"
+              aria-selected={tab === t}
+              className="tab"
               onClick={() => setTab(t)}
-              className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors ${
-                tab === t ? 'bg-black text-white' : 'bg-black/5 text-black/60 hover:bg-black/10'
-              }`}
             >
-              {t === 'messages' ? `Messages (${messages.length}${unreadCount ? ` · ${unreadCount} new` : ''})` : `Subscribers (${subscribers.length})`}
+              {t === 'messages' ? 'Messages' : 'Subscribers'}
+              <span className="count">{t === 'messages' ? messages.length : subscribers.length}</span>
+              {t === 'messages' && unreadCount > 0 && <span className="pill coral" style={{ marginLeft: 4 }}>{unreadCount} new</span>}
             </button>
           ))}
         </div>
-      </div>
 
       {tab === 'messages' ? (
-        <div className="bg-white rounded-xl border border-black/8 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-black/8">
-            <div className="flex gap-2">
+        <div>
+          <div className="toolbar">
+            <div className="row" style={{ gap: 6 }}>
               {(['all', 'unread'] as const).map((f) => (
                 <button
                   key={f}
                   type="button"
+                  aria-pressed={filter === f}
+                  className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-ghost'}`}
                   onClick={() => setFilter(f)}
-                  className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider cursor-pointer ${
-                    filter === f ? 'bg-violet-600 text-white' : 'text-black/50 hover:bg-black/5'
-                  }`}
                 >
-                  {f}
+                  {f === 'all' ? 'All' : 'Unread'}
                 </button>
               ))}
             </div>
             {unreadCount > 0 && (
               <button
                 type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ marginLeft: 'auto' }}
                 onClick={() => messages.filter((m) => !m.read).forEach((m) => storeInbox.setRead(tenantId, m.id, true))}
-                className="text-[11px] font-bold text-violet-600 hover:underline cursor-pointer"
               >
                 Mark all as read
               </button>
@@ -2523,65 +2741,33 @@ function InboxManager({ onToast }: { onToast: (msg: string) => void }) {
               <p className="text-xs text-black/50 mt-1">Customer questions from your storefront's Contact form will appear here.</p>
             </div>
           ) : (
-            <ul className="divide-y divide-black/6">
+            <ul className="divide" style={{ borderTop: '1px solid var(--line-soft)' }}>
               {visibleMessages.map((m) => {
                 const isOpen = openId === m.id
                 return (
-                  <li key={m.id} className={m.read ? '' : 'bg-violet-50/60'}>
-                    <button type="button" onClick={() => toggleOpen(m)} className="w-full text-left px-5 py-4 flex items-start gap-4 cursor-pointer hover:bg-black/[0.02]">
-                      <span className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${m.read ? 'bg-transparent' : 'bg-violet-500'}`} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className={`text-sm truncate ${m.read ? 'text-black/70' : 'font-bold text-black'}`}>{m.name}</p>
-                          <p className="text-[11px] text-black/40 flex-shrink-0">{formatDate(m.createdAt)}</p>
+                  <li key={m.id} style={{ borderBottom: '1px solid var(--line-soft)', background: m.read ? undefined : 'var(--indigo-soft)' }}>
+                    <button type="button" onClick={() => toggleOpen(m)} style={{ width: '100%', textAlign: 'left', padding: '14px 20px', display: 'flex', alignItems: 'flex-start', gap: 14, background: 'none', border: 0 }}>
+                      <span style={{ marginTop: 6, width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: m.read ? 'transparent' : 'var(--indigo)' }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="row between" style={{ gap: 8 }}>
+                          <p style={{ fontWeight: m.read ? 400 : 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</p>
+                          <p className="small muted" style={{ flexShrink: 0 }}>{formatDate(m.createdAt)}</p>
                         </div>
-                        <p className="text-xs font-semibold text-violet-700 mt-0.5">{m.subject}</p>
-                        {!isOpen && <p className="text-xs text-black/50 truncate mt-0.5">{m.message}</p>}
+                        <p style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--indigo)', marginTop: 2 }}>{m.subject}</p>
+                        {!isOpen && <p className="small muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>{m.message}</p>}
                       </div>
                     </button>
                     {isOpen && (
-                      <div className="px-5 pb-5 pl-11 space-y-3">
-                        <p className="text-sm text-black/80 whitespace-pre-wrap leading-relaxed">{m.message}</p>
-                        <p className="text-xs text-black/50">
-                          {m.email}
-                          {m.phone ? ` · ${m.phone}` : ''}
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <a
-                            href={`mailto:${m.email}?subject=${encodeURIComponent(`Re: ${m.subject}`)}`}
-                            className="px-3 py-1.5 rounded-lg bg-black text-white text-[11px] font-bold uppercase tracking-wider"
-                          >
-                            Reply by email
-                          </a>
+                      <div style={{ padding: '0 20px 16px 42px' }} className="col">
+                        <p style={{ fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', color: 'var(--ink-2)' }}>{m.message}</p>
+                        <p className="small muted">{m.email}{m.phone ? ` · ${m.phone}` : ''}</p>
+                        <div className="row wrap" style={{ gap: 8, marginTop: 4 }}>
+                          <a href={`mailto:${m.email}?subject=${encodeURIComponent(`Re: ${m.subject}`)}`} className="btn btn-primary btn-sm">Reply by email</a>
                           {m.phone && (
-                            <a
-                              href={`https://wa.me/${m.phone.replace(/[^0-9]/g, '').replace(/^(\d{10})$/, '91$1')}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold uppercase tracking-wider"
-                            >
-                              WhatsApp
-                            </a>
+                            <a href={`https://wa.me/${m.phone.replace(/[^0-9]/g, '').replace(/^(\d{10})$/, '91$1')}`} target="_blank" rel="noreferrer" className="btn btn-sm" style={{ background: '#25d366', color: '#fff', border: 0 }}>WhatsApp</a>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => storeInbox.setRead(tenantId, m.id, false)}
-                            className="px-3 py-1.5 rounded-lg bg-black/5 text-black/70 text-[11px] font-bold uppercase tracking-wider cursor-pointer hover:bg-black/10"
-                          >
-                            Mark unread
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!window.confirm(`Delete the message from ${m.name}?`)) return
-                              storeInbox.deleteMessage(tenantId, m.id)
-                              setOpenId(null)
-                              onToast('Message deleted.')
-                            }}
-                            className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-[11px] font-bold uppercase tracking-wider cursor-pointer hover:bg-red-100"
-                          >
-                            Delete
-                          </button>
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => storeInbox.setRead(tenantId, m.id, false)}>Mark unread</button>
+                          <button type="button" className="btn btn-danger btn-sm" onClick={() => { if (!window.confirm(`Delete the message from ${m.name}?`)) return; storeInbox.deleteMessage(tenantId, m.id); setOpenId(null); onToast('Message deleted.') }}>Delete</button>
                         </div>
                       </div>
                     )}
@@ -2592,47 +2778,29 @@ function InboxManager({ onToast }: { onToast: (msg: string) => void }) {
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-black/8 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-black/8">
-            <p className="text-xs text-black/50">{subscribers.length} people joined your newsletter.</p>
-            <button
-              type="button"
-              onClick={exportSubscribers}
-              className="px-3 py-1.5 rounded-lg bg-black text-white text-[11px] font-bold uppercase tracking-wider cursor-pointer"
-            >
-              Export CSV
-            </button>
+        <div>
+          <div className="toolbar">
+            <p className="muted small">{subscribers.length} people joined your newsletter.</p>
+            <button type="button" className="btn btn-outline btn-sm" style={{ marginLeft: 'auto' }} onClick={exportSubscribers}>Export CSV</button>
           </div>
           {subscribers.length === 0 ? (
-            <div className="p-12 text-center">
-              <p className="text-3xl mb-2">📨</p>
-              <p className="text-sm font-bold text-black">No subscribers yet</p>
-              <p className="text-xs text-black/50 mt-1">Emails entered in your storefront footer's newsletter box will appear here.</p>
-            </div>
+            <div className="empty"><MessageSquare size={32} /><p>No subscribers yet</p><p className="small">Emails from your storefront footer newsletter box appear here.</p></div>
           ) : (
-            <ul className="divide-y divide-black/6">
+            <ul>
               {subscribers.map((s) => (
-                <li key={s.email} className="px-5 py-3 flex items-center justify-between gap-4">
+                <li key={s.email} style={{ padding: '12px 20px', borderBottom: '1px solid var(--line-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
                   <div>
-                    <p className="text-sm text-black">{s.email}</p>
-                    <p className="text-[11px] text-black/40">Joined {formatDate(s.subscribedAt)}</p>
+                    <p style={{ fontWeight: 600 }}>{s.email}</p>
+                    <p className="small muted">Joined {formatDate(s.subscribedAt)}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      storeInbox.unsubscribe(tenantId, s.email)
-                      onToast(`${s.email} removed from the list.`)
-                    }}
-                    className="text-[11px] font-bold text-red-600 hover:underline cursor-pointer"
-                  >
-                    Remove
-                  </button>
+                  <button type="button" className="btn btn-danger btn-sm" onClick={() => { storeInbox.unsubscribe(tenantId, s.email); onToast(`${s.email} removed from the list.`) }}>Remove</button>
                 </li>
               ))}
             </ul>
           )}
         </div>
       )}
+      </div>
     </div>
   )
 }
@@ -2713,135 +2881,106 @@ function OrderManager({ onToast }: { onToast: (msg: string) => void }) {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-xl border border-black/8 shadow-sm">
+    <div className="stack">
+      <div className="page-head">
         <div>
-          <h2 className="text-lg font-bold text-black">Customer Orders & Shipments</h2>
-          <p className="text-xs text-black/50 mt-0.5">
-            {orders.length} total orders recorded • Manage fulfillment, status transitions, and customer deliveries.
-          </p>
+          <h1>Orders</h1>
+          <p className="sub">{orders.length} total orders · manage fulfilment and shipments</p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleExportCsv}
-            className="bg-stone-900 hover:bg-black text-white text-xs font-bold px-4 py-2.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-          >
-            <span>📥</span>
-            <span>Export Orders CSV</span>
-          </button>
-        </div>
+        <button type="button" className="btn btn-outline btn-sm" onClick={handleExportCsv}>
+          <Package size={14} strokeWidth={2} /> Export CSV
+        </button>
       </div>
 
-      {/* Filter and Search */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <input
-            type="text"
-            value={searchOrder}
-            onChange={(e) => setSearchOrder(e.target.value)}
-            placeholder="Search by Order ID, Customer Name, Phone, or City..."
-            className="w-full bg-white border border-black/15 px-4 py-2.5 pl-9 text-xs rounded-lg outline-none focus:border-black"
-          />
-          <span className="absolute left-3 top-2.5 text-black/40 text-xs">🔍</span>
-          {searchOrder && (
-            <button
-              onClick={() => setSearchOrder('')}
-              className="absolute right-3 top-2.5 text-black/40 hover:text-black text-xs"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="bg-white border border-black/15 px-4 py-2.5 text-xs font-bold uppercase rounded-lg outline-none cursor-pointer focus:border-black"
-        >
-          <option value="all">ALL STATUSES ({orders.length})</option>
-          <option value="Processing">PROCESSING</option>
-          <option value="In Transit">IN TRANSIT</option>
-          <option value="Out for Delivery">OUT FOR DELIVERY</option>
-          <option value="Delivered">DELIVERED</option>
-        </select>
-      </div>
-
-      {/* Orders Table */}
-      <div className="bg-white rounded-xl border border-black/8 shadow-sm overflow-hidden">
-        {filteredOrders.length === 0 ? (
-          <div className="py-16 text-center px-4">
-            <p className="text-4xl mb-3">📋</p>
-            <p className="text-lg font-serif mb-1">No orders match your criteria</p>
-            <p className="text-xs text-black/40">Orders will appear here as customers checkout on your storefront.</p>
+      <div className="card">
+        {/* Toolbar */}
+        <div className="toolbar">
+          <div className="search" style={{ width: 320 }}>
+            <Search size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', pointerEvents: 'none' }} />
+            <input
+              className="input"
+              value={searchOrder}
+              onChange={(e) => setSearchOrder(e.target.value)}
+              placeholder="Search by Order ID, customer name, phone…"
+              style={{ paddingLeft: 40 }}
+            />
           </div>
+          <select
+            className="select"
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            style={{ width: 'auto' }}
+          >
+            <option value="all">All statuses ({orders.length})</option>
+            <option value="Processing">Processing</option>
+            <option value="In Transit">In Transit</option>
+            <option value="Out for Delivery">Out for Delivery</option>
+            <option value="Delivered">Delivered</option>
+          </select>
+        </div>
+
+        {/* Orders Table */}
+        <div className="table-wrap">
+        {filteredOrders.length === 0 ? (
+          <div className="empty"><Package size={32} /><p>No orders match your criteria</p></div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="table">
               <thead>
-                <tr className="border-b border-black/10 bg-stone-50 text-[10px] font-bold tracking-widest uppercase text-black/50">
-                  <th className="px-6 py-3.5">Order ID & Date</th>
-                  <th className="px-4 py-3.5">Customer & Destination</th>
-                  <th className="px-4 py-3.5">Items Ordered</th>
-                  <th className="px-4 py-3.5">Payment</th>
-                  <th className="px-4 py-3.5">Fulfillment Status</th>
-                  <th className="px-4 py-3.5">Total Amount</th>
-                  <th className="px-6 py-3.5 text-right">Actions</th>
+                <tr>
+                  <th>Order ID & Date</th>
+                  <th>Customer</th>
+                  <th>Items</th>
+                  <th>Payment</th>
+                  <th>Status</th>
+                  <th className="num">Total</th>
+                  <th className="actions">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-black/5 text-xs">
+              <tbody>
                 {filteredOrders.map((order) => {
                   const custName = order.shippingAddress?.name || 'Customer'
                   const custCityState = [order.shippingAddress?.city, order.shippingAddress?.state].filter(Boolean).join(', ')
                   return (
-                    <tr key={order.id} className="hover:bg-stone-50/70 transition-colors">
-                      <td className="px-6 py-4">
-                        <span className="font-mono font-bold text-black block">{order.id}</span>
-                        <span className="text-[10px] text-black/40">{order.date}</span>
+                    <tr key={order.id} className="clickable">
+                      <td>
+                        <span className="cell-main mono">{order.id}</span>
+                        <span className="cell-sub">{order.date}</span>
                       </td>
 
-                      <td className="px-4 py-4">
-                        <p className="font-bold text-black">{custName}</p>
-                        {custCityState && <p className="text-[11px] text-black/50">{custCityState}</p>}
+                      <td>
+                        <p className="cell-main">{custName}</p>
+                        {custCityState && <p className="cell-sub">{custCityState}</p>}
                         {order.shippingAddress?.phone && (
-                          <p className="text-[10px] font-mono text-black/40">{order.shippingAddress.phone}</p>
+                          <p className="cell-sub mono">{order.shippingAddress.phone}</p>
                         )}
                       </td>
 
-                      <td className="px-4 py-4">
+                      <td>
                         {order.items?.map((item: any, idx: number) => {
                           const itemName = item.name || item.product?.name || 'Product'
                           const itemSize = item.size || item.selectedSize || ''
                           return (
-                            <p key={idx} className="truncate max-w-xs text-[11px] text-black/80">
-                              <span className="font-bold">{item.quantity}x</span> {itemName} {itemSize ? `(${itemSize})` : ''}
+                            <p key={idx} style={{ fontSize: 12.5 }}>
+                              <strong>{item.quantity}×</strong> {itemName} {itemSize ? `(${itemSize})` : ''}
                             </p>
                           )
                         })}
                       </td>
 
-                      <td className="px-4 py-4">
-                        <span className="text-[11px] font-medium text-black/70 block">{order.paymentMethod || 'Prepaid'}</span>
-                        {/cod|cash on delivery/i.test(order.paymentMethod || '') && order.status !== 'Delivered' ? (
-                          <span className="text-[9px] font-mono text-amber-600 font-bold uppercase">COLLECT ON DELIVERY</span>
-                        ) : (
-                          <span className="text-[9px] font-mono text-emerald-600 font-bold uppercase">PAID</span>
-                        )}
+                      <td>
+                        <span style={{ fontSize: 13 }}>{order.paymentMethod || 'Prepaid'}</span>
+                        <span className={`cell-sub ${/cod|cash on delivery/i.test(order.paymentMethod || '') && order.status !== 'Delivered' ? '' : 'leaf'}`} style={{ fontWeight: 700 }}>
+                          {/cod|cash on delivery/i.test(order.paymentMethod || '') && order.status !== 'Delivered' ? 'Collect on delivery' : 'Paid'}
+                        </span>
                       </td>
 
-                      <td className="px-4 py-4">
+                      <td>
                         <select
+                          className="select"
                           value={order.status}
                           onChange={(e) => handleStatusChange(order.id, e.target.value as TrackedOrder['status'])}
-                          className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-lg border outline-none cursor-pointer ${
-                            order.status === 'Delivered'
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                              : order.status === 'In Transit'
-                              ? 'bg-blue-50 text-blue-800 border-blue-300'
-                              : order.status === 'Out for Delivery'
-                              ? 'bg-purple-50 text-purple-800 border-purple-300'
-                              : 'bg-amber-50 text-amber-800 border-amber-300'
-                          }`}
+                          style={{ height: 32, fontSize: 12.5, padding: '0 32px 0 10px' }}
                         >
                           <option value="Processing">Processing</option>
                           <option value="In Transit">In Transit</option>
@@ -2850,14 +2989,15 @@ function OrderManager({ onToast }: { onToast: (msg: string) => void }) {
                         </select>
                       </td>
 
-                      <td className="px-4 py-4 font-bold text-sm text-black">₹{order.total.toLocaleString()}</td>
+                      <td className="num money">₹{order.total.toLocaleString()}</td>
 
-                      <td className="px-6 py-4 text-right">
+                      <td className="actions">
                         <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
                           onClick={() => setSelectedOrder(order)}
-                          className="px-3 py-1.5 text-xs font-bold bg-stone-100 hover:bg-black hover:text-white rounded-lg border border-black/10 transition-colors cursor-pointer"
                         >
-                          👁️ View
+                          View
                         </button>
                       </td>
                     </tr>
@@ -2867,6 +3007,7 @@ function OrderManager({ onToast }: { onToast: (msg: string) => void }) {
             </table>
           </div>
         )}
+        </div>
       </div>
 
       {/* Order Details Modal */}
