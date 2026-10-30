@@ -368,12 +368,14 @@ router.post('/refresh', async (req: Request, res: Response) => {
     }
 
     const tenant = await getTenantModel(masterDb).findOne({ slug: decoded.tenantSlug, id: decoded.tenantId })
-    if (!tenant || !tenantAllowsSignIn(tenant.status) || tenant.ownerLoginRevoked) return void revoked()
+    if (!tenant || !tenantAllowsSignIn(tenant.status)) return void revoked()
     if (decoded.role === 'seller') {
+      // ownerLoginRevoked only disables /owner/{key}; password sessions stay valid.
       if (isResetPending(tenant)) return void revoked()
       res.json(await sellerSession(masterDb, tenant))
       return
     }
+    if (tenant.ownerLoginRevoked) return void revoked()
     const staff = tenant.staffMembers.find((s) => s.id === decoded.userId)
     if (!staff) return void revoked()
     res.json(await staffSession(masterDb, tenant, staff))
