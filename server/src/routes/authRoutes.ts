@@ -178,7 +178,7 @@ async function attemptSellerLogin(masterDb: Connection, loginId: string, passwor
     return null
   }
 
-  if (matched.ownerLoginRevoked) return { status: 403, body: { error: SIGN_IN_REVOKED } }
+  // ownerLoginRevoked only kills the private /owner/{key} link — email/password still works.
   if (matched.status === 'suspended') return { status: 403, body: { error: 'Your store has been suspended. Please contact support.' } }
   if (matched.status === 'pending') return { status: 403, body: { error: 'Your store application is still under review.' } }
   if (matched.status === 'cancelled') return { status: 403, body: { error: 'This store has been closed. Please contact support.' } }
@@ -241,6 +241,7 @@ router.post('/seller/login', async (req: Request, res: Response) => {
     const loginId = credential(req.body?.loginId)?.toLowerCase()
     const password = credential(req.body?.password, MAX_PASSWORD)
     const ownerLoginKey = credential(req.body?.ownerLoginKey, 80)
+    const tenantSlug = credential(req.body?.tenantSlug, 60)?.toLowerCase()
     if (!loginId || !password) {
       res.status(400).json({ error: 'Please enter your Login ID and password.' })
       return
@@ -255,6 +256,8 @@ router.post('/seller/login', async (req: Request, res: Response) => {
         return
       }
       restrictSlug = bound.slug
+    } else if (tenantSlug) {
+      restrictSlug = tenantSlug
     }
     const result = await attemptSellerLogin(masterDb, loginId, password, restrictSlug)
     if (!result) {

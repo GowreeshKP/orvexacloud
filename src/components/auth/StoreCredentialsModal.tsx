@@ -76,6 +76,12 @@ export default function StoreCredentialsModal({ tenant, isOpen, onClose, onSucce
   const [staffList, setStaffList] = useState<Array<{ id: string; name: string; email: string; role: string }>>([])
   const [staffLoading, setStaffLoading] = useState(false)
   const [staffMsg, setStaffMsg] = useState<string | null>(null)
+  const [manualPassword, setManualPassword] = useState('')
+  const [manualPassword2, setManualPassword2] = useState('')
+  const [showManualPass, setShowManualPass] = useState(false)
+  const [isSettingPassword, setIsSettingPassword] = useState(false)
+  const [passwordMsg, setPasswordMsg] = useState<string | null>(null)
+  const [copiedDashboard, setCopiedDashboard] = useState(false)
 
   useEffect(() => {
     if (tenant && isOpen) {
@@ -85,6 +91,9 @@ export default function StoreCredentialsModal({ tenant, isOpen, onClose, onSucce
       setOwnerName(tenant.ownerName || current.ownerName)
       setOwnerPhone(tenant.ownerPhone || '')
       setStaffMsg(null)
+      setPasswordMsg(null)
+      setManualPassword('')
+      setManualPassword2('')
 
       if ((current.passwordResetPending || current.isPasswordRevoked) && current.resetToken && current.resetUrl) {
         setResetDetails({ token: current.resetToken, url: current.resetUrl, email: current.loginId })
@@ -169,6 +178,50 @@ export default function StoreCredentialsModal({ tenant, isOpen, onClose, onSucce
       const updated = authService.getStoreCredential(tenant.slug)
       setCredInfo(updated)
       onSuccess?.(res.message || 'Store details updated successfully!')
+    }
+  }
+
+  const dashboardLoginUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/dashboard/${tenant.slug}`
+      : `https://app.orvexacloud.in/dashboard/${tenant.slug}`
+
+  const handleCopyDashboardUrl = async () => {
+    const ok = await copyPlainText(dashboardLoginUrl)
+    if (ok) {
+      setCopiedDashboard(true)
+      window.setTimeout(() => setCopiedDashboard(false), 2000)
+    }
+  }
+
+  const handleSetOwnerPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPasswordMsg(null)
+    if (manualPassword.length < 8) {
+      setPasswordMsg('Password must be at least 8 characters.')
+      return
+    }
+    if (manualPassword !== manualPassword2) {
+      setPasswordMsg('Passwords do not match.')
+      return
+    }
+    setIsSettingPassword(true)
+    const res = await authService.updateStoreCredentialsAdmin(tenant.slug, {
+      ownerEmail: ownerEmail.trim().toLowerCase() || undefined,
+      ownerName: ownerName.trim() || undefined,
+      newPassword: manualPassword,
+    })
+    setIsSettingPassword(false)
+    if (res.success) {
+      setManualPassword('')
+      setManualPassword2('')
+      setCredInfo(authService.getStoreCredential(tenant.slug))
+      setPasswordMsg(null)
+      onSuccess?.(
+        `Password set for ${tenant.brandName}. Owner signs in at ${dashboardLoginUrl} with ${ownerEmail.trim() || tenant.ownerEmail} / the password you just set.`,
+      )
+    } else {
+      setPasswordMsg(res.error || res.message || 'Could not set password.')
     }
   }
 
@@ -389,12 +442,97 @@ Security Level: Dedicated Database Isolation
           ───────────────────────────────────────────────────────────── */}
           {activeTab === 'credentials' && (
             <div className="space-y-5">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-3">
+                <div>
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-emerald-800 font-bold">
+                    Tenant admin portal (email + password)
+                  </p>
+                  <p className="text-[11px] text-emerald-900/80 mt-1 leading-relaxed">
+                    After you set a password below, the store owner opens this URL and signs in with their owner email
+                    (or store slug) anytime — including after logout.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <code className="flex-1 bg-white border border-emerald-200 rounded-xl px-3 py-2 text-[11px] text-slate-800 break-all">
+                    {dashboardLoginUrl}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={handleCopyDashboardUrl}
+                    className="px-3 py-2 rounded-xl text-xs font-bold bg-emerald-700 text-white cursor-pointer"
+                  >
+                    {copiedDashboard ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                  <div className="bg-white/90 border border-emerald-100 rounded-xl px-3 py-2">
+                    <span className="text-slate-500 font-mono uppercase tracking-wider text-[10px]">Login ID</span>
+                    <p className="font-semibold text-slate-900 mt-0.5 break-all">{ownerEmail || tenant.ownerEmail}</p>
+                    <p className="text-slate-500 mt-0.5">or slug <code className="font-mono">{tenant.slug}</code></p>
+                  </div>
+                  <div className="bg-white/90 border border-emerald-100 rounded-xl px-3 py-2">
+                    <span className="text-slate-500 font-mono uppercase tracking-wider text-[10px]">Password</span>
+                    <p className="font-semibold text-slate-900 mt-0.5">Set with the form below</p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleSetOwnerPassword} className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
+                <div>
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-slate-500 font-bold">Set owner password</p>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Simple Super Admin control: create or replace the store owner password (min 8 characters).
+                  </p>
+                </div>
+                <label className="block space-y-1">
+                  <span className="text-[11px] font-semibold text-slate-700">New password</span>
+                  <div className="flex gap-2">
+                    <input
+                      type={showManualPass ? 'text' : 'password'}
+                      value={manualPassword}
+                      onChange={(e) => setManualPassword(e.target.value)}
+                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs outline-none focus:border-blue-500 focus:bg-white"
+                      placeholder="Min 8 characters"
+                      autoComplete="new-password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="px-3 py-2 rounded-xl text-xs font-semibold border border-slate-200 cursor-pointer"
+                      onClick={() => setShowManualPass((v) => !v)}
+                    >
+                      {showManualPass ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-[11px] font-semibold text-slate-700">Confirm password</span>
+                  <input
+                    type={showManualPass ? 'text' : 'password'}
+                    value={manualPassword2}
+                    onChange={(e) => setManualPassword2(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs outline-none focus:border-blue-500 focus:bg-white"
+                    placeholder="Re-type password"
+                    autoComplete="new-password"
+                    required
+                  />
+                </label>
+                {passwordMsg && <p className="text-xs text-rose-600">{passwordMsg}</p>}
+                <button
+                  type="submit"
+                  disabled={isSettingPassword}
+                  className="w-full py-2.5 rounded-xl text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
+                >
+                  {isSettingPassword ? 'Saving password…' : 'Save owner password'}
+                </button>
+              </form>
+
               <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-mono uppercase tracking-widest text-slate-500 font-bold">Store Owner Login URL</p>
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-slate-500 font-bold">Optional private login link</p>
                     <p className="text-[11px] text-slate-500 mt-1">
-                      Share this link with the store owner. It stays the same when other store details are saved.
+                      Alternate one-click owner link. Email + password on the dashboard URL above is the normal re-login path.
                     </p>
                   </div>
                   {ownerLoginRevoked ? (
@@ -501,71 +639,42 @@ Security Level: Dedicated Database Isolation
                       )}
                       <p className="text-[10px] text-slate-400 mt-0.5">
                         {isPasswordRevoked
-                          ? 'Old password is non-functional until reset'
-                          : 'Store owner manages access via secure email reset'}
+                          ? 'Old password is non-functional until reset or you set a new one above'
+                          : 'Owner signs in on the dashboard URL with email/slug + password'}
                       </p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* SECTION: PASSWORD RESET TRIGGER (Admins cannot set manual passwords) */}
-              <div className="bg-gradient-to-br from-blue-50/70 via-indigo-50/40 to-slate-50 border border-blue-200/80 rounded-2xl p-5 space-y-4 shadow-xs">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🔄</span>
-                      <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                        Store Owner Password Management
-                      </h3>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold border border-blue-200">
-                        Zero-Knowledge Security
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                      For data privacy and compliance, store passwords cannot be viewed or manually entered by administrators.
-                      Use the button below to initiate an official password reset for the store owner.
-                    </p>
-                  </div>
+              {/* Optional email reset (revokes current password until owner resets) */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                    Or email a reset link
+                  </h3>
+                  <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                    This revokes the current password and emails a one-time reset to{' '}
+                    <code className="font-mono text-slate-800">{ownerEmail || tenant.ownerEmail}</code>.
+                    Prefer <strong>Set owner password</strong> above for day-to-day setup.
+                  </p>
                 </div>
 
-                {/* Security Policy Alert */}
-                <div className="bg-white/90 border border-blue-100 rounded-xl p-3.5 text-xs text-slate-700 flex items-start gap-2.5 shadow-xs">
-                  <span className="text-base mt-0.5">🛡️</span>
-                  <div className="space-y-1">
-                    <p className="font-semibold text-slate-900">
-                      Security Invalidation Policy
-                    </p>
-                    <p className="text-slate-600 text-[11px] leading-relaxed">
-                      Clicking <strong>Reset Password</strong> immediately invalidates the store owner&apos;s current password in the master database.
-                      They will <strong>not be able to log in with their old password</strong> and must use the one-time link delivered to:
-                    </p>
-                    <code className="text-blue-700 font-mono font-bold text-[11px] block mt-0.5 bg-blue-50/80 px-2 py-1 rounded border border-blue-200/60 w-fit">
-                      {ownerEmail || tenant.ownerEmail}
-                    </code>
-                  </div>
-                </div>
-
-                {/* Primary Reset Button */}
                 <button
                   type="button"
                   onClick={handleTriggerPasswordReset}
                   disabled={isResetting}
-                  className="w-full py-3 px-4 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:scale-[0.99] transition-all cursor-pointer shadow-md shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-100 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isResetting ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>Revoking Old Password & Sending Email...</span>
+                      <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-700 rounded-full animate-spin" />
+                      <span>Sending reset email…</span>
                     </>
                   ) : isPasswordRevoked ? (
-                    <>
-                      <span>✉️ Re-send Password Reset Email & Keep Old Password Revoked</span>
-                    </>
+                    <span>Re-send password reset email</span>
                   ) : (
-                    <>
-                      <span>✉️ Send Password Reset Email & Revoke Old Password</span>
-                    </>
+                    <span>Send password reset email</span>
                   )}
                 </button>
 

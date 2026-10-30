@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { authService, type SellerSession } from '@/api/auth'
 import { API_BASE } from '@/api/base'
+import { sellerPortalUrl } from '@/lib/store-urls'
 
 interface SellerLoginProps {
   brandName: string
   boundSlug: string
-  ownerLoginKey: string
+  /** Private /owner/{key} flow only. Dashboard re-login uses boundSlug instead. */
+  ownerLoginKey?: string
   onLoginSuccess: (session: SellerSession) => void
 }
 
@@ -27,7 +29,7 @@ export default function SellerLogin({ brandName, boundSlug, ownerLoginKey, onLog
     if (submitting) return
     setError(null)
     setSubmitting(true)
-    const res = await authService.loginSeller(loginId, password, ownerLoginKey)
+    const res = await authService.loginSeller(loginId, password, ownerLoginKey, boundSlug)
     setSubmitting(false)
     if (!res.success || !res.session) {
       setPassword('')
@@ -74,7 +76,9 @@ export default function SellerLogin({ brandName, boundSlug, ownerLoginKey, onLog
           <h2>
             Run your store from one <em>command centre</em>.
           </h2>
-          <p>Sign in to manage {brandName}. This page is only for the store owner link issued by Orvexa Cloud.</p>
+          <p>
+            Sign in with the store owner email (or slug <strong>{boundSlug}</strong>) and password set by Orvexa Cloud.
+          </p>
         </div>
         <div className="auth-points">
           <div>
@@ -103,7 +107,7 @@ export default function SellerLogin({ brandName, boundSlug, ownerLoginKey, onLog
             </div>
 
             <label className="field">
-              <span className="label">Email</span>
+              <span className="label">Email or store slug</span>
               <input
                 id="owner-login-id"
                 className="input"
@@ -113,7 +117,7 @@ export default function SellerLogin({ brandName, boundSlug, ownerLoginKey, onLog
                 autoFocus
                 value={loginId}
                 onChange={(e) => setLoginId(e.target.value)}
-                placeholder="you@store.com"
+                placeholder={boundSlug || 'you@store.com'}
               />
             </label>
 
@@ -210,14 +214,17 @@ export default function SellerLogin({ brandName, boundSlug, ownerLoginKey, onLog
   )
 }
 
+/** Wrong-store session only — normal logout uses the email/password form above. */
 export function StoreDashboardGate({
   brandName,
   otherStore,
   onSignOut,
+  dashboardUrl,
 }: {
   brandName?: string
   otherStore?: string
   onSignOut?: () => void
+  dashboardUrl?: string
 }) {
   return (
     <div className="auth">
@@ -225,9 +232,9 @@ export function StoreDashboardGate({
         <img className="logo" src="/brand/logo-white.svg" alt="Orvexa Cloud" />
         <div>
           <h2>
-            Store owner access is <em>by invitation</em>.
+            This address belongs to <em>another store</em>.
           </h2>
-          <p>Management for {brandName || 'this store'} opens from the private login link issued by Orvexa Cloud.</p>
+          <p>Management for {brandName || 'this store'} needs that store&apos;s owner credentials.</p>
         </div>
         <img className="mark-bg" src="/brand/logo-white.svg" alt="" aria-hidden />
       </aside>
@@ -235,16 +242,21 @@ export function StoreDashboardGate({
         <div className="auth-card">
           <div>
             <p className="eyebrow">Store owner</p>
-            <h1>Private sign-in</h1>
+            <h1>Wrong store session</h1>
             <p className="muted" style={{ marginTop: 6 }}>
               {otherStore
-                ? `You are signed in to ${otherStore}. This address belongs to a different store.`
-                : 'Use the store owner login URL from your Orvexa administrator. Customer sign-in does not open this dashboard.'}
+                ? `You are signed in to ${otherStore}. Sign out, then sign in with the owner email and password for ${brandName || 'this store'}.`
+                : 'Sign in with the store owner email and password.'}
             </p>
+            {dashboardUrl && (
+              <p className="muted small" style={{ marginTop: 10 }}>
+                Portal: <span className="mono">{dashboardUrl}</span>
+              </p>
+            )}
           </div>
           {onSignOut && (
-            <button type="button" className="btn btn-outline" onClick={onSignOut}>
-              Sign out
+            <button type="button" className="btn btn-primary" onClick={onSignOut}>
+              Sign out and continue
             </button>
           )}
           <p className="center muted small">© {new Date().getFullYear()} Orvexa Tech Private Limited</p>
@@ -252,4 +264,8 @@ export function StoreDashboardGate({
       </div>
     </div>
   )
+}
+
+export function storeOwnerDashboardHint(slug: string): string {
+  return sellerPortalUrl(slug)
 }

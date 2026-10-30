@@ -6,10 +6,10 @@ import { mockStore } from '@/api/mock-store'
 import { auditLogger } from '@/api/audit-logger'
 import { API_BASE } from '@/api/base'
 import { PLAN_CATALOG, formatPlanPrice, normalizePlanId, storeAddress } from '@/data/plans'
-import { tenantPortalPath } from '@/lib/store-urls'
+import { sellerPortalUrl, tenantPortalPath } from '@/lib/store-urls'
 import { fetchStoreAnalytics, fetchDomainConfig, saveCustomDomain } from '@/api/storefront-analytics'
 import { storeInbox, STORE_INBOX_EVENT, type NewsletterSubscriber, type StoreMessage } from '@/api/store-messages'
-import { StoreDashboardGate } from '@/components/auth/SellerLogin'
+import SellerLogin, { StoreDashboardGate } from '@/components/auth/SellerLogin'
 import PortalView from '@/components/platform/PortalView'
 import StoreAuditLogs from '@/components/store/StoreAuditLogs'
 import StorefrontContentEditor, {
@@ -170,12 +170,33 @@ export default function DashboardApp() {
     )
   }
 
-  if (!session || session.tenantSlug !== tenant?.slug) {
+  if (!tenant?.slug) {
     return (
       <StoreDashboardGate
-        brandName={tenant?.brandName}
-        otherStore={session && session.tenantSlug !== tenant?.slug ? session.brandName : undefined}
-        onSignOut={session ? handleLogout : undefined}
+        brandName="this store"
+        dashboardUrl={typeof window !== 'undefined' ? window.location.href : undefined}
+      />
+    )
+  }
+
+  // Signed into a different store — force sign-out before this portal's login form.
+  if (session && session.tenantSlug !== tenant.slug) {
+    return (
+      <StoreDashboardGate
+        brandName={tenant.brandName}
+        otherStore={session.brandName}
+        dashboardUrl={sellerPortalUrl(tenant.slug)}
+        onSignOut={handleLogout}
+      />
+    )
+  }
+
+  if (!session) {
+    return (
+      <SellerLogin
+        brandName={tenant.brandName}
+        boundSlug={tenant.slug}
+        onLoginSuccess={(next) => setSession(next)}
       />
     )
   }

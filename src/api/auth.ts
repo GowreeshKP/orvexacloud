@@ -565,7 +565,8 @@ export const authService = {
   async loginSeller(
     loginId: string,
     password: string,
-    ownerLoginKey?: string
+    ownerLoginKey?: string,
+    tenantSlug?: string
   ): Promise<{ success: boolean; session?: SellerSession; error?: string }> {
     const cleanId = loginId.trim().toLowerCase()
     const cleanPass = password.trim()
@@ -578,6 +579,7 @@ export const authService = {
           loginId: cleanId,
           password: cleanPass,
           ...(ownerLoginKey ? { ownerLoginKey } : {}),
+          ...(tenantSlug && !ownerLoginKey ? { tenantSlug: tenantSlug.trim().toLowerCase() } : {}),
         }),
       })
 
