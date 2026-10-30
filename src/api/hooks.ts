@@ -187,17 +187,22 @@ export function useThemeCustomizer(): {
   const { tenant, refreshTenant } = useTenant()
 
   const updateTheme = useCallback((updates: Partial<ThemeConfig>) => {
-    if (tenant) {
-      mockStore.updateTheme(tenant.id, updates)
+    if (!tenant) return
+    // Optimistic local update for the live preview — do not refresh from API yet or
+    // empty Mongo theme would wipe the merchant's unsaved edits.
+    mockStore.updateTheme(tenant.id, updates)
+    void apiClient.updateTheme(tenant.slug, updates).then((saved) => {
+      if (saved) mockStore.updateTheme(tenant.id, saved)
       refreshTenant()
-    }
+    })
   }, [tenant, refreshTenant])
 
   const updateTenant = useCallback((updates: Partial<TenantConfig>) => {
-    if (tenant) {
-      mockStore.updateTenant(tenant.id, updates)
+    if (!tenant) return
+    mockStore.updateTenant(tenant.id, updates)
+    void apiClient.updateStoreProfile(tenant.slug, updates).then(() => {
       refreshTenant()
-    }
+    })
   }, [tenant, refreshTenant])
 
   return {

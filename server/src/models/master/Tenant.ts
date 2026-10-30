@@ -157,6 +157,12 @@ export const TenantSchema = new Schema<ITenant>(
       discountPercent: { type: Number, default: 0, min: 0, max: 90 },
       freeShippingThreshold: { type: Number, default: 999, min: 0 },
       shippingFee: { type: Number, default: 70, min: 0 },
+      copy: { type: Schema.Types.Mixed, default: undefined },
+      trustItems: { type: Schema.Types.Mixed, default: undefined },
+      homeSections: { type: Schema.Types.Mixed, default: undefined },
+      pdpOptions: { type: Schema.Types.Mixed, default: undefined },
+      footerOptions: { type: Schema.Types.Mixed, default: undefined },
+      socialLinks: { type: Schema.Types.Mixed, default: undefined },
     },
     subscription: {
       plan: { type: String, default: 'starter' },

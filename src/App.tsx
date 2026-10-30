@@ -1188,9 +1188,8 @@ function HeroSection({
   onShopClick: () => void
 }) {
   const copy = getStorefrontCopy(tenant)
-  const heroImage =
-    tenant?.theme?.heroImage ||
-    (isTemplateStore(tenant) ? '' : 'https://cdn.shopify.com/s/files/1/0957/7549/0340/files/IMG_5227_1.jpg?v=1778607243')
+  // Prefer the merchant's saved hero. Never fall back to third-party CDN URLs that 404.
+  const heroImage = tenant?.theme?.heroImage || ''
   const brandTitle = tenant?.brandName || 'THE LUNAR CLOTHING'
   const headline = tenant?.theme?.heroHeadline || tenant?.tagline || brandTitle
   const subhead = tenant?.theme?.heroSubhead || copy.heroSubhead
@@ -1731,9 +1730,7 @@ function MissionBlock({
 }) {
   const brandName = tenant?.brandName || 'The Lunar Clothing'
   const copy = getStorefrontCopy(tenant)
-  const bgImg =
-    tenant?.theme?.heroImage ||
-    (isTemplateStore(tenant) ? '' : 'https://cdn.shopify.com/s/files/1/0957/7549/0340/files/IMG_2171_1.jpg?v=1766941862')
+  const bgImg = tenant?.theme?.heroImage || ''
 
   return (
     <section className="relative py-36 md:py-48 bg-stone-950 text-center text-white overflow-hidden select-none border-t border-white/10">
@@ -3660,12 +3657,10 @@ function AccountDrawer({
             <div className="flex items-center gap-3.5">
               {tenant?.logo || tenant?.theme?.logoUrl ? (
                 <img src={tenant.logo || tenant.theme.logoUrl} alt={brandName} className="h-9 w-auto object-contain rounded-md" />
-              ) : tenant && isTemplateStore(tenant) ? (
-                <div className="w-9 h-9 rounded-md bg-white/10 border border-white/20 flex items-center justify-center font-bold text-sm">
-                  {brandName.charAt(0).toUpperCase()}
-                </div>
               ) : (
-                <img src="/lunar-logo.png" alt="Lunar" className="h-9 w-auto object-contain rounded-md" />
+                <div className="w-9 h-9 rounded-md bg-white/10 border border-white/20 flex items-center justify-center font-bold text-sm">
+                  {(brandName || 'S').charAt(0).toUpperCase()}
+                </div>
               )}
               <div>
                 <div className="flex items-center gap-2">

@@ -242,6 +242,7 @@ router.get('/theme', async (req: Request, res: Response) => {
 const THEME_COLOR_KEYS = ['primaryColor', 'accentColor', 'backgroundColor'] as const
 const THEME_TEXT_KEYS = ['fontDisplay', 'fontSans', 'heroHeadline', 'heroSubhead', 'heroCtaText', 'secondaryCtaText', 'discountCode'] as const
 const THEME_FLAG_KEYS = ['enableAnimations', 'enableReviews', 'enableOrderTracking'] as const
+const HOME_SECTION_IDS = new Set(['trustBar', 'bestsellers', 'categories', 'featured', 'triptych', 'mission'])
 
 function themeFields(body: unknown): Record<string, unknown> {
   if (!isPlainObject(body)) throw new ValidationError('Request body must be a JSON object.')
@@ -273,6 +274,57 @@ function themeFields(body: unknown): Record<string, unknown> {
   if (threshold !== undefined) out.freeShippingThreshold = threshold
   const fee = optNumber(body.shippingFee, 'shippingFee', { min: 0, max: 100_000 })
   if (fee !== undefined) out.shippingFee = fee
+
+  // Homepage content editor fields (StorefrontContentEditor → extrasToTheme)
+  if (isPlainObject(body.copy)) {
+    const copy: Record<string, string> = {}
+    for (const [k, v] of Object.entries(body.copy)) {
+      if (typeof k !== 'string' || k.length > 60) continue
+      if (typeof v === 'string') copy[k] = v.slice(0, 2000)
+    }
+    out.copy = copy
+  }
+  if (Array.isArray(body.trustItems)) {
+    out.trustItems = body.trustItems.slice(0, 12).map((item, i) => {
+      if (!isPlainObject(item)) throw new ValidationError(`trustItems[${i}] is invalid.`)
+      return {
+        icon: optString(item.icon, `trustItems[${i}].icon`, 16) || '✨',
+        text: optString(item.text, `trustItems[${i}].text`, 80) || '',
+      }
+    }).filter((t) => t.text)
+  }
+  if (Array.isArray(body.homeSections)) {
+    out.homeSections = body.homeSections.slice(0, 12).map((item, i) => {
+      if (!isPlainObject(item)) throw new ValidationError(`homeSections[${i}] is invalid.`)
+      const id = optString(item.id, `homeSections[${i}].id`, 40) || ''
+      if (!HOME_SECTION_IDS.has(id)) throw new ValidationError(`homeSections[${i}].id is not a known section.`)
+      return { id, visible: item.visible !== false }
+    })
+  }
+  if (isPlainObject(body.pdpOptions)) {
+    const pdp: Record<string, boolean> = {}
+    for (const key of ['zoom', 'guarantee', 'details', 'shipping', 'related'] as const) {
+      const v = optBoolean(body.pdpOptions[key], `pdpOptions.${key}`)
+      if (v !== undefined) pdp[key] = v
+    }
+    out.pdpOptions = pdp
+  }
+  if (isPlainObject(body.footerOptions)) {
+    const footer: Record<string, boolean> = {}
+    for (const key of ['trustStrip', 'newsletter'] as const) {
+      const v = optBoolean(body.footerOptions[key], `footerOptions.${key}`)
+      if (v !== undefined) footer[key] = v
+    }
+    out.footerOptions = footer
+  }
+  if (isPlainObject(body.socialLinks)) {
+    const social: Record<string, string> = {}
+    for (const key of ['instagram', 'whatsapp', 'pinterest', 'facebook'] as const) {
+      const v = optString(body.socialLinks[key], `socialLinks.${key}`, 300)
+      if (v !== undefined) social[key] = v
+    }
+    out.socialLinks = social
+  }
   return out
 }
 
@@ -291,6 +343,54 @@ router.put('/theme', ...ownerOfTenant, async (req: Request, res: Response) => {
     res.json({ success: true, theme: savedTheme })
   } catch (err) {
     sendError(res, err, 'Failed to update theme', 'update theme')
+  }
+})
+
+// PUT store profile (brand, logo, contact) — store owner only
+router.put('/profile', ...ownerOfTenant, async (req: Request, res: Response) => {
+  try {
+    if (!isPlainObject(req.body)) throw new ValidationError('Request body must be a JSON object.')
+    const body = req.body
+    const $set: Record<string, unknown> = {}
+    const brandName = optString(body.brandName ?? body.name, 'brandName', 100)
+    if (brandName !== undefined) $set.brandName = brandName
+    const tagline = optString(body.tagline, 'tagline', 300)
+    if (tagline !== undefined) $set.tagline = tagline
+    const aboutStory = optString(body.aboutStory, 'aboutStory', 5000)
+    if (aboutStory !== undefined) $set.aboutStory = aboutStory
+    const logo = optImageUrl(body.logo ?? body.logoUrl, 'logo')
+    if (logo !== undefined) {
+      $set.logo = logo
+      $set['theme.logoUrl'] = logo
+    }
+    if (isPlainObject(body.contact)) {
+      const phone = optString(body.contact.phone, 'contact.phone', 40)
+      const email = optString(body.contact.email, 'contact.email', 254)
+      const address = optString(body.contact.address, 'contact.address', 500)
+      const workingHours = optString(body.contact.workingHours, 'contact.workingHours', 120)
+      const shippingThresholdFormatted = optString(body.contact.shippingThresholdFormatted, 'contact.shippingThresholdFormatted', 80)
+      if (phone !== undefined) $set['contact.phone'] = phone
+      if (email !== undefined) $set['contact.email'] = email
+      if (address !== undefined) $set['contact.address'] = address
+      if (workingHours !== undefined) $set['contact.workingHours'] = workingHours
+      if (shippingThresholdFormatted !== undefined) $set['contact.shippingThresholdFormatted'] = shippingThresholdFormatted
+    }
+    if (Object.keys($set).length === 0) {
+      res.status(400).json({ error: 'No profile fields to update.' })
+      return
+    }
+    const masterDb = await connectMasterDatabase()
+    const updated = await getTenantModel(masterDb).findOneAndUpdate(
+      { slug: req.tenant!.slug },
+      { $set },
+      { new: true }
+    )
+    if (logo !== undefined) {
+      await req.tenantDb!.ThemeConfig.findOneAndUpdate({}, { $set: { logoUrl: logo } }, { upsert: true })
+    }
+    res.json({ success: true, tenant: updated })
+  } catch (err) {
+    sendError(res, err, 'Failed to update store profile', 'update profile')
   }
 })
 

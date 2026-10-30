@@ -52,6 +52,12 @@ export interface IThemeConfigDoc extends Document {
   enableAnimations: boolean
   enableReviews: boolean
   enableOrderTracking: boolean
+  copy?: Record<string, string>
+  trustItems?: { icon: string; text: string }[]
+  homeSections?: { id: string; visible: boolean }[]
+  pdpOptions?: Record<string, boolean>
+  footerOptions?: Record<string, boolean>
+  socialLinks?: Record<string, string>
   updatedAt: string
 }
 
@@ -76,6 +82,12 @@ export const ThemeConfigSchema = new Schema<IThemeConfigDoc>(
     enableAnimations: { type: Boolean, default: true },
     enableReviews: { type: Boolean, default: true },
     enableOrderTracking: { type: Boolean, default: true },
+    copy: { type: Schema.Types.Mixed },
+    trustItems: { type: Schema.Types.Mixed },
+    homeSections: { type: Schema.Types.Mixed },
+    pdpOptions: { type: Schema.Types.Mixed },
+    footerOptions: { type: Schema.Types.Mixed },
+    socialLinks: { type: Schema.Types.Mixed },
   },
   { timestamps: true }
 )

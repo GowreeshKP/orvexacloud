@@ -31,17 +31,22 @@ import {
 import type { Product } from '@/types'
 import type { TenantConfig, ThemeConfig, TrackedOrder } from '@/types/tenant'
 
-// Dashboard sidebar navigation items
-const NAV_ITEMS = [
+// Store owner portal nav — matches orvexa-portals-demo layout
+const PRIMARY_NAV = [
   { id: 'overview', label: 'Dashboard', icon: '📊' },
-  { id: 'products', label: 'Products & Inventory', icon: '🏷️' },
-  { id: 'orders', label: 'Orders & Shipments', icon: '📦' },
-  { id: 'inbox', label: 'Inbox & Subscribers', icon: '✉️' },
-  { id: 'storefront', label: 'Storefront & Homepage', icon: '🎨' },
-  { id: 'database', label: 'Database & MongoDB', icon: '🗄️' },
-  { id: 'audit', label: 'Security & Audit Log', icon: '🛡️' },
-  { id: 'settings', label: 'Store Settings & Plan', icon: '⚙️' },
+  { id: 'orders', label: 'Orders', icon: '📦' },
+  { id: 'products', label: 'Products', icon: '🏷️' },
+  { id: 'inbox', label: 'Messages', icon: '✉️' },
 ] as const
+
+const STORE_NAV = [
+  { id: 'storefront', label: 'Storefront', icon: '🎨' },
+  { id: 'settings', label: 'Settings', icon: '⚙️' },
+  { id: 'database', label: 'Database', icon: '🗄️' },
+  { id: 'audit', label: 'Audit log', icon: '🛡️' },
+] as const
+
+const NAV_ITEMS = [...PRIMARY_NAV, ...STORE_NAV] as const
 
 type DashboardView = (typeof NAV_ITEMS)[number]['id']
 
@@ -219,17 +224,17 @@ export default function DashboardApp() {
       >
         <div className="brand-row">
           <img src="/brand/logo-white.svg" alt="Orvexa" style={{ height: 28 }} />
-          {!sidebarCollapsed && <span className="portal-chip">Merchant</span>}
+          {!sidebarCollapsed && <span className="portal-chip">Store Owner</span>}
         </div>
 
         <div className="store-card">
-          <span className="avatar sm" style={{ background: 'var(--gold)', color: 'var(--ink)' }}>
-            {tenant?.brandName?.charAt(0) || 'S'}
+          <span className="avatar sm" style={{ background: 'var(--indigo)', color: '#fff' }}>
+            {(tenant?.brandName || 'S').slice(0, 2).toUpperCase()}
           </span>
           {!sidebarCollapsed && (
             <div className="grow min-w-0">
               <p className="nm truncate">{tenant?.brandName || 'My Store'}</p>
-              <p className="sub truncate">{tenant?.ownerName || session.name}</p>
+              <p className="sub truncate">{storeAddress(tenant?.slug || '')}</p>
             </div>
           )}
           <button type="button" className="btn btn-ghost btn-icon" style={{ color: 'var(--on-ink-2)' }} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title={sidebarCollapsed ? 'Expand' : 'Collapse'} aria-label={sidebarCollapsed ? 'Expand menu' : 'Collapse menu'}>
@@ -237,9 +242,28 @@ export default function DashboardApp() {
           </button>
         </div>
 
-        <p className="nav-group">{!sidebarCollapsed && 'Store'}</p>
-        <nav className="col" style={{ gap: 4 }} aria-label="Merchant sections">
-          {NAV_ITEMS.map((item) => {
+        <nav className="col" style={{ gap: 4 }} aria-label="Store owner sections">
+          {PRIMARY_NAV.map((item) => {
+            const isActive = activeView === item.id
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setActiveView(item.id)
+                  setNavOpen(false)
+                }}
+                className={`nav-item${isActive ? ' active' : ''}`}
+                title={item.label}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                <span aria-hidden>{item.icon}</span>
+                {!sidebarCollapsed && <span className="grow">{item.label}</span>}
+              </button>
+            )
+          })}
+          <p className="nav-group">{!sidebarCollapsed && 'Your store'}</p>
+          {STORE_NAV.map((item) => {
             const isActive = activeView === item.id
             return (
               <button
@@ -261,14 +285,18 @@ export default function DashboardApp() {
         </nav>
 
         <div className="sidebar-foot">
-          <a href={tenantPortalPath(tenant?.slug || '')} target="_blank" rel="noopener noreferrer" className="nav-item">
-            <span aria-hidden>🌐</span>
-            {!sidebarCollapsed && <span>Live storefront</span>}
-          </a>
-          <button type="button" onClick={handleLogout} className="nav-item" style={{ color: 'var(--coral)' }}>
-            <span aria-hidden>🚪</span>
-            {!sidebarCollapsed && <span>Sign out</span>}
-          </button>
+          <div className="user-card">
+            <span className="avatar sm">{(session.name || 'O').slice(0, 2).toUpperCase()}</span>
+            {!sidebarCollapsed && (
+              <div className="grow min-w-0">
+                <p className="nm truncate">{session.name || tenant?.ownerName || 'Store owner'}</p>
+                <p className="rl">Store owner</p>
+              </div>
+            )}
+            <button type="button" onClick={handleLogout} className="btn btn-ghost btn-icon" style={{ color: 'var(--on-ink-2)' }} title="Sign out" aria-label="Sign out">
+              🚪
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -277,17 +305,23 @@ export default function DashboardApp() {
           <button type="button" className="menu-btn btn btn-outline btn-icon" onClick={() => setNavOpen(true)} aria-label="Open menu">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
           </button>
-          <span className="crumb">Merchant</span>
+          <span className="crumb">Store</span>
           <span className="muted">/</span>
           <strong key={activeView} style={{ fontFamily: 'var(--font-display)' }}>
             {NAV_ITEMS.find((n) => n.id === activeView)?.label || 'Dashboard'}
           </strong>
-          <span className="muted small mono hidden sm:inline">{tenant?.brandName} · {storeAddress(tenant?.slug || '')}</span>
           <div className="right row" style={{ gap: 8 }}>
+            <a
+              href={tenantPortalPath(tenant?.slug || '')}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-outline btn-sm"
+            >
+              View store
+            </a>
             <button type="button" className="btn btn-gold btn-sm" onClick={() => switchLayer('storefront', tenant?.slug || 'lunar')}>
               Open storefront
             </button>
-            <span className="pill leaf">{tenant?.status || 'Active'}</span>
           </div>
         </header>
 
@@ -356,33 +390,21 @@ function DashboardOverview({ onNavigate }: { onNavigate: (view: DashboardView) =
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Welcome Banner */}
-      <div
-        className="text-white p-6 md:p-8 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6"
-        style={{ background: 'linear-gradient(135deg, #0f0f1a 0%, #1a1040 50%, #0d1117 100%)', boxShadow: '0 8px 40px rgba(0,0,0,0.2)' }}
-      >
+      <div className="page-head" style={{ marginBottom: 8 }}>
         <div>
-          <span className="text-[10px] font-mono tracking-[0.25em]" style={{ color: 'rgba(139,92,246,0.8)' }}>SELLER PORTAL • ORVEXA PLATFORM</span>
-          <h2 className="text-xl md:text-2xl mt-1" style={{ fontFamily: 'var(--font-display)' }}>Welcome back, {tenant?.ownerName || 'Merchant'}! 👋</h2>
-          <p className="text-xs mt-1 max-w-xl" style={{ color: 'rgba(255,255,255,0.55)' }}>
-            Manage catalog, homepage and orders. Live storefront:{' '}
-            <strong style={{ color: 'rgba(255,255,255,0.85)' }}>{storeAddress(tenant?.slug || '')}</strong>
-            {tenant?.customDomain ? ` · custom ${tenant.customDomain}` : ''}
+          <p className="eyebrow">Store owner</p>
+          <h1>Welcome back, {tenant?.ownerName || 'there'}</h1>
+          <p className="sub">
+            Orders, products and your storefront for <strong>{storeAddress(tenant?.slug || '')}</strong>
+            {tenant?.customDomain ? ` · ${tenant.customDomain}` : ''}
           </p>
         </div>
-        <div className="flex gap-3 flex-wrap">
-          <button
-            onClick={() => onNavigate('products')}
-            className="font-bold text-xs uppercase tracking-wider px-4 py-2.5 rounded-lg cursor-pointer transition-all text-black"
-            style={{ background: 'white', boxShadow: '0 2px 12px rgba(0,0,0,0.2)' }}
-          >
-            + Add Product
+        <div className="row wrap" style={{ gap: 8 }}>
+          <button type="button" className="btn btn-primary" onClick={() => onNavigate('products')}>
+            + Add product
           </button>
-          <button
-            onClick={() => onNavigate('storefront')}
-            className="font-bold text-xs uppercase tracking-wider px-4 py-2.5 rounded-lg cursor-pointer transition-all text-white"
-            style={{ background: 'rgba(139,92,246,0.3)', border: '1px solid rgba(139,92,246,0.4)' }}
-          >
-            🎨 Edit Homepage
+          <button type="button" className="btn btn-gold" onClick={() => onNavigate('storefront')}>
+            Edit storefront
           </button>
         </div>
       </div>
@@ -1532,7 +1554,6 @@ function ProductFormModal({
 // =====================================================
 function StorefrontCustomizer({ onToast }: { onToast: (msg: string) => void }) {
   const { theme, tenant, updateTheme, updateTenant } = useThemeCustomizer()
-  const { refreshTenant } = useTenant()
   const switchLayer = useSwitchLayer()
   const [isSaved, setIsSaved] = useState(false)
 
@@ -1668,7 +1689,8 @@ function StorefrontCustomizer({ onToast }: { onToast: (msg: string) => void }) {
   }
 
   const handleSaveAll = () => {
-    // Save theme updates
+    // Persist theme + homepage extras to the API (hooks call PUT /theme).
+    // Do not refreshTenant() here — that race would reload empty Mongo and wipe the preview.
     updateTheme({
       heroImage,
       heroHeadline,
@@ -1687,7 +1709,6 @@ function StorefrontCustomizer({ onToast }: { onToast: (msg: string) => void }) {
       ...extrasToTheme(extras),
     })
 
-    // Save tenant profile updates
     updateTenant({
       brandName,
       name: brandName,
@@ -1704,9 +1725,8 @@ function StorefrontCustomizer({ onToast }: { onToast: (msg: string) => void }) {
       },
     })
 
-    refreshTenant()
     setIsSaved(true)
-    onToast('✅ Homepage banner, branding & theme published to live store!')
+    onToast('Homepage, branding and theme published to your live store.')
   }
 
   return (

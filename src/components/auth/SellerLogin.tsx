@@ -73,25 +73,26 @@ export default function SellerLogin({ brandName, boundSlug, ownerLoginKey, onLog
       <aside className="auth-side">
         <img className="logo" src="/brand/logo-white.svg" alt="Orvexa Cloud" />
         <div>
+          <p className="portal-chip" style={{ marginBottom: 18 }}>Store Owner</p>
           <h2>
-            Run your store from one <em>command centre</em>.
+            Your store, orders and customers <em>in one place.</em>
           </h2>
           <p>
-            Sign in with the store owner email (or slug <strong>{boundSlug}</strong>) and password set by Orvexa Cloud.
+            Manage products, ship orders, reply to customers and shape your storefront.
           </p>
         </div>
         <div className="auth-points">
           <div>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M20 6 9 17l-5-5" /></svg>
-            Catalog, orders, and store settings
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><path d="M9 22V12h6v10" /></svg>
+            Products, orders and customers
           </div>
           <div>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M20 6 9 17l-5-5" /></svg>
-            Isolated to this store only
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z" /><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14z" /></svg>
+            Change your storefront in minutes
           </div>
           <div>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M20 6 9 17l-5-5" /></svg>
-            Separate from customer sign-in
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+            Your data stays in your own database
           </div>
         </div>
         <img className="mark-bg" src="/brand/logo-white.svg" alt="" aria-hidden />
@@ -101,13 +102,15 @@ export default function SellerLogin({ brandName, boundSlug, ownerLoginKey, onLog
         {view === 'login' && (
           <form className="auth-card" onSubmit={handleSubmit}>
             <div>
-              <p className="eyebrow">Store owner</p>
+              <p className="eyebrow">Store owner portal</p>
               <h1>Sign in</h1>
-              <p className="muted" style={{ marginTop: 6 }}>{brandName}</p>
+              <p className="muted" style={{ marginTop: 6 }}>
+                {brandName ? `Welcome back to ${brandName}.` : 'Welcome back. Enter your details to continue.'}
+              </p>
             </div>
 
             <label className="field">
-              <span className="label">Email or store slug</span>
+              <span className="label">Email or store address</span>
               <input
                 id="owner-login-id"
                 className="input"

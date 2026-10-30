@@ -121,6 +121,28 @@ class ApiClient {
     return data?.theme || (tenant ? tenant.theme : null)
   }
 
+  async updateStoreProfile(tenantSlug: string, updates: Partial<TenantConfig>): Promise<TenantConfig | null> {
+    const payload = {
+      brandName: updates.brandName || updates.name,
+      name: updates.name || updates.brandName,
+      tagline: updates.tagline,
+      aboutStory: updates.aboutStory,
+      logo: updates.logo || updates.logoUrl,
+      logoUrl: updates.logoUrl || updates.logo,
+      contact: updates.contact,
+    }
+    const data = await this.request<{ success: boolean; tenant: TenantConfig }>(`/stores/${tenantSlug}/profile`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+
+    const tenant = mockStore.getTenantBySlug(tenantSlug)
+    if (tenant) {
+      mockStore.updateTenant(tenant.id, updates)
+    }
+    return data?.tenant || (tenant ? { ...tenant, ...updates } : null)
+  }
+
   // --- ORDERS ---
   async getOrders(tenantSlug: string): Promise<TrackedOrder[]> {
     const data = await this.request<TrackedOrder[]>(`/stores/${tenantSlug}/orders`)
