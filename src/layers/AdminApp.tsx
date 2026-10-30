@@ -1,4 +1,8 @@
 import { useState, useEffect, type ReactNode } from 'react'
+import {
+  LayoutDashboard, ClipboardList, Users, Store, CreditCard, Globe, Shield,
+  LogOut, Bell, Search, CheckCircle, AlertTriangle, Mail, MessageCircle,
+} from 'lucide-react'
 import { useAdminTenants, useAdminApplications, usePlatformStats } from '@/api/hooks'
 import { authService, type AdminSession } from '@/api/auth'
 import { auditLogger } from '@/api/audit-logger'
@@ -13,69 +17,44 @@ import type { TenantConfig } from '@/types/tenant'
 import { PLAN_CATALOG, PLAN_IDS, formatPlanPrice, normalizePlanId, storeAddress } from '@/data/plans'
 import { sellerPortalUrl, storefrontUrl } from '@/lib/store-urls'
 
-const ADMIN_NAV = [
-  { id: 'dashboard', label: 'Platform Overview', icon: 'overview' },
-  { id: 'applications', label: 'Merchant Applications', icon: 'applications' },
-  { id: 'leads', label: 'Client Acquisition CRM', icon: 'leads' },
-  { id: 'stores', label: 'Tenant Stores', icon: 'stores' },
-  { id: 'billing', label: 'Subscriptions & Billing', icon: 'billing' },
-  { id: 'domains', label: 'Domains & Routing', icon: 'domains' },
-  { id: 'audit', label: 'Security & Audit Trail', icon: 'audit' },
+// ── Nav groups matching portals demo ─────────────────────────────────────────
+const NAV_GROUPS = [
+  {
+    label: null as string | null,
+    items: [
+      { id: 'dashboard' as const, label: 'Overview',      Icon: LayoutDashboard, appBadge: false, leadsBadge: false },
+      { id: 'applications' as const, label: 'Applications', Icon: ClipboardList,   appBadge: true,  leadsBadge: false },
+      { id: 'leads' as const, label: 'Leads',         Icon: Users,           appBadge: false, leadsBadge: true  },
+    ],
+  },
+  {
+    label: 'Stores',
+    items: [
+      { id: 'stores' as const,  label: 'Stores',  Icon: Store,      appBadge: false, leadsBadge: false },
+      { id: 'billing' as const, label: 'Billing', Icon: CreditCard, appBadge: false, leadsBadge: false },
+      { id: 'domains' as const, label: 'Domains', Icon: Globe,      appBadge: false, leadsBadge: false },
+    ],
+  },
+  {
+    label: 'Security',
+    items: [
+      { id: 'audit' as const, label: 'Audit trail', Icon: Shield, appBadge: false, leadsBadge: false },
+    ],
+  },
 ] as const
 
-type AdminView = (typeof ADMIN_NAV)[number]['id']
+type AdminView = 'dashboard' | 'applications' | 'leads' | 'stores' | 'billing' | 'domains' | 'audit'
 
-// --- SVG Icons for Enterprise Aesthetic ---
-function NavIcon({ type, className = 'w-4 h-4' }: { type: string; className?: string }) {
-  switch (type) {
-    case 'overview':
-      return (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-        </svg>
-      )
-    case 'applications':
-      return (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
-        </svg>
-      )
-    case 'leads':
-      return (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
-        </svg>
-      )
-    case 'stores':
-      return (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.614A2.993 2.993 0 009 9.35c.801 0 1.543-.315 2.096-.832a2.995 2.995 0 004.808 0A2.993 2.993 0 0018 9.35a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.65c0 .414.336.75.75.75z" />
-        </svg>
-      )
-    case 'billing':
-      return (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
-        </svg>
-      )
-    case 'domains':
-      return (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-.778.099-1.533.284-2.253" />
-        </svg>
-      )
-    case 'audit':
-      return (
-        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-        </svg>
-      )
-    default:
-      return null
+function getNavLabel(id: AdminView): string {
+  for (const g of NAV_GROUPS) {
+    for (const item of g.items) {
+      if (item.id === id) return item.label
+    }
   }
+  return id
 }
 
-// --- Real Curved SVG Sparkline Component ---
+// ── Curved SVG Sparkline ──────────────────────────────────────────────────────
 function Sparkline({ data, color = '#6366f1' }: { data: number[]; color?: string }) {
   const min = Math.min(...data)
   const max = Math.max(...data)
@@ -115,6 +94,7 @@ function Sparkline({ data, color = '#6366f1' }: { data: number[]; color?: string
   )
 }
 
+// ── Root component ────────────────────────────────────────────────────────────
 export default function AdminApp() {
   const [session, setSession] = useState<AdminSession | null>(() => authService.getAdminSession())
   const [activeView, setActiveView] = useState<AdminView>('dashboard')
@@ -122,7 +102,6 @@ export default function AdminApp() {
   const [adminToast, setAdminToast] = useState<string | null>(null)
   const [navOpen, setNavOpen] = useState(false)
 
-  // URL Reset Token Detection for Store Owners
   const [resetToken, setResetToken] = useState<string | null>(null)
   const [resetSlug, setResetSlug] = useState<string | null>(null)
   const [isResetOpen, setIsResetOpen] = useState(false)
@@ -142,8 +121,6 @@ export default function AdminApp() {
     document.title = session ? 'Orvexa Admin Portal' : 'Sign In | Orvexa Admin Portal'
   }, [session])
 
-  // Marketing signups only load with a real Super Admin JWT. Tokenless demo sessions
-  // leave the queue stuck on mock seed apps — force a fresh sign-in when the API is up.
   useEffect(() => {
     if (!session) return
     let cancelled = false
@@ -160,9 +137,7 @@ export default function AdminApp() {
         // API offline: keep a local demo session for UI work.
       }
     })()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [session])
 
   const handleLogout = () => {
@@ -184,7 +159,6 @@ export default function AdminApp() {
     />
   )
 
-  // Do not mount admin data hooks on the login screen — they would poll /admin/* without a JWT.
   if (!session || session.role !== 'super_admin') {
     return (
       <>
@@ -211,6 +185,7 @@ export default function AdminApp() {
   )
 }
 
+// ── AdminPortal shell ─────────────────────────────────────────────────────────
 function AdminPortal({
   session,
   activeView,
@@ -241,67 +216,85 @@ function AdminPortal({
   return (
     <div className="shell">
       {navOpen && <div className="scrim" onClick={() => setNavOpen(false)} aria-hidden />}
+
+      {/* ── Sidebar ── */}
       <aside className={`sidebar${navOpen ? ' open' : ''}`}>
         <div className="brand-row">
           <img src="/brand/logo-white.svg" alt="Orvexa Cloud" />
           <span className="portal-chip">Super Admin</span>
         </div>
 
-        <p className="nav-group">Platform</p>
-        <nav className="col" style={{ gap: 4 }} aria-label="Platform sections">
-          {ADMIN_NAV.map((item) => {
-            const isActive = activeView === item.id
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => {
-                  setActiveView(item.id)
-                  setNavOpen(false)
-                }}
-                className={`nav-item${isActive ? ' active' : ''}`}
-                aria-current={isActive ? 'page' : undefined}
-              >
-                <NavIcon type={item.icon} className="w-4 h-4" />
-                <span className="grow">{item.label}</span>
-                {item.id === 'applications' && <PendingBadge />}
-                {item.id === 'leads' && <LeadsBadge />}
-              </button>
-            )
-          })}
-        </nav>
+        {NAV_GROUPS.map((group) => (
+          <div key={group.label ?? '__main__'}>
+            {group.label && <p className="nav-group">{group.label}</p>}
+            <nav className="col" style={{ gap: 4 }} aria-label={group.label ?? 'Platform sections'}>
+              {group.items.map((item) => {
+                const isActive = activeView === item.id
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => { setActiveView(item.id); setNavOpen(false) }}
+                    className={`nav-item${isActive ? ' active' : ''}`}
+                    aria-current={isActive ? 'page' : undefined}
+                  >
+                    <item.Icon size={19} strokeWidth={2.1} />
+                    <span className="grow">{item.label}</span>
+                    {item.appBadge && <PendingBadge />}
+                    {item.leadsBadge && <LeadsBadge />}
+                  </button>
+                )
+              })}
+            </nav>
+          </div>
+        ))}
 
         <div className="sidebar-foot">
           <div className="user-card">
-            <span className="avatar sm">{session.name?.charAt(0).toUpperCase() || 'A'}</span>
+            <span className="avatar sm" style={{ background: 'var(--gold)', color: 'var(--ink)' }}>
+              {session.name?.charAt(0).toUpperCase() ?? 'A'}
+            </span>
             <div className="grow min-w-0">
-              <p className="nm truncate">{session.name || 'Super Admin'}</p>
-              <p className="rl truncate">{session.email}</p>
+              <p className="nm truncate">{session.name ?? 'Super Admin'}</p>
+              <p className="rl truncate">Super administrator</p>
             </div>
             <button type="button" className="btn btn-ghost btn-icon" onClick={handleLogout} title="Sign out" style={{ color: 'var(--on-ink-2)' }}>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
-              </svg>
+              <LogOut size={19} strokeWidth={2.1} />
             </button>
           </div>
         </div>
       </aside>
 
-      <div className="min-w-0 flex flex-col min-h-screen">
+      {/* ── Content area ── */}
+      <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <header className="topbar">
           <button type="button" className="menu-btn btn btn-outline btn-icon" onClick={() => setNavOpen(true)} aria-label="Open menu">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
           </button>
-          <span className="crumb">Platform Admin</span>
-          <span className="muted">/</span>
-          <strong key={activeView} style={{ fontFamily: 'var(--font-display)' }}>
-            {ADMIN_NAV.find((n) => n.id === activeView)?.label}
-          </strong>
-          <div className="right row" style={{ gap: 10 }}>
-            <span className="pill gold">
+
+          <div className="col" style={{ gap: 2 }}>
+            <span className="crumb">Platform</span>
+            <strong key={activeView} style={{ fontFamily: 'var(--font-display)', fontSize: 17, lineHeight: 1.2 }}>
+              {getNavLabel(activeView)}
+            </strong>
+          </div>
+
+          <div className="search topbar-search" style={{ width: 'min(280px, 30vw)' }}>
+            <Search size={15} strokeWidth={2.1} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', pointerEvents: 'none' }} />
+            <input className="input" placeholder="Search…" style={{ height: 40, paddingLeft: 40, background: '#fff' }} />
+          </div>
+
+          <div className="row right" style={{ gap: 10 }}>
+            <span className="pill leaf mono">
               <span className="dot" />
-              Session active
+              Production
             </span>
+            <button type="button" className="btn btn-ghost btn-icon" style={{ position: 'relative' }}>
+              <Bell size={19} strokeWidth={2.1} />
+              <span style={{ position: 'absolute', top: 9, right: 9, width: 6, height: 6, borderRadius: '50%', background: 'var(--gold)', border: '1.5px solid var(--paper)' }} />
+            </button>
           </div>
         </header>
 
@@ -327,7 +320,7 @@ function AdminPortal({
         </main>
       </div>
 
-      {/* Provision Store Modal */}
+      {/* ── Provision Store Modal ── */}
       <ProvisionStoreModal
         isOpen={isProvisionModalOpen}
         onClose={() => setIsProvisionModalOpen(false)}
@@ -342,17 +335,20 @@ function AdminPortal({
 
       {resetPasswordModal}
 
-      {/* Global Admin Toast */}
+      {/* ── Toast ── */}
       {adminToast && (
-        <div className="fixed top-6 right-6 z-50 bg-slate-900 border border-emerald-500/40 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs animate-slide-down">
-          <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-bold flex items-center justify-center text-[11px]">✓</span>
-          <span>{adminToast}</span>
+        <div className="toasts">
+          <div className="toast">
+            <CheckCircle size={18} strokeWidth={2.1} />
+            <span>{adminToast}</span>
+          </div>
         </div>
       )}
     </div>
   )
 }
 
+// ── Badge helpers ─────────────────────────────────────────────────────────────
 function PendingBadge() {
   const { applications } = useAdminApplications()
   const pending = applications.filter((a) => a.status === 'pending').length
@@ -367,7 +363,7 @@ function LeadsBadge() {
 }
 
 // =====================================================
-// 1. Platform Overview (Enterprise Redesign)
+// 1. Platform Overview
 // =====================================================
 function PlatformOverview({
   onSwitchView,
@@ -381,58 +377,55 @@ function PlatformOverview({
   const { applications } = useAdminApplications()
 
   if (!stats) return (
-    <div className="space-y-4">
-      {[...Array(3)].map((_, i) => <div key={i} className="h-28 rounded-2xl bg-slate-200 animate-pulse" />)}
+    <div className="stack">
+      {[...Array(3)].map((_, i) => (
+        <div key={i} className="card" style={{ height: 128, background: 'var(--line-soft)' }} />
+      ))}
     </div>
   )
 
   const pendingApps = applications.filter((a) => a.status === 'pending')
+  const waitlistCount = applications.filter((a) => a.status === 'waitlist').length
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const firstName = 'Orvexa'
 
   const kpis = [
     {
-      label: 'Gross Merchandise Value',
-      value: `₹${stats.totalGMV.toLocaleString()}`,
-      sub: 'Cumulative merchant store GMV',
-      sparkData: [3200, 4800, 4100, 6200, 5800, 7400, stats.totalGMV],
-      color: '#10b981',
-      trend: '+24.8%',
-      trendPositive: true,
-    },
-    {
-      label: 'Active Merchant Stores',
-      value: stats.activeStores.toString(),
-      sub: 'Multi-tenant isolated clusters',
-      sparkData: [1, 1, 2, 2, 2, 2, stats.activeStores],
-      color: '#6366f1',
-      trend: '+2 this month',
-      trendPositive: true,
-    },
-    {
-      label: 'Monthly Recurring Revenue',
+      label: 'Monthly recurring revenue',
       value: `₹${stats.monthlyRecurringRevenue.toLocaleString()}`,
-      sub: 'Store SaaS subscriptions',
+      sub: 'vs last month',
       sparkData: [1800, 2400, 2400, 3100, 3100, 3498, stats.monthlyRecurringRevenue],
-      color: '#8b5cf6',
-      trend: '+18.4%',
-      trendPositive: true,
+      color: '#12163a',
+      trend: '↗ 9.8%',
+      gold: true,
     },
     {
-      label: 'Client Inbound Leads',
-      value: applications.length.toString(),
-      sub: 'Marketing site signup funnel',
-      sparkData: [2, 4, 3, 5, 4, 6, applications.length],
-      color: '#06b6d4',
-      trend: `${pendingApps.length} pending review`,
-      trendPositive: true,
+      label: 'Active stores',
+      value: stats.activeStores.toString(),
+      sub: 'this month',
+      sparkData: [1, 1, 2, 2, 2, 2, stats.activeStores],
+      color: '#3a32e6',
+      trend: '+2',
+      gold: false,
     },
     {
-      label: 'Consumer Reach',
-      value: `${stats.totalCustomers} Accounts`,
-      sub: 'Verified buyers across stores',
-      sparkData: [2, 3, 3, 4, 4, 5, stats.totalCustomers],
-      color: '#f59e0b',
-      trend: '+12.6%',
-      trendPositive: true,
+      label: 'Store sales (30 days)',
+      value: `₹${stats.totalGMV.toLocaleString()}`,
+      sub: 'vs previous 30 days',
+      sparkData: [3200, 4800, 4100, 6200, 5800, 7400, stats.totalGMV],
+      color: '#087049',
+      trend: '↗ 14.2%',
+      gold: false,
+    },
+    {
+      label: 'Applications waiting',
+      value: pendingApps.length.toString(),
+      sub: waitlistCount > 0 ? `${waitlistCount} on the early-access list` : 'pending merchant review',
+      sparkData: [2, 4, 3, 5, 4, 6, pendingApps.length],
+      color: '#e6b800',
+      trend: '',
+      gold: false,
     },
   ]
 
@@ -440,52 +433,65 @@ function PlatformOverview({
     <div className="stack">
       <div className="page-head">
         <div>
-          <p className="eyebrow">Live multi-tenant cluster</p>
-          <h1>Platform command center</h1>
-          <p className="sub">
-            Review marketing-site signups, provision tenant databases, and manage domain routing.
-          </p>
+          <h1>{greeting}, {firstName}</h1>
+          <p className="sub">Here is what is happening across Orvexa Cloud.</p>
         </div>
         <div className="row wrap">
-          <button type="button" onClick={onOpenProvisionModal} className="btn btn-gold">
-            Provision store
+          <button type="button" onClick={() => onSwitchView('applications')} className="btn btn-outline">
+            Review applications
           </button>
-          <button type="button" onClick={() => onSwitchView('applications')} className="btn btn-primary">
-            Review apps ({stats.pendingApplications})
-          </button>
-          <button type="button" onClick={() => onSwitchView('leads')} className="btn btn-outline">
-            Client CRM
+          <button type="button" onClick={onOpenProvisionModal} className="btn btn-primary">
+            + Provision store
           </button>
         </div>
       </div>
 
-      <div className="callout ok">
-        <span className="pill leaf"><span className="dot" /> Master DB connected</span>
-        <span className="muted small">{stats.activeStores} isolated store databases · marketing funnel active</span>
-      </div>
-
+      {/* 4 KPI cards */}
       <div className="grid cols-4">
-        {kpis.slice(0, 4).map((kpi, idx) => (
-          <div
-            key={kpi.label}
-            className={`card kpi${idx === 0 ? ' gold' : ''}`}
-          >
-            <div>
-              <div className="kpi-label">{kpi.label}</div>
-              <div className="kpi-value">{kpi.value}</div>
-              <div className="kpi-foot">
-                <span className={`delta${kpi.trendPositive ? '' : ' down'}`}>{kpi.trend}</span>
-                <span>{kpi.sub}</span>
-              </div>
-              <div className="spark">
-                <Sparkline data={kpi.sparkData} color={idx === 0 ? '#12163a' : kpi.color} />
-              </div>
+        {kpis.map((kpi) => (
+          <div key={kpi.label} className={`card kpi${kpi.gold ? ' gold' : ''}`}>
+            <div className="kpi-label">{kpi.label}</div>
+            <div className="kpi-value">{kpi.value}</div>
+            <div className="kpi-foot">
+              <span className="delta">{kpi.trend}</span>
+              <span>{kpi.sub}</span>
+            </div>
+            <div className="spark">
+              <Sparkline data={kpi.sparkData} color={kpi.gold ? '#12163a' : kpi.color} />
             </div>
           </div>
         ))}
       </div>
 
-      {/* Two Column Layout: Active Tenants & Pending Applications */}
+      {/* Needs attention panel */}
+      {pendingApps.length > 0 && (
+        <div className="card" style={{ overflow: 'hidden' }}>
+          <div className="card-head">
+            <div>
+              <h3 className="card-title">Needs your attention</h3>
+              <p className="card-sub">The things that cannot wait</p>
+            </div>
+          </div>
+          <div className="card-body">
+            <div className="divide">
+              <div className="attn">
+                <div className="ic" style={{ background: 'var(--gold-soft)', color: 'var(--gold-ink)' }}>
+                  <AlertTriangle size={18} strokeWidth={2.1} />
+                </div>
+                <div className="grow min-w-0">
+                  <p className="strong">{pendingApps.length} merchant application{pendingApps.length > 1 ? 's' : ''} awaiting review</p>
+                  <p className="muted small">New forms from the marketing site are pending approval</p>
+                </div>
+                <button type="button" onClick={() => onSwitchView('applications')} className="btn btn-gold btn-sm">
+                  Review queue
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Two-column: Tenants + Pending approvals */}
       <div className="grid cols-2-1">
         <section className="card">
           <div className="card-head">
@@ -611,17 +617,17 @@ function ApplicationQueue() {
   }
 
   return (
-    <div className="space-y-7 max-w-6xl">
+    <div className="stack" style={{ maxWidth: 1080 }}>
       {provisionMessage && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-5 py-3.5 rounded-xl text-xs font-semibold flex items-center gap-3 shadow-xs animate-slide-down">
-          <span className="text-lg">📁</span>
+        <div className="callout ok">
+          <CheckCircle size={18} strokeWidth={2.1} />
           <span>{provisionMessage}</span>
         </div>
       )}
       {errorMessage && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-800 px-5 py-3.5 rounded-xl text-xs font-semibold flex items-center justify-between gap-3 shadow-xs">
+        <div className="callout bad" style={{ justifyContent: 'space-between' }}>
           <span>{errorMessage}</span>
-          <button onClick={() => setErrorMessage(null)} className="text-rose-500 hover:text-rose-700 cursor-pointer">✕</button>
+          <button type="button" onClick={() => setErrorMessage(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--coral)' }}>✕</button>
         </div>
       )}
 
@@ -640,11 +646,9 @@ function ApplicationQueue() {
       </div>
 
       {syncError && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-900 px-5 py-3.5 rounded-xl text-xs font-semibold flex items-center justify-between gap-3">
+        <div className="callout" style={{ background: 'var(--gold-soft)', borderColor: 'var(--gold-edge)', justifyContent: 'space-between' }}>
           <span>{syncError}</span>
-          <button type="button" onClick={() => refresh()} className="text-amber-700 hover:text-amber-900 cursor-pointer underline">
-            Retry
-          </button>
+          <button type="button" onClick={() => refresh()} className="btn btn-ghost btn-sm">Retry</button>
         </div>
       )}
 
@@ -655,231 +659,215 @@ function ApplicationQueue() {
         <button type="button" role="tab" aria-selected={tab === 'waitlist'} className="tab" onClick={() => setTab('waitlist')}>
           Early-access waitlist <span className="count">{waitlist.length}</span>
         </button>
+        {processed.length > 0 && (
+          <span className="tab" style={{ marginLeft: 'auto', cursor: 'default', color: 'var(--muted)' }}>
+            Reviewed <span className="count">{processed.length}</span>
+          </span>
+        )}
       </div>
 
       {tab === 'waitlist' ? (
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-slate-100">
-            <h3 className="text-sm font-bold text-slate-900">Early-Access Waitlist</h3>
-            <p className="text-xs text-slate-400">Signups from countries that have not launched yet. These are interest only: no store is created and nobody is charged.</p>
-          </div>
-          {waitlist.length === 0 ? (
-            <p className="p-8 text-center text-xs text-slate-400">No early-access signups yet.</p>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {waitlist.map((app) => (
-                <div key={app.id} className="p-4 flex items-center justify-between gap-4 text-xs flex-wrap">
-                  <div className="min-w-0">
-                    <p className="font-bold text-slate-900">{app.brandName}</p>
-                    <p className="font-mono text-slate-400">{app.ownerEmail}</p>
-                  </div>
-                  <div className="flex items-center gap-3 text-slate-500">
-                    <span className="font-mono font-bold text-slate-700">{app.launch?.country || app.attribution?.country || '—'}</span>
-                    {app.requestedPlan?.id && <span>{PLAN_CATALOG[normalizePlanId(app.requestedPlan.id)].label}</span>}
-                    <span className={app.consents?.marketing ? 'text-emerald-600' : 'text-slate-400'}>
-                      {app.consents?.marketing ? 'Marketing opt-in' : 'No marketing consent'}
-                    </span>
-                    <span className="font-mono">{app.submittedAt}</span>
-                  </div>
-                </div>
-              ))}
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <h3 className="card-title">Early-Access Waitlist</h3>
+              <p className="card-sub">Signups from countries that have not launched yet. Interest only — no store is created.</p>
             </div>
-          )}
+          </div>
+          <div className="card-body">
+            {waitlist.length === 0 ? (
+              <div className="empty">
+                <p className="strong">No early-access signups yet.</p>
+              </div>
+            ) : (
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Brand</th>
+                      <th>Email</th>
+                      <th>Country</th>
+                      <th>Plan</th>
+                      <th>Submitted</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {waitlist.map((app) => (
+                      <tr key={app.id}>
+                        <td className="cell-main">{app.brandName}</td>
+                        <td className="cell-sub mono">{app.ownerEmail}</td>
+                        <td><span className="pill mono">{app.attribution?.country || '—'}</span></td>
+                        <td>{app.requestedPlan?.id ? PLAN_CATALOG[normalizePlanId(app.requestedPlan.id)].label : '—'}</td>
+                        <td className="cell-sub mono">{app.submittedAt}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
-      <>
-      {/* Pending Applications Section */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900 tracking-tight">Pending Onboarding Requests</h3>
-            <p className="text-xs text-slate-400">Review brand details and authorize automated tenant folder & database provisioning</p>
-          </div>
-          <span className="text-xs font-mono font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
-            {pending.length} Awaiting Authorization
-          </span>
-        </div>
-
-        {pending.length === 0 ? (
-          <div className="bg-white rounded-xl p-12 border border-slate-200/80 text-center shadow-xs">
-            <p className="text-3xl mb-2">🎉</p>
-            <p className="text-sm font-bold text-slate-800">No Pending Applications</p>
-            <p className="text-xs text-slate-400 mt-1">New forms from marketing-site-orvexacloud appear here for approval.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {pending.map((app) => (
-              <div key={app.id} className="bg-white rounded-xl p-6 border border-slate-200/80 shadow-xs hover:shadow-md transition-all flex flex-col justify-between">
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between">
+        <>
+          {/* Pending application cards */}
+          {pending.length === 0 ? (
+            <div className="card">
+              <div className="empty">
+                <p className="strong">No Pending Applications</p>
+                <p className="muted small">New forms from marketing-site-orvexacloud appear here for approval.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid cols-2">
+              {pending.map((app) => (
+                <div key={app.id} className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+                  <div className="card-head">
                     <div>
-                      <h4 className="text-base font-bold text-slate-900">{app.brandName}</h4>
-                      <p className="text-xs text-slate-400 font-medium">{app.niche}</p>
+                      <p className="card-title">{app.brandName}</p>
+                      <p className="card-sub">{app.niche}</p>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                        Pending Review
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-mono">
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                      <span className="pill gold mono">Pending review</span>
+                      <span className="muted small mono">
                         {app.channel === 'website' ? `via ${app.attribution?.site || 'website'}` : 'via admin form'}
                       </span>
                     </div>
                   </div>
 
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-400">Applicant / Owner:</span>
-                      <span className="font-semibold text-slate-800">{app.ownerName || '—'}</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-400">Contact Email:</span>
-                      <span className="font-mono text-slate-700">{app.ownerEmail}</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-slate-100">
-                      <span className="text-slate-400">Target Subdomain:</span>
-                      <code className="text-indigo-600 font-mono font-semibold">{storeAddress(slugEdits[app.id] || app.requestedSlug)}</code>
-                    </div>
-                    {app.requestedPlan?.id && (
-                      <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span className="text-slate-400">Chosen Plan:</span>
-                        <span className="font-semibold text-slate-800">
-                          {PLAN_CATALOG[normalizePlanId(app.requestedPlan.id)].label}
-                          {app.requestedPlan.cycle && <span className="text-slate-400 font-normal"> · {app.requestedPlan.cycle}</span>}
-                          {app.requestedPlan.total != null && (
-                            <span className="text-slate-400 font-normal"> · quoted {app.requestedPlan.currency || 'INR'} {app.requestedPlan.total.toLocaleString('en-IN')}</span>
-                          )}
-                        </span>
-                      </div>
-                    )}
-                    {app.launch?.country && (
-                      <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span className="text-slate-400">Country:</span>
-                        <span className="font-mono font-semibold text-slate-700">{app.launch.country}</span>
-                      </div>
-                    )}
-                    {app.migration?.from && (
-                      <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span className="text-slate-400">Migration:</span>
-                        <span className="font-semibold text-amber-700">
-                          From {app.migration.from}{app.migration.currentDomain ? ` (${app.migration.currentDomain})` : ''}
-                        </span>
-                      </div>
-                    )}
+                  <div className="card-body" style={{ flex: 1 }}>
+                    <dl className="kv">
+                      <dt>Applicant</dt>
+                      <dd>{app.ownerName || '—'}</dd>
+                      <dt>Contact email</dt>
+                      <dd className="mono">{app.ownerEmail}</dd>
+                      <dt>Target subdomain</dt>
+                      <dd><code className="mono" style={{ color: 'var(--indigo)' }}>{storeAddress(slugEdits[app.id] || app.requestedSlug)}</code></dd>
+                      {app.requestedPlan?.id && (
+                        <>
+                          <dt>Chosen plan</dt>
+                          <dd>
+                            {PLAN_CATALOG[normalizePlanId(app.requestedPlan.id)].label}
+                            {app.requestedPlan.cycle && <span className="muted"> · {app.requestedPlan.cycle}</span>}
+                          </dd>
+                        </>
+                      )}
+                      {app.launch?.country && (
+                        <>
+                          <dt>Country</dt>
+                          <dd className="mono">{app.launch.country}</dd>
+                        </>
+                      )}
+                      {app.migration?.from && (
+                        <>
+                          <dt>Migration</dt>
+                          <dd style={{ color: 'var(--gold-ink)' }}>From {app.migration.from}{app.migration.currentDomain ? ` (${app.migration.currentDomain})` : ''}</dd>
+                        </>
+                      )}
+                    </dl>
+
                     {app.slugCheck && !app.slugCheck.available && (
-                      <div className="py-2 px-3 rounded-lg bg-amber-50 border border-amber-200 space-y-1.5">
-                        <p className="text-amber-800 font-semibold">
-                          "{app.requestedSlug}" is {app.slugCheck.reason === 'reserved' ? 'a reserved name' : app.slugCheck.reason === 'invalid' ? 'not a valid address' : 'already taken'}. Pick another address before approving.
+                      <div className="callout" style={{ marginTop: 12, flexDirection: 'column', gap: 8 }}>
+                        <p className="strong small">
+                          &ldquo;{app.requestedSlug}&rdquo; is {app.slugCheck.reason === 'reserved' ? 'reserved' : app.slugCheck.reason === 'invalid' ? 'invalid' : 'already taken'}. Pick another address.
                         </p>
                         <input
                           value={slugEdits[app.id] ?? ''}
                           onChange={(e) => setSlugEdits((s) => ({ ...s, [app.id]: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }))}
                           placeholder={`${app.requestedSlug}-store`}
-                          className="w-full px-2.5 py-1.5 rounded border border-amber-300 bg-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-amber-300"
+                          className="input"
+                          style={{ height: 36, fontSize: 13 }}
                         />
                       </div>
                     )}
-                    {app.consents?.termsAcceptedAt && (
-                      <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span className="text-slate-400">Consent:</span>
-                        <span className="text-slate-600 text-right">
-                          Terms {app.consents.termsVersion?.terms ? `v${app.consents.termsVersion.terms} ` : ''}accepted {app.consents.termsAcceptedAt.slice(0, 10)}
-                          {' · '}{app.consents.marketing ? 'marketing opt-in' : 'no marketing'}
-                        </span>
+
+                    {/* Provisioning preview */}
+                    <div className="callout info" style={{ marginTop: 12, flexDirection: 'column', gap: 4, fontSize: 12 }}>
+                      <div className="row between">
+                        <span className="muted">📁 Client folder:</span>
+                        <code className="mono strong">src/tenants/{slugEdits[app.id] || app.requestedSlug}/</code>
                       </div>
-                    )}
-                    {app.attribution?.utm && Object.keys(app.attribution.utm).length > 0 && (
-                      <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span className="text-slate-400">Campaign:</span>
-                        <span className="font-mono text-[11px] text-slate-500 truncate max-w-[60%]">
-                          {Object.entries(app.attribution.utm).map(([k, v]) => `${k}=${v}`).join(' ')}
-                        </span>
+                      <div className="row between">
+                        <span className="muted">🗄️ Isolated DB:</span>
+                        <code className="mono" style={{ color: 'var(--leaf)' }}>orvexa_tenant_{slugEdits[app.id] || app.requestedSlug}</code>
                       </div>
-                    )}
-                    {app.categories && app.categories.length > 0 && (
-                      <div className="py-1 border-b border-slate-100">
-                        <span className="text-slate-400 block mb-1">Store Categories:</span>
-                        <div className="flex flex-wrap gap-1">
-                          {app.categories.map((c) => (
-                            <span key={c} className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold text-[10px]">
-                              {c}
-                            </span>
-                          ))}
-                        </div>
+                    </div>
+
+                    {app.message && (
+                      <div className="callout" style={{ marginTop: 12, background: 'var(--paper)', borderColor: 'var(--line)', color: 'var(--ink-2)', fontSize: 13 }}>
+                        <span>&ldquo;{app.message}&rdquo;</span>
                       </div>
                     )}
                   </div>
 
-                  {/* Provisioning preview box */}
-                  <div className="bg-slate-50 rounded-lg p-3 border border-slate-200/80 space-y-1.5 text-[11px] font-mono">
-                    <div className="flex items-center justify-between text-slate-600">
-                      <span>📁 Client Folder:</span>
-                      <code className="text-slate-900 font-bold">src/tenants/{slugEdits[app.id] || app.requestedSlug}/</code>
-                    </div>
-                    <div className="flex items-center justify-between text-slate-600">
-                      <span>🗄️ Isolated DB:</span>
-                      <code className="text-emerald-700 font-bold">orvexa_tenant_{slugEdits[app.id] || app.requestedSlug}</code>
-                    </div>
+                  <div style={{ padding: '0 20px 20px', display: 'flex', gap: 10, borderTop: '1px solid var(--line-soft)', paddingTop: 16 }}>
+                    <button
+                      type="button"
+                      onClick={() => handleApproveWithFeedback(app.id, app.requestedSlug, app.brandName)}
+                      disabled={busyId === app.id || (app.slugCheck?.available === false && !slugEdits[app.id])}
+                      className="btn btn-primary"
+                      style={{ flex: 1 }}
+                    >
+                      {busyId === app.id ? 'Working…' : 'Authorize & Provision'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleReject(app.id)}
+                      disabled={busyId === app.id}
+                      className="btn btn-danger"
+                    >
+                      Reject
+                    </button>
                   </div>
-
-                  {app.message && (
-                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs text-slate-600 italic">
-                      &quot;{app.message}&quot;
-                    </div>
-                  )}
                 </div>
+              ))}
+            </div>
+          )}
 
-                <div className="flex gap-2.5 pt-5 mt-4 border-t border-slate-100">
-                  <button
-                    onClick={() => handleApproveWithFeedback(app.id, app.requestedSlug, app.brandName)}
-                    disabled={busyId === app.id || (app.slugCheck?.available === false && !slugEdits[app.id])}
-                    className="flex-1 bg-slate-950 hover:bg-slate-800 text-white text-xs font-bold py-2.5 rounded-lg transition-colors cursor-pointer shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {busyId === app.id ? 'Working…' : 'Authorize & Provision'}
-                  </button>
-                  <button
-                    onClick={() => handleReject(app.id)}
-                    disabled={busyId === app.id}
-                    className="px-4 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer border border-rose-200 disabled:opacity-40"
-                  >
-                    Reject
-                  </button>
+          {/* Processed archive */}
+          {processed.length > 0 && (
+            <div className="card">
+              <div className="card-head">
+                <div>
+                  <h3 className="card-title">Recently processed</h3>
+                  <p className="card-sub">{processed.length} reviewed applications</p>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Processed Archive */}
-      {processed.length > 0 && (
-        <div className="pt-4 border-t border-slate-200">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Recently Processed ({processed.length})</h4>
-          <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs divide-y divide-slate-100">
-            {processed.map((app) => (
-              <div key={app.id} className="p-4 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                    app.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
-                  }`}>
-                    {app.status}
-                  </span>
-                  <span className="font-bold text-slate-900">{app.brandName}</span>
-                  <span className="font-mono text-slate-400 hidden sm:inline">{storeAddress(app.requestedSlug)}</span>
-                </div>
-                <span className="font-mono text-slate-500">{app.ownerEmail}</span>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Status</th>
+                      <th>Brand</th>
+                      <th>Domain</th>
+                      <th>Email</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {processed.map((app) => (
+                      <tr key={app.id}>
+                        <td>
+                          <span className={`pill mono ${app.status === 'approved' ? 'leaf' : 'coral'}`}>
+                            {app.status}
+                          </span>
+                        </td>
+                        <td className="cell-main">{app.brandName}</td>
+                        <td className="cell-sub mono">{storeAddress(app.requestedSlug)}</td>
+                        <td className="cell-sub mono">{app.ownerEmail}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-      </>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
 }
 
 // =====================================================
-// 3. Client Acquisition & Leads CRM (NEW)
+// 3. Client Acquisition & Leads CRM
 // =====================================================
 function ClientLeadsCRM({ onSwitchView }: { onSwitchView: (v: AdminView) => void }) {
   const { applications, approve } = useAdminApplications()
@@ -893,134 +881,125 @@ function ClientLeadsCRM({ onSwitchView }: { onSwitchView: (v: AdminView) => void
   })
 
   return (
-    <div className="space-y-6 max-w-6xl">
-      {/* Funnel Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs">
-          <p className="text-2xl font-bold text-slate-900">{applications.length + 18}</p>
-          <p className="text-[11px] text-slate-400 uppercase tracking-wider font-mono mt-1">Website Form Inquiries</p>
-        </div>
-        <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs">
-          <p className="text-2xl font-bold text-indigo-600">{applications.filter(a => a.status === 'pending').length}</p>
-          <p className="text-[11px] text-slate-400 uppercase tracking-wider font-mono mt-1">Hot Leads Pending</p>
-        </div>
-        <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs">
-          <p className="text-2xl font-bold text-emerald-600">{tenants.length}</p>
-          <p className="text-[11px] text-slate-400 uppercase tracking-wider font-mono mt-1">Converted Active Stores</p>
-        </div>
-        <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs">
-          <p className="text-2xl font-bold text-purple-600">82.4%</p>
-          <p className="text-[11px] text-slate-400 uppercase tracking-wider font-mono mt-1">Lead Conversion Rate</p>
+    <div className="stack" style={{ maxWidth: 1080 }}>
+      <div className="page-head">
+        <div>
+          <h1>Client leads CRM</h1>
+          <p className="sub">Prospective clients acquired through the Orvexa Cloud platform website</p>
         </div>
       </div>
 
-      {/* Leads Management Table */}
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Inbound Merchant Inquiries & Leads</h3>
-            <p className="text-xs text-slate-400">Prospective clients acquired through the Orvexa Cloud platform website</p>
-          </div>
+      {/* Funnel KPIs */}
+      <div className="grid cols-4">
+        <div className="card kpi">
+          <div className="kpi-label">Website inquiries</div>
+          <div className="kpi-value">{applications.length + 18}</div>
+          <div className="kpi-foot"><span className="muted small">Form submissions</span></div>
+        </div>
+        <div className="card kpi">
+          <div className="kpi-label">Hot leads pending</div>
+          <div className="kpi-value" style={{ color: 'var(--indigo)' }}>{applications.filter((a) => a.status === 'pending').length}</div>
+          <div className="kpi-foot"><span className="muted small">Awaiting outreach</span></div>
+        </div>
+        <div className="card kpi">
+          <div className="kpi-label">Converted stores</div>
+          <div className="kpi-value" style={{ color: 'var(--leaf)' }}>{tenants.length}</div>
+          <div className="kpi-foot"><span className="muted small">Active tenants</span></div>
+        </div>
+        <div className="card kpi">
+          <div className="kpi-label">Conversion rate</div>
+          <div className="kpi-value" style={{ color: '#8b5cf6' }}>82.4%</div>
+          <div className="kpi-foot"><span className="muted small">Lead to store</span></div>
+        </div>
+      </div>
 
-          <div className="flex gap-2 text-xs">
-            <button
-              onClick={() => setFilter('all')}
-              className={`px-3 py-1.5 rounded-lg font-medium cursor-pointer transition-colors ${
-                filter === 'all' ? 'bg-slate-900 text-white font-bold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              All Leads ({applications.length})
-            </button>
-            <button
-              onClick={() => setFilter('pending')}
-              className={`px-3 py-1.5 rounded-lg font-medium cursor-pointer transition-colors ${
-                filter === 'pending' ? 'bg-slate-900 text-white font-bold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Pending Review ({applications.filter(a => a.status === 'pending').length})
-            </button>
-            <button
-              onClick={() => setFilter('approved')}
-              className={`px-3 py-1.5 rounded-lg font-medium cursor-pointer transition-colors ${
-                filter === 'approved' ? 'bg-slate-900 text-white font-bold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Converted / Active ({applications.filter(a => a.status === 'approved').length})
-            </button>
+      {/* Leads table */}
+      <div className="card">
+        <div className="toolbar" style={{ borderBottom: '1.5px solid var(--line)' }}>
+          <div style={{ flex: 1 }}>
+            <h3 className="card-title">Inbound merchant inquiries</h3>
+          </div>
+          <div className="tabs" role="tablist" style={{ border: 'none', gap: 6 }}>
+            {(['all', 'pending', 'approved'] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                role="tab"
+                aria-selected={filter === f}
+                className="tab"
+                onClick={() => setFilter(f)}
+                style={{ borderBottom: 'none', paddingTop: 6, paddingBottom: 6 }}
+              >
+                {f === 'all' ? `All (${applications.length})` : f === 'pending' ? `Pending (${applications.filter((a) => a.status === 'pending').length})` : `Active (${applications.filter((a) => a.status === 'approved').length})`}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+        <div className="table-wrap">
+          <table className="table">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-500 uppercase tracking-wider font-mono text-[10px]">
-                <th className="text-left px-5 py-3">Brand & Desired Domain</th>
-                <th className="text-left px-4 py-3">Founder / Contact</th>
-                <th className="text-left px-4 py-3">Niche Category</th>
-                <th className="text-left px-4 py-3">Submitted Date</th>
-                <th className="text-left px-4 py-3">Status</th>
-                <th className="text-right px-5 py-3">Outreach Actions</th>
+              <tr>
+                <th>Brand &amp; domain</th>
+                <th>Founder / contact</th>
+                <th>Category</th>
+                <th>Submitted</th>
+                <th>Status</th>
+                <th className="num">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {filteredApps.map((app) => (
-                <tr key={app.id} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="px-5 py-3.5">
-                    <p className="font-bold text-slate-900">{app.brandName}</p>
-                    <code className="text-[11px] font-mono text-indigo-600">{storeAddress(app.requestedSlug)}</code>
+                <tr key={app.id}>
+                  <td>
+                    <p className="cell-main">{app.brandName}</p>
+                    <code className="cell-sub mono">{storeAddress(app.requestedSlug)}</code>
                   </td>
-                  <td className="px-4 py-3.5">
-                    <p className="font-semibold text-slate-800">{app.ownerName}</p>
-                    <p className="text-[11px] text-slate-400 font-mono">{app.ownerEmail}</p>
-                    <p className="text-[10px] text-slate-400">{app.phone}</p>
+                  <td>
+                    <p style={{ fontWeight: 600 }}>{app.ownerName}</p>
+                    <p className="cell-sub mono">{app.ownerEmail}</p>
+                    {app.phone && <p className="cell-sub">{app.phone}</p>}
                   </td>
-                  <td className="px-4 py-3.5">
-                    <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-[11px] font-medium">
-                      {app.niche}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5 font-mono text-slate-500">
-                    {app.submittedAt}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                      app.status === 'approved'
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : app.status === 'pending'
-                        ? 'bg-amber-50 text-amber-700 border-amber-200'
-                        : app.status === 'waitlist'
-                        ? 'bg-sky-50 text-sky-700 border-sky-200'
-                        : 'bg-rose-50 text-rose-700 border-rose-200'
+                  <td><span className="pill outline">{app.niche}</span></td>
+                  <td className="cell-sub mono">{app.submittedAt}</td>
+                  <td>
+                    <span className={`pill mono ${
+                      app.status === 'approved' ? 'leaf' :
+                      app.status === 'pending' ? 'gold' :
+                      app.status === 'waitlist' ? 'indigo' : 'coral'
                     }`}>
                       {app.status}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-2">
+                  <td className="actions">
+                    <div className="row" style={{ justifyContent: 'flex-end', gap: 6 }}>
                       <a
                         href={`mailto:${app.ownerEmail}?subject=Welcome to Orvexa Cloud - ${app.brandName} Storefront`}
-                        className="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded border border-slate-200 transition-colors"
+                        className="btn btn-outline btn-sm"
                       >
-                        ✉️ Email
+                        <Mail size={14} strokeWidth={2.1} />
+                        Email
                       </a>
                       {app.phone && (
                         <a
-                          href={`https://wa.me/${app.phone.replace(/[^0-9]/g, '')}?text=Hello%20${encodeURIComponent(app.ownerName)},%20thank%20you%20for%20applying%20for%20${encodeURIComponent(app.brandName)}%20on%20Orvexa%20Cloud!`}
+                          href={`https://wa.me/${app.phone.replace(/[^0-9]/g, '')}?text=Hello%20${encodeURIComponent(app.ownerName || '')},%20thank%20you%20for%20applying%20for%20${encodeURIComponent(app.brandName)}%20on%20Orvexa%20Cloud!`}
                           target="_blank"
                           rel="noreferrer"
-                          className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded border border-emerald-200 transition-colors"
+                          className="btn btn-outline btn-sm"
                         >
-                          💬 WhatsApp
+                          <MessageCircle size={14} strokeWidth={2.1} />
+                          WhatsApp
                         </a>
                       )}
                       {app.status === 'pending' && (
                         <button
+                          type="button"
                           onClick={async () => {
                             const { tenant, error } = await approve(app.id)
                             if (tenant) onSwitchView('stores')
-                            else window.alert(error || 'Could not provision this store. Open Merchant Applications to review it.')
+                            else window.alert(error || 'Could not provision this store.')
                           }}
-                          className="px-2.5 py-1 text-[11px] font-bold bg-slate-950 hover:bg-slate-800 text-white rounded shadow-xs cursor-pointer"
+                          className="btn btn-primary btn-sm"
                         >
                           Provision →
                         </button>
@@ -1061,12 +1040,7 @@ function TenantDirectory({ onOpenProvisionModal }: { onOpenProvisionModal?: () =
   }
 
   const testTenantApis = async (slug: string) => {
-    setProbes((prev) => ({
-      ...prev,
-      [slug]: { storefront: 'checking', products: 'checking' },
-    }))
-    // Same-origin API probes only — fetching orvexacloud.in HTML from app.orvexacloud.in
-    // is cross-origin and shows as a CORS / Failed to fetch console error.
+    setProbes((prev) => ({ ...prev, [slug]: { storefront: 'checking', products: 'checking' } }))
     const resolveUrl = `${API_BASE}/public/resolve?slug=${encodeURIComponent(slug)}`
     const productsUrl = `${API_BASE}/stores/${encodeURIComponent(slug)}/products`
     try {
@@ -1080,28 +1054,19 @@ function TenantDirectory({ onOpenProvisionModal }: { onOpenProvisionModal?: () =
         if (Array.isArray(body)) productCount = body.length
         else if (body && Array.isArray(body.products)) productCount = body.products.length
       }
-      const storeOk = resolveRes.ok
-      const productsOk = prodRes.ok
       setProbes((prev) => ({
         ...prev,
         [slug]: {
-          storefront: storeOk ? 'ok' : 'fail',
-          products: productsOk ? 'ok' : 'fail',
-          detail: productsOk
-            ? `Resolve ${resolveRes.status} · Products ${prodRes.status}${productCount != null ? ` (${productCount} items)` : ''} · ${storefrontUrl(slug)}`
+          storefront: resolveRes.ok ? 'ok' : 'fail',
+          products: prodRes.ok ? 'ok' : 'fail',
+          detail: prodRes.ok
+            ? `Resolve ${resolveRes.status} · Products ${prodRes.status}${productCount != null ? ` (${productCount} items)` : ''}`
             : `Resolve ${resolveRes.status} · Products ${prodRes.status}`,
         },
       }))
-      showToast(
-        storeOk && productsOk
-          ? `${slug}: storefront resolve + products API OK`
-          : `${slug}: check failed (resolve ${resolveRes.status}, products ${prodRes.status})`,
-      )
+      showToast(resolveRes.ok && prodRes.ok ? `${slug}: OK` : `${slug}: check failed`)
     } catch (err) {
-      setProbes((prev) => ({
-        ...prev,
-        [slug]: { storefront: 'fail', products: 'fail', detail: String((err as Error)?.message || err) },
-      }))
+      setProbes((prev) => ({ ...prev, [slug]: { storefront: 'fail', products: 'fail', detail: String((err as Error)?.message || err) } }))
       showToast(`${slug}: could not reach storefront/API`)
     }
   }
@@ -1112,8 +1077,8 @@ function TenantDirectory({ onOpenProvisionModal }: { onOpenProvisionModal?: () =
     t.ownerEmail.toLowerCase().includes(search.toLowerCase())
   )
 
-  const getTenantEnvString = (t: TenantConfig) => {
-    return `# --- Tenant Environment Variables ---
+  const getTenantEnvString = (t: TenantConfig) =>
+    `# --- Tenant Environment Variables ---
 TENANT_ID=${t.id}
 TENANT_SLUG=${t.slug}
 BRAND_NAME="${t.brandName}"
@@ -1133,7 +1098,6 @@ API_PORT=5000
 STORAGE_BUCKET=orvexatech-media-${t.slug}
 ENABLE_ORDER_TRACKING=${t.theme.enableOrderTracking}
 ENABLE_CUSTOMER_REVIEWS=${t.theme.enableReviews}`
-  }
 
   const handleCopyEnv = (text: string) => {
     navigator.clipboard.writeText(text)
@@ -1142,209 +1106,156 @@ ENABLE_CUSTOMER_REVIEWS=${t.theme.enableReviews}`
   }
 
   return (
-    <div className="space-y-6 max-w-6xl">
-      {/* Toast Notification */}
+    <div className="stack" style={{ maxWidth: 1200 }}>
+      {/* Toast */}
       {toastMsg && (
-        <div className="fixed top-6 right-6 z-50 bg-slate-900 border border-emerald-500/40 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-xs animate-slide-down">
-          <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-bold flex items-center justify-center text-[11px]">✓</span>
-          <span>{toastMsg}</span>
+        <div className="toasts">
+          <div className="toast">
+            <CheckCircle size={18} strokeWidth={2.1} />
+            <span>{toastMsg}</span>
+          </div>
         </div>
       )}
 
-      {/* Credentials Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-900 border border-slate-800 rounded-2xl p-5 text-white flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">🔐</span>
-            <h3 className="text-sm font-bold text-white tracking-tight">Store Authentication & Credentials Management</h3>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-              Super Admin Master Control
-            </span>
-          </div>
-          <p className="text-xs text-slate-300/80">
-            Set custom usernames, login emails, and passwords for any store owner. Generate instant onboarding access passes for handover.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-mono text-amber-300 font-semibold bg-amber-500/10 px-3 py-1.5 rounded-lg border border-amber-500/20">
-            🔑 {tenants.length} Stores Protected
-          </span>
+      <div className="page-head">
+        <div>
+          <h1>Tenant stores</h1>
+          <p className="sub">Manage allocated tenants, store access, credentials, and API health</p>
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="relative flex-1 max-w-md">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search stores by brand, slug, or owner..."
-            className="w-full bg-white border border-slate-200 px-3.5 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none rounded-lg shadow-xs transition-all"
-          />
+      {/* Credentials info callout (replacing dark gradient banner) */}
+      <div className="callout info">
+        <Shield size={18} strokeWidth={2.1} style={{ flex: 'none', marginTop: 1 }} />
+        <div>
+          <p className="strong">Store Authentication &amp; Credentials Management</p>
+          <p className="muted small">Set custom usernames, login emails, and passwords for any store owner. Generate instant onboarding access passes for handover.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <p className="text-xs font-mono text-slate-500 hidden sm:block">
-            {syncing ? 'Syncing…' : `${filtered.length} allocated store${filtered.length === 1 ? '' : 's'}`}
+        <span className="pill gold mono" style={{ marginLeft: 'auto', flexShrink: 0 }}>
+          🔑 {tenants.length} Stores
+        </span>
+      </div>
+
+      {syncError && <div className="callout">{syncError}</div>}
+
+      {/* Toolbar */}
+      <div className="card">
+        <div className="toolbar">
+          <div className="search" style={{ flex: 1, maxWidth: 360 }}>
+            <Search size={15} strokeWidth={2.1} />
+            <input
+              className="input"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search stores by brand, slug, or owner…"
+              style={{ height: 38 }}
+            />
+          </div>
+          <p className="muted small mono" style={{ display: 'none' }}>
+            {syncing ? 'Syncing…' : `${filtered.length} store${filtered.length === 1 ? '' : 's'}`}
           </p>
-          <button
-            type="button"
-            onClick={() => refresh()}
-            className="px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer"
-          >
-            Refresh from API
+          <p className="muted small mono">{syncing ? 'Syncing…' : `${filtered.length} store${filtered.length === 1 ? '' : 's'}`}</p>
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => refresh()}>
+            Refresh
           </button>
           {onOpenProvisionModal && (
-            <button
-              onClick={onOpenProvisionModal}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <span>⊕</span>
-              <span>Provision New Store</span>
+            <button type="button" className="btn btn-gold" onClick={onOpenProvisionModal}>
+              ⊕ Provision new store
             </button>
           )}
         </div>
-      </div>
 
-      {syncError && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
-          {syncError}
-        </div>
-      )}
-
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+        <div className="table-wrap">
+          <table className="table">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-500 uppercase tracking-wider font-mono text-[10px]">
-                <th className="text-left px-5 py-3">Store Name & Slug</th>
-                <th className="text-left px-4 py-3">Portals</th>
-                <th className="text-left px-4 py-3">Owner Contact</th>
-                <th className="text-left px-4 py-3">Plan Tier</th>
-                <th className="text-left px-4 py-3">Status / API</th>
-                <th className="text-right px-5 py-3">Credentials & Actions</th>
+              <tr>
+                <th>Store name &amp; slug</th>
+                <th>Portals</th>
+                <th>Owner contact</th>
+                <th>Plan tier</th>
+                <th>Status / API</th>
+                <th className="num">Credentials &amp; actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody>
               {!syncing && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
-                    No allocated tenants yet. Approve a marketing application or provision a store — they appear here from the live master API.
+                  <td colSpan={6} style={{ padding: '40px 16px', textAlign: 'center', color: 'var(--muted)' }}>
+                    No allocated tenants yet. Approve a marketing application or provision a store.
                   </td>
                 </tr>
               )}
               {filtered.map((tenant) => {
                 const probe = probes[tenant.slug]
                 return (
-                <tr key={tenant.id} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="px-5 py-3.5">
-                    <p className="font-bold text-slate-900">{tenant.brandName}</p>
-                    <code className="text-[11px] font-mono text-indigo-600">{storeAddress(tenant.slug)}</code>
-                    <p className="text-[10px] font-mono text-slate-400 mt-1">db: orvexa_tenant_{tenant.slug}</p>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <div className="flex flex-col gap-1 items-start">
-                      <a
-                        href={storefrontUrl(tenant.slug)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[11px] font-semibold text-indigo-700 hover:underline"
-                      >
-                        Storefront ↗
-                      </a>
-                      <a
-                        href={sellerPortalUrl(tenant.slug)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[11px] font-semibold text-slate-700 hover:underline"
-                      >
-                        Tenant dashboard ↗
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => setCredentialsTenant(tenant)}
-                        className="text-[11px] font-semibold text-amber-800 hover:underline cursor-pointer bg-transparent border-0 p-0"
-                      >
-                        Owner login / credentials
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <p className="font-medium text-slate-800">{tenant.ownerName}</p>
-                    <p className="text-[10px] text-slate-400 font-mono">{tenant.ownerEmail}</p>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <select
-                      value={tenant.plan}
-                      onChange={(e) => changePlan(tenant.id, e.target.value as 'starter' | 'pro' | 'enterprise')}
-                      className="bg-slate-50 text-slate-800 text-xs font-semibold px-2 py-1 rounded border border-slate-200 cursor-pointer"
-                    >
-                      {PLAN_IDS.map((id) => (
-                        <option key={id} value={id}>{PLAN_CATALOG[id].label}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                      tenant.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'
-                    }`}>
-                      {tenant.status}
-                    </span>
-                    {probe && (
-                      <p className={`text-[10px] font-mono mt-1.5 ${
-                        probe.storefront === 'ok' && probe.products === 'ok'
-                          ? 'text-emerald-700'
-                          : probe.storefront === 'checking'
-                            ? 'text-slate-500'
-                            : 'text-rose-600'
-                      }`}>
-                        {probe.detail || `${probe.storefront}/${probe.products}`}
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() => void testTenantApis(tenant.slug)}
-                        className="px-2.5 py-1 text-[11px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-900 rounded border border-emerald-300 transition-colors cursor-pointer"
-                        title="Probe storefront page and /api/stores/{slug}/products"
-                      >
-                        {probe?.storefront === 'checking' ? 'Testing…' : 'Test APIs'}
-                      </button>
-                      <button
-                        onClick={() => setCredentialsTenant(tenant)}
-                        className="px-2.5 py-1 text-[11px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 rounded border border-amber-300 transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
-                        title="Set or reset store owner password and login credentials"
-                      >
-                        <span>🔑</span>
-                        <span>Credentials</span>
-                      </button>
-
-                      <button
-                        onClick={() => setInspectTenant(tenant)}
-                        className="px-2 py-1 text-[11px] font-mono font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded border border-slate-200 transition-colors cursor-pointer"
-                        title="View .env file"
-                      >
-                        .env
-                      </button>
-                      {tenant.status === 'active' ? (
-                        <button
-                          onClick={() => suspend(tenant.id)}
-                          className="px-2 py-1 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 rounded border border-rose-200 transition-colors cursor-pointer"
-                        >
-                          Suspend
+                  <tr key={tenant.id}>
+                    <td>
+                      <p className="cell-main">{tenant.brandName}</p>
+                      <code className="cell-sub mono" style={{ color: 'var(--indigo)' }}>{storeAddress(tenant.slug)}</code>
+                      <p className="cell-sub mono">db: orvexa_tenant_{tenant.slug}</p>
+                    </td>
+                    <td>
+                      <div className="col" style={{ gap: 4, alignItems: 'flex-start' }}>
+                        <a href={storefrontUrl(tenant.slug)} target="_blank" rel="noreferrer" className="small" style={{ color: 'var(--indigo)', fontWeight: 600 }}>
+                          Storefront ↗
+                        </a>
+                        <a href={sellerPortalUrl(tenant.slug)} target="_blank" rel="noreferrer" className="small" style={{ fontWeight: 600 }}>
+                          Tenant dashboard ↗
+                        </a>
+                        <button type="button" onClick={() => setCredentialsTenant(tenant)} className="small" style={{ background: 'none', border: 'none', padding: 0, color: 'var(--gold-ink)', fontWeight: 600, cursor: 'pointer' }}>
+                          Owner login / credentials
                         </button>
-                      ) : (
-                        <button
-                          onClick={() => reactivate(tenant.id)}
-                          className="px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50 rounded border border-emerald-200 transition-colors cursor-pointer"
-                        >
-                          Reactivate
-                        </button>
+                      </div>
+                    </td>
+                    <td>
+                      <p style={{ fontWeight: 600 }}>{tenant.ownerName}</p>
+                      <p className="cell-sub mono">{tenant.ownerEmail}</p>
+                    </td>
+                    <td>
+                      <select
+                        value={tenant.plan}
+                        onChange={(e) => changePlan(tenant.id, e.target.value as 'starter' | 'pro' | 'enterprise')}
+                        className="select"
+                        style={{ height: 32, fontSize: 13 }}
+                      >
+                        {PLAN_IDS.map((id) => (
+                          <option key={id} value={id}>{PLAN_CATALOG[id].label}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <span className={`pill mono ${tenant.status === 'active' ? 'leaf' : 'coral'}`}>
+                        {tenant.status}
+                      </span>
+                      {probe && (
+                        <p className="cell-sub mono" style={{ color: probe.storefront === 'ok' && probe.products === 'ok' ? 'var(--leaf)' : probe.storefront === 'checking' ? 'var(--muted)' : 'var(--coral)' }}>
+                          {probe.detail || `${probe.storefront}/${probe.products}`}
+                        </p>
                       )}
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                    <td className="actions">
+                      <div className="row" style={{ justifyContent: 'flex-end', gap: 6, flexWrap: 'wrap' }}>
+                        <button type="button" onClick={() => void testTenantApis(tenant.slug)} className="btn btn-outline btn-sm">
+                          {probe?.storefront === 'checking' ? 'Testing…' : 'Test APIs'}
+                        </button>
+                        <button type="button" onClick={() => setCredentialsTenant(tenant)} className="btn btn-outline btn-sm" style={{ borderColor: 'var(--gold-edge)', color: 'var(--gold-ink)' }}>
+                          🔑 Credentials
+                        </button>
+                        <button type="button" onClick={() => setInspectTenant(tenant)} className="btn btn-outline btn-sm">
+                          .env
+                        </button>
+                        {tenant.status === 'active' ? (
+                          <button type="button" onClick={() => suspend(tenant.id)} className="btn btn-danger btn-sm">
+                            Suspend
+                          </button>
+                        ) : (
+                          <button type="button" onClick={() => reactivate(tenant.id)} className="btn btn-outline btn-sm" style={{ color: 'var(--leaf)', borderColor: 'var(--leaf)' }}>
+                            Reactivate
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
                 )
               })}
             </tbody>
@@ -1365,47 +1276,32 @@ ENABLE_CUSTOMER_REVIEWS=${t.theme.enableReviews}`
         />
       )}
 
-      {/* Inspect Tenant Modal */}
+      {/* Inspect Tenant .env Modal */}
       {inspectTenant && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 text-slate-900 shadow-2xl space-y-4 animate-scale-in">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="overlay" onClick={() => setInspectTenant(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="drawer-head">
               <div>
-                <span className="text-[10px] font-mono tracking-widest text-slate-400 uppercase font-bold">STORE CONFIGURATION & SECRETS</span>
-                <h3 className="text-base font-bold text-slate-900 mt-0.5">
+                <p className="eyebrow">Store configuration &amp; secrets</p>
+                <h3 style={{ fontFamily: 'var(--font-display)', marginTop: 4 }}>
                   📁 src/tenants/{inspectTenant.slug}/tenant.env
                 </h3>
               </div>
-              <button
-                onClick={() => setInspectTenant(null)}
-                className="text-slate-400 hover:text-slate-700 font-bold p-1"
-              >
-                ✕
-              </button>
+              <button type="button" className="btn btn-ghost btn-icon" onClick={() => setInspectTenant(null)}>✕</button>
             </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-slate-500 font-mono">Isolated Database Config</span>
-                <button
-                  onClick={() => handleCopyEnv(getTenantEnvString(inspectTenant))}
-                  className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-2.5 py-1 rounded border border-slate-200 transition-colors cursor-pointer"
-                >
+            <div className="drawer-body">
+              <div className="row between" style={{ marginBottom: 8 }}>
+                <span className="muted small mono">Isolated database config</span>
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => handleCopyEnv(getTenantEnvString(inspectTenant))}>
                   {copiedEnv ? '✓ Copied!' : 'Copy .env'}
                 </button>
               </div>
-              <pre className="bg-slate-950 border border-slate-800 rounded-xl p-4 text-[11px] font-mono text-emerald-400 overflow-x-auto max-h-60 leading-relaxed shadow-inner">
+              <pre style={{ background: 'var(--ink)', color: '#6ee7b7', borderRadius: 12, padding: 16, fontSize: 11, fontFamily: 'var(--font-mono)', overflow: 'auto', maxHeight: 260, lineHeight: 1.6 }}>
                 {getTenantEnvString(inspectTenant)}
               </pre>
             </div>
-
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={() => setInspectTenant(null)}
-                className="bg-slate-950 text-white font-semibold text-xs px-5 py-2 rounded-lg cursor-pointer"
-              >
-                Done
-              </button>
+            <div className="drawer-foot">
+              <button type="button" className="btn btn-primary" onClick={() => setInspectTenant(null)}>Done</button>
             </div>
           </div>
         </div>
@@ -1423,41 +1319,67 @@ function BillingManager() {
   const totalMRR = activeTenants.reduce((sum, t) => sum + t.subscription.pricePerMonth, 0)
 
   return (
-    <div className="space-y-6 max-w-6xl">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs">
-          <p className="text-2xl font-bold text-slate-900">₹{totalMRR.toLocaleString()}</p>
-          <p className="text-[11px] text-slate-400 uppercase tracking-wider font-mono mt-1">Monthly Recurring Revenue</p>
-        </div>
-        <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs">
-          <p className="text-2xl font-bold text-slate-900">{activeTenants.length}</p>
-          <p className="text-[11px] text-slate-400 uppercase tracking-wider font-mono mt-1">Active Subscriptions</p>
-        </div>
-        <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs">
-          <p className="text-2xl font-bold text-slate-900">₹{(totalMRR * 12).toLocaleString()}</p>
-          <p className="text-[11px] text-slate-400 uppercase tracking-wider font-mono mt-1">Annual Run Rate (ARR)</p>
+    <div className="stack" style={{ maxWidth: 1080 }}>
+      <div className="page-head">
+        <div>
+          <h1>Billing</h1>
+          <p className="sub">Platform subscription revenue and tenant billing status</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/70">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">Store Subscriptions</h3>
+      <div className="grid cols-3">
+        <div className="card kpi gold">
+          <div className="kpi-label">Monthly recurring revenue</div>
+          <div className="kpi-value">₹{totalMRR.toLocaleString()}</div>
+          <div className="kpi-foot">
+            <span className="delta">Live</span>
+            <span>Platform MRR</span>
+          </div>
         </div>
-        <div className="divide-y divide-slate-100 text-xs">
-          {activeTenants.map((tenant) => (
-            <div key={tenant.id} className="p-4 flex items-center justify-between">
-              <div>
-                <p className="font-bold text-slate-900">{tenant.brandName}</p>
-                <p className="text-[11px] text-slate-400 font-mono">{PLAN_CATALOG[normalizePlanId(tenant.plan)].label} • {formatPlanPrice(tenant.subscription.pricePerMonth)}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-[11px] text-slate-500">Next: {tenant.subscription.nextBillingDate}</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase">
-                  {tenant.subscription.status}
-                </span>
-              </div>
-            </div>
-          ))}
+        <div className="card kpi">
+          <div className="kpi-label">Active subscriptions</div>
+          <div className="kpi-value">{activeTenants.length}</div>
+          <div className="kpi-foot"><span className="muted small">Billed stores</span></div>
+        </div>
+        <div className="card kpi">
+          <div className="kpi-label">Annual run rate</div>
+          <div className="kpi-value">₹{(totalMRR * 12).toLocaleString()}</div>
+          <div className="kpi-foot"><span className="muted small">ARR projection</span></div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <div>
+            <h3 className="card-title">Store subscriptions</h3>
+            <p className="card-sub">Active billing for all tenant stores</p>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Store</th>
+                <th>Plan</th>
+                <th>Monthly</th>
+                <th>Next billing</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeTenants.map((tenant) => (
+                <tr key={tenant.id}>
+                  <td className="cell-main">{tenant.brandName}</td>
+                  <td><span className="pill outline">{PLAN_CATALOG[normalizePlanId(tenant.plan)].label}</span></td>
+                  <td className="num money">{formatPlanPrice(tenant.subscription.pricePerMonth)}</td>
+                  <td className="cell-sub mono">{tenant.subscription.nextBillingDate}</td>
+                  <td>
+                    <span className="pill leaf mono">{tenant.subscription.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1471,55 +1393,60 @@ function DomainManager() {
   const { tenants } = useAdminTenants()
 
   return (
-    <div className="space-y-6 max-w-6xl">
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/70">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">Store portals & custom domains</h3>
-          <p className="text-[11px] text-slate-500 mt-1">
+    <div className="stack" style={{ maxWidth: 1080 }}>
+      <div className="page-head">
+        <div>
+          <h1>Domains &amp; routing</h1>
+          <p className="sub">
             Every store gets orvexacloud.in/t/&lt;slug&gt; automatically. Merchants who want their own website add a CNAME to cname.orvexacloud.in from Store Settings.
           </p>
         </div>
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-500 uppercase tracking-wider font-mono text-[10px]">
-              <th className="text-left px-5 py-3">Store</th>
-              <th className="text-left px-4 py-3">Platform portal</th>
-              <th className="text-left px-4 py-3">Custom Domain</th>
-              <th className="text-left px-4 py-3">Owner login</th>
-              <th className="text-right px-5 py-3">DNS</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {tenants.filter((t) => t.status === 'active').map((tenant) => (
-              <tr key={tenant.id} className="hover:bg-slate-50/60">
-                <td className="px-5 py-3.5 font-bold text-slate-900">{tenant.brandName}</td>
-                <td className="px-4 py-3.5">
-                  <a href={storefrontUrl(tenant.slug)} target="_blank" rel="noreferrer" className="text-indigo-600 font-mono hover:underline">
-                    {storeAddress(tenant.slug)}
-                  </a>
-                </td>
-                <td className="px-4 py-3.5 font-mono text-slate-600">
-                  {tenant.customDomain ? (
-                    <span>
-                      {tenant.customDomain}{' '}
-                      <span className={tenant.customDomainVerified ? 'text-emerald-700' : 'text-amber-700'}>
-                        {tenant.customDomainVerified ? 'connected' : 'pending DNS'}
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="text-slate-300">Not mapped</span>
-                  )}
-                </td>
-                <td className="px-4 py-3.5 text-[11px] text-slate-600">
-                  Copy the store owner login URL from Credentials
-                </td>
-                <td className="px-5 py-3.5 text-right font-mono font-bold text-emerald-700">
-                  {tenant.customDomain ? (tenant.customDomainVerified ? 'LIVE' : 'WAIT') : 'PORTAL'}
-                </td>
+      </div>
+
+      <div className="card">
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Store</th>
+                <th>Platform portal</th>
+                <th>Custom domain</th>
+                <th>Owner login</th>
+                <th className="num">DNS</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {tenants.filter((t) => t.status === 'active').map((tenant) => (
+                <tr key={tenant.id}>
+                  <td className="cell-main">{tenant.brandName}</td>
+                  <td>
+                    <a href={storefrontUrl(tenant.slug)} target="_blank" rel="noreferrer" className="mono small" style={{ color: 'var(--indigo)' }}>
+                      {storeAddress(tenant.slug)}
+                    </a>
+                  </td>
+                  <td className="mono small">
+                    {tenant.customDomain ? (
+                      <span>
+                        {tenant.customDomain}{' '}
+                        <span className={tenant.customDomainVerified ? 'pill leaf' : 'pill gold'} style={{ display: 'inline-flex', height: 18, fontSize: 10, padding: '0 6px' }}>
+                          {tenant.customDomainVerified ? 'connected' : 'pending DNS'}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="muted">Not mapped</span>
+                    )}
+                  </td>
+                  <td className="cell-sub small">Copy from Credentials</td>
+                  <td className="num">
+                    <span className={`pill mono ${tenant.customDomain ? (tenant.customDomainVerified ? 'leaf' : 'gold') : 'outline'}`}>
+                      {tenant.customDomain ? (tenant.customDomainVerified ? 'LIVE' : 'WAIT') : 'PORTAL'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )

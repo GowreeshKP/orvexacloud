@@ -103,23 +103,24 @@ export default function AdminLogin({ onSuccess }: { onSuccess: (session: AdminSe
       <aside className="auth-side">
         <img className="logo" src="/brand/logo-white.svg" alt="Orvexa Cloud" />
         <div>
+          <p className="portal-chip" style={{ marginBottom: 18 }}>Super Admin</p>
           <h2>
-            Run every store from one <em>command centre</em>.
+            Run every store from one <em>calm place.</em>
           </h2>
-          <p>Review marketing signups, provision isolated tenant databases, and keep billing and domains under control.</p>
+          <p>Approve brands, provision stores, watch billing and keep a full audit trail.</p>
         </div>
         <div className="auth-points">
           <div>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M20 6 9 17l-5-5" /></svg>
-            Marketing form intake → pending approvals
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" /><path d="M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v0a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z" /><path d="M9 12h6M9 16h4" /></svg>
+            Approve brands and open stores
           </div>
           <div>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M20 6 9 17l-5-5" /></svg>
-            Database-per-store isolation
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /></svg>
+            Billing, domains and plans
           </div>
           <div>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M20 6 9 17l-5-5" /></svg>
-            Super Admin only — restricted access
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
+            Full audit trail on every action
           </div>
         </div>
         <img className="mark-bg" src="/brand/logo-white.svg" alt="" aria-hidden />
@@ -128,13 +129,13 @@ export default function AdminLogin({ onSuccess }: { onSuccess: (session: AdminSe
       <div className="auth-main">
         <form className="auth-card" onSubmit={handleSubmit}>
           <div>
-            <p className="eyebrow">Super Admin</p>
+            <p className="eyebrow">Super Admin portal</p>
             <h1>Sign in</h1>
-            <p className="muted" style={{ marginTop: 6 }}>Authorized administrators only.</p>
+            <p className="muted" style={{ marginTop: 6 }}>Welcome back. Enter your details to continue.</p>
           </div>
 
           <label className="field">
-            <span className="label">Admin email</span>
+            <span className="label">Admin email or ID</span>
             <input
               id="admin-login-id"
               className="input"
