@@ -6,6 +6,7 @@ import { API_BASE } from '@/api/base'
 import AdminLogin from '@/components/auth/AdminLogin'
 import ResetPasswordModal from '@/components/auth/ResetPasswordModal'
 import StoreCredentialsModal from '@/components/auth/StoreCredentialsModal'
+import PortalView from '@/components/platform/PortalView'
 import ProvisionStoreModal from '@/components/platform/ProvisionStoreModal'
 import PlatformAuditLogs from '@/components/platform/PlatformAuditLogs'
 import type { TenantConfig } from '@/types/tenant'
@@ -247,7 +248,7 @@ function AdminPortal({
         </div>
 
         <p className="nav-group">Platform</p>
-        <nav className="col" style={{ gap: 4 }}>
+        <nav className="col" style={{ gap: 4 }} aria-label="Platform sections">
           {ADMIN_NAV.map((item) => {
             const isActive = activeView === item.id
             return (
@@ -259,6 +260,7 @@ function AdminPortal({
                   setNavOpen(false)
                 }}
                 className={`nav-item${isActive ? ' active' : ''}`}
+                aria-current={isActive ? 'page' : undefined}
               >
                 <NavIcon type={item.icon} className="w-4 h-4" />
                 <span className="grow">{item.label}</span>
@@ -292,7 +294,9 @@ function AdminPortal({
           </button>
           <span className="crumb">Platform Admin</span>
           <span className="muted">/</span>
-          <strong style={{ fontFamily: 'var(--font-display)' }}>{ADMIN_NAV.find((n) => n.id === activeView)?.label}</strong>
+          <strong key={activeView} style={{ fontFamily: 'var(--font-display)' }}>
+            {ADMIN_NAV.find((n) => n.id === activeView)?.label}
+          </strong>
           <div className="right row" style={{ gap: 10 }}>
             <span className="pill gold">
               <span className="dot" />
@@ -303,20 +307,22 @@ function AdminPortal({
 
         <main className="main">
           <div className="page">
-            {activeView === 'dashboard' && (
-              <PlatformOverview
-                onSwitchView={setActiveView}
-                onOpenProvisionModal={() => setIsProvisionModalOpen(true)}
-              />
-            )}
-            {activeView === 'applications' && <ApplicationQueue />}
-            {activeView === 'leads' && <ClientLeadsCRM onSwitchView={setActiveView} />}
-            {activeView === 'stores' && (
-              <TenantDirectory onOpenProvisionModal={() => setIsProvisionModalOpen(true)} />
-            )}
-            {activeView === 'billing' && <BillingManager />}
-            {activeView === 'domains' && <DomainManager />}
-            {activeView === 'audit' && <PlatformAuditLogs />}
+            <PortalView viewKey={activeView}>
+              {activeView === 'dashboard' && (
+                <PlatformOverview
+                  onSwitchView={setActiveView}
+                  onOpenProvisionModal={() => setIsProvisionModalOpen(true)}
+                />
+              )}
+              {activeView === 'applications' && <ApplicationQueue />}
+              {activeView === 'leads' && <ClientLeadsCRM onSwitchView={setActiveView} />}
+              {activeView === 'stores' && (
+                <TenantDirectory onOpenProvisionModal={() => setIsProvisionModalOpen(true)} />
+              )}
+              {activeView === 'billing' && <BillingManager />}
+              {activeView === 'domains' && <DomainManager />}
+              {activeView === 'audit' && <PlatformAuditLogs />}
+            </PortalView>
           </div>
         </main>
       </div>

@@ -1534,3 +1534,111 @@ img {
 .orv-pulse-ring {
   animation: orv-pulse-ring 2s ease-out infinite;
 }
+
+/* =========================================
+   PORTAL SHELL — MENU FLIPS + VIEW TRANSITIONS
+   ========================================= */
+.shell .sidebar {
+  transition: width 0.28s var(--ease-out), transform 0.28s var(--ease-out);
+}
+
+.shell .sidebar .nav-item {
+  position: relative;
+  overflow: hidden;
+  transition:
+    background 0.2s var(--ease-out),
+    color 0.2s var(--ease-out),
+    transform 0.18s var(--ease-out),
+    box-shadow 0.2s var(--ease-out);
+}
+
+.shell .sidebar .nav-item:hover:not(.active) {
+  transform: translateX(2px);
+}
+
+.shell .sidebar .nav-item:active {
+  transform: scale(0.985);
+}
+
+.shell .sidebar .nav-item.active {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+}
+
+.shell .sidebar .nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 99px;
+  background: var(--gold, #ffc21a);
+  animation: portal-nav-tick 0.28s var(--ease-spring) both;
+}
+
+@keyframes portal-nav-tick {
+  from { opacity: 0; transform: scaleY(0.4); }
+  to { opacity: 1; transform: scaleY(1); }
+}
+
+.shell .sidebar .store-card,
+.shell .sidebar .brand-row,
+.shell .sidebar .nav-group,
+.shell .sidebar .sidebar-foot {
+  transition: opacity 0.2s var(--ease-out);
+}
+
+.shell .scrim {
+  animation: portal-scrim-in 0.2s var(--ease-out) both;
+}
+
+@keyframes portal-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.shell .topbar strong {
+  display: inline-block;
+  animation: portal-crumb-in 0.28s var(--ease-out) both;
+}
+
+@keyframes portal-crumb-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.shell .page {
+  perspective: 900px;
+}
+
+.portal-view {
+  animation: portal-view-flip 0.32s var(--ease-out) both;
+  transform-origin: 50% 0;
+  will-change: opacity, transform;
+}
+
+@keyframes portal-view-flip {
+  from {
+    opacity: 0;
+    transform: translateY(10px) rotateX(4deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) rotateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell .sidebar,
+  .shell .sidebar .nav-item,
+  .shell .topbar strong,
+  .portal-view,
+  .shell .scrim {
+    animation: none !important;
+    transition: none !important;
+  }
+  .shell .sidebar .nav-item:hover:not(.active),
+  .shell .sidebar .nav-item:active {
+    transform: none;
+  }
+}

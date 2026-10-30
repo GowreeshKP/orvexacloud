@@ -10,6 +10,7 @@ import { tenantPortalPath } from '@/lib/store-urls'
 import { fetchStoreAnalytics, fetchDomainConfig, saveCustomDomain } from '@/api/storefront-analytics'
 import { storeInbox, STORE_INBOX_EVENT, type NewsletterSubscriber, type StoreMessage } from '@/api/store-messages'
 import { StoreDashboardGate } from '@/components/auth/SellerLogin'
+import PortalView from '@/components/platform/PortalView'
 import StoreAuditLogs from '@/components/store/StoreAuditLogs'
 import StorefrontContentEditor, {
   extrasToTheme,
@@ -191,7 +192,10 @@ export default function DashboardApp() {
       )}
 
       {navOpen && <div className="scrim" onClick={() => setNavOpen(false)} aria-hidden />}
-      <aside className={`sidebar${navOpen ? ' open' : ''}`} style={sidebarCollapsed ? { width: 76 } : undefined}>
+      <aside
+        className={`sidebar${navOpen ? ' open' : ''}${sidebarCollapsed ? ' is-collapsed' : ''}`}
+        style={sidebarCollapsed ? { width: 76 } : undefined}
+      >
         <div className="brand-row">
           <img src="/brand/logo-white.svg" alt="Orvexa" style={{ height: 28 }} />
           {!sidebarCollapsed && <span className="portal-chip">Merchant</span>}
@@ -207,13 +211,13 @@ export default function DashboardApp() {
               <p className="sub truncate">{tenant?.ownerName || session.name}</p>
             </div>
           )}
-          <button type="button" className="btn btn-ghost btn-icon" style={{ color: 'var(--on-ink-2)' }} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title={sidebarCollapsed ? 'Expand' : 'Collapse'}>
+          <button type="button" className="btn btn-ghost btn-icon" style={{ color: 'var(--on-ink-2)' }} onClick={() => setSidebarCollapsed(!sidebarCollapsed)} title={sidebarCollapsed ? 'Expand' : 'Collapse'} aria-label={sidebarCollapsed ? 'Expand menu' : 'Collapse menu'}>
             {sidebarCollapsed ? '→' : '←'}
           </button>
         </div>
 
         <p className="nav-group">{!sidebarCollapsed && 'Store'}</p>
-        <nav className="col" style={{ gap: 4 }}>
+        <nav className="col" style={{ gap: 4 }} aria-label="Merchant sections">
           {NAV_ITEMS.map((item) => {
             const isActive = activeView === item.id
             return (
@@ -226,6 +230,7 @@ export default function DashboardApp() {
                 }}
                 className={`nav-item${isActive ? ' active' : ''}`}
                 title={item.label}
+                aria-current={isActive ? 'page' : undefined}
               >
                 <span aria-hidden>{item.icon}</span>
                 {!sidebarCollapsed && <span className="grow">{item.label}</span>}
@@ -253,7 +258,9 @@ export default function DashboardApp() {
           </button>
           <span className="crumb">Merchant</span>
           <span className="muted">/</span>
-          <strong style={{ fontFamily: 'var(--font-display)' }}>{NAV_ITEMS.find((n) => n.id === activeView)?.label || 'Dashboard'}</strong>
+          <strong key={activeView} style={{ fontFamily: 'var(--font-display)' }}>
+            {NAV_ITEMS.find((n) => n.id === activeView)?.label || 'Dashboard'}
+          </strong>
           <span className="muted small mono hidden sm:inline">{tenant?.brandName} · {storeAddress(tenant?.slug || '')}</span>
           <div className="right row" style={{ gap: 8 }}>
             <button type="button" className="btn btn-gold btn-sm" onClick={() => switchLayer('storefront', tenant?.slug || 'lunar')}>
@@ -265,14 +272,16 @@ export default function DashboardApp() {
 
         <main className="main">
           <div className="page">
-            {activeView === 'overview' && <DashboardOverview onNavigate={(view) => setActiveView(view)} />}
-            {activeView === 'products' && <ProductManager onToast={showToast} />}
-            {activeView === 'orders' && <OrderManager onToast={showToast} />}
-            {activeView === 'inbox' && <InboxManager onToast={showToast} />}
-            {activeView === 'storefront' && <StorefrontCustomizer onToast={showToast} />}
-            {activeView === 'database' && <DatabaseManager onToast={showToast} />}
-            {activeView === 'audit' && tenant && <StoreAuditLogs tenant={tenant} onToast={showToast} />}
-            {activeView === 'settings' && <StoreSettings onNavigate={(view) => setActiveView(view)} onToast={showToast} />}
+            <PortalView viewKey={activeView}>
+              {activeView === 'overview' && <DashboardOverview onNavigate={(view) => setActiveView(view)} />}
+              {activeView === 'products' && <ProductManager onToast={showToast} />}
+              {activeView === 'orders' && <OrderManager onToast={showToast} />}
+              {activeView === 'inbox' && <InboxManager onToast={showToast} />}
+              {activeView === 'storefront' && <StorefrontCustomizer onToast={showToast} />}
+              {activeView === 'database' && <DatabaseManager onToast={showToast} />}
+              {activeView === 'audit' && tenant && <StoreAuditLogs tenant={tenant} onToast={showToast} />}
+              {activeView === 'settings' && <StoreSettings onNavigate={(view) => setActiveView(view)} onToast={showToast} />}
+            </PortalView>
           </div>
         </main>
       </div>
