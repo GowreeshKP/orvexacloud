@@ -98,10 +98,32 @@ async function proxyApi(request, url, env) {
 
   const isProfilePut =
     request.method === 'PUT' && /^\/api\/stores\/[^/]+\/profile$/.test(url.pathname)
-  // Buffer body when we may need to re-play it for the theme shim after a 404.
+  const isThemePut =
+    request.method === 'PUT' && /^\/api\/stores\/[^/]+\/theme$/.test(url.pathname)
+  // Buffer body when we may rewrite image URLs or re-play for the profile→theme shim.
   let rawBody = null
-  if (isProfilePut) {
+  if (isProfilePut || isThemePut) {
     rawBody = await request.arrayBuffer()
+  }
+  if (isThemePut && rawBody) {
+    try {
+      const parsed = JSON.parse(new TextDecoder().decode(rawBody))
+      let changed = false
+      for (const key of ['logoUrl', 'heroImage']) {
+        const v = parsed[key]
+        if (typeof v === 'string' && v.trim() && !/^https?:\/\//i.test(v) && !v.startsWith('data:image/')) {
+          parsed[key] = ''
+          changed = true
+        }
+      }
+      if (changed) {
+        rawBody = new TextEncoder().encode(JSON.stringify(parsed)).buffer
+        headers.set('content-type', 'application/json')
+        headers.delete('content-length')
+      }
+    } catch {
+      /* keep original body */
+    }
   }
 
   const init = {
