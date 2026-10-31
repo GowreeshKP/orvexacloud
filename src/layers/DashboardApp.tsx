@@ -711,7 +711,7 @@ function DashboardOverview({ onNavigate }: { onNavigate: (view: DashboardView) =
 // =====================================================
 function ProductManager({ onToast }: { onToast: (msg: string) => void }) {
   const { products, addProduct, updateProduct, deleteProduct } = useDashboardProducts()
-  const { tenant, refreshTenant } = useTenant()
+  const { tenant, patchTenant } = useTenant()
   const isTemplate = isTemplateStore(tenant)
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
@@ -726,11 +726,11 @@ function ProductManager({ onToast }: { onToast: (msg: string) => void }) {
     const existing = tenant.categories || []
     const [created] = buildTenantCategories([name])
     if (!created) return null
-    if (!existing.some((c) => c.slug === created.slug)) {
-      mockStore.updateTenant(tenant.id, { categories: [...existing, created] })
-      refreshTenant(tenant.slug)
-      onToast(`Added category "${created.name}".`)
-    }
+    if (existing.some((c) => c.slug === created.slug)) return created.slug
+    const next = [...existing, created]
+    // Soft-patch only — refreshTenant() sets loading=true and tears down the Add Product modal.
+    patchTenant({ categories: next })
+    onToast(`Added category "${created.name}".`)
     return created.slug
   }
 

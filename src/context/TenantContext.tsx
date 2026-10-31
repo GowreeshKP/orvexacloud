@@ -24,6 +24,8 @@ interface TenantContextValue {
   error: string | null
   layer: ApplicationLayer
   refreshTenant: (slug?: string) => void
+  /** Merge fields into the current tenant without flipping loading (keeps open modals mounted). */
+  patchTenant: (updates: Partial<TenantConfig>) => void
   switchTenant: (slug: string) => void
   switchLayer: (layer: ApplicationLayer, tenantSlug?: string) => void
 }
@@ -34,6 +36,7 @@ const TenantContext = createContext<TenantContextValue>({
   error: null,
   layer: 'storefront',
   refreshTenant: () => {},
+  patchTenant: () => {},
   switchTenant: () => {},
   switchLayer: () => {},
 })
@@ -125,6 +128,17 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const refreshTenant = useCallback((customSlug?: string) => {
     void loadTenant(customSlug)
   }, [loadTenant])
+
+  const patchTenant = useCallback((updates: Partial<TenantConfig>) => {
+    setTenant((prev) => {
+      if (!prev) return prev
+      const next = deepCloneTenant({ ...prev, ...updates })
+      if (updates.theme) next.theme = { ...prev.theme, ...updates.theme }
+      if (updates.contact) next.contact = { ...prev.contact, ...updates.contact }
+      mockStore.updateTenant(prev.id, updates)
+      return next
+    })
+  }, [])
 
   /** pushState only works same-origin; storefront lives on orvexacloud.in while the dashboard is on app. */
   const navigateLayerUrl = (url: string): 'external' | 'internal' => {
@@ -237,6 +251,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         error,
         layer,
         refreshTenant,
+        patchTenant,
         switchTenant,
         switchLayer,
       }}

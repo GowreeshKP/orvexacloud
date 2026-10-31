@@ -184,26 +184,26 @@ export function useThemeCustomizer(): {
   updateTheme: (updates: Partial<ThemeConfig>) => void
   updateTenant: (updates: Partial<TenantConfig>) => void
 } {
-  const { tenant, refreshTenant } = useTenant()
+  const { tenant, patchTenant } = useTenant()
 
   const updateTheme = useCallback((updates: Partial<ThemeConfig>) => {
     if (!tenant) return
-    // Optimistic local update for the live preview — do not refresh from API yet or
-    // empty Mongo theme would wipe the merchant's unsaved edits.
+    // Optimistic local update for the live preview — soft-patch keeps storefront editor mounted.
     mockStore.updateTheme(tenant.id, updates)
+    patchTenant({ theme: { ...tenant.theme, ...updates } })
     void apiClient.updateTheme(tenant.slug, updates).then((saved) => {
-      if (saved) mockStore.updateTheme(tenant.id, saved)
-      refreshTenant()
+      if (saved) {
+        mockStore.updateTheme(tenant.id, saved)
+        patchTenant({ theme: { ...tenant.theme, ...saved } })
+      }
     })
-  }, [tenant, refreshTenant])
+  }, [tenant, patchTenant])
 
   const updateTenant = useCallback((updates: Partial<TenantConfig>) => {
     if (!tenant) return
-    mockStore.updateTenant(tenant.id, updates)
-    void apiClient.updateStoreProfile(tenant.slug, updates).then(() => {
-      refreshTenant()
-    })
-  }, [tenant, refreshTenant])
+    patchTenant(updates)
+    void apiClient.updateStoreProfile(tenant.slug, updates)
+  }, [tenant, patchTenant])
 
   return {
     theme: tenant?.theme || null,
