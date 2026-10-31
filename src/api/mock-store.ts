@@ -57,7 +57,7 @@ class MockPlatformStore {
   }
 
   // Persist all state to localStorage so changes survive page reload & cross-tab navigation
-  public persist(): void {
+  public persist(options?: { silent?: boolean }): void {
     if (!isBrowser()) return
     try {
       const tenantsList = Array.from(this.tenants.values())
@@ -69,7 +69,10 @@ class MockPlatformStore {
       const appsList = Array.from(this.applications.values())
       localStorage.setItem(STORAGE_KEY_APPLICATIONS, JSON.stringify(appsList))
 
-      window.dispatchEvent(new CustomEvent('orvexa:store-updated', { detail: { timestamp: Date.now() } }))
+      // Admin sync / background merges must not force every open storefront to re-resolve.
+      if (!options?.silent) {
+        window.dispatchEvent(new CustomEvent('orvexa:store-updated', { detail: { timestamp: Date.now() } }))
+      }
     } catch (e) {
       console.warn('Failed to persist mockStore to localStorage', e)
     }
@@ -149,7 +152,7 @@ class MockPlatformStore {
   // The master database is the list. Local sample stores are not kept beside it.
   replaceApplications(remote: TenantApplication[]): void {
     this.applications = new Map(remote.map((a) => [a.id, { ...a }]))
-    this.persist()
+    this.persist({ silent: true })
   }
 
   replaceTenants(remote: TenantConfig[]): void {
@@ -162,13 +165,13 @@ class MockPlatformStore {
       if (!next.has(id)) this.tenantDatabases.delete(id)
     }
     this.tenants = next
-    this.persist()
+    this.persist({ silent: true })
   }
 
   // Applications loaded from the backend (website signups included) replace local copies by id.
   mergeApplications(remote: TenantApplication[]): void {
     remote.forEach((a) => this.applications.set(a.id, { ...this.applications.get(a.id), ...a }))
-    this.persist()
+    this.persist({ silent: true })
   }
 
   // Tenants loaded from the master DB replace local copies by id (and by slug when ids differ).
@@ -188,7 +191,7 @@ class MockPlatformStore {
       this.tenants.set(t.id, { ...existing, ...t })
       this.ensureTenantDatabase(t.id)
     })
-    this.persist()
+    this.persist({ silent: true })
   }
 
   /** Empty isolated DB for a newly approved / API-synced tenant (products come from the real API later). */

@@ -335,7 +335,7 @@ export function useAdminTenants(): {
     const onFocus = () => { void syncFromBackend() }
     window.addEventListener('orvexa:tenant-provisioned', onProvisioned)
     window.addEventListener('focus', onFocus)
-    const poll = window.setInterval(onFocus, 30_000)
+    const poll = window.setInterval(onFocus, 60_000)
     return () => {
       window.removeEventListener('orvexa:tenant-provisioned', onProvisioned)
       window.removeEventListener('focus', onFocus)
@@ -559,7 +559,7 @@ export function useAdminApplications(): {
     }
     window.addEventListener('orvexa:applications-changed', handleChange)
     window.addEventListener('focus', syncFromBackend)
-    const poll = window.setInterval(syncFromBackend, 15_000)
+    const poll = window.setInterval(syncFromBackend, 60_000)
     return () => {
       window.removeEventListener('orvexa:applications-changed', handleChange)
       window.removeEventListener('focus', syncFromBackend)

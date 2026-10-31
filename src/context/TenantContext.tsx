@@ -206,6 +206,17 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
     void loadTenant()
 
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null
+    const scheduleReload = () => {
+      // Super Admin has no store slug — ignore mockStore persist storms from tenant sync.
+      if (resolveApplicationLayer() === 'admin' && !resolveTenantSlug()) return
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null
+        void loadTenant()
+      }, 2500)
+    }
+
     const handleLocationChange = () => {
       const next = pathPortalRedirectUrl()
       if (next && next !== window.location.href) {
@@ -214,18 +225,15 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       }
       void loadTenant()
     }
-    const handleStoreUpdated = () => {
-      void loadTenant()
-    }
 
     window.addEventListener('popstate', handleLocationChange)
-    window.addEventListener('storage', handleStoreUpdated)
-    window.addEventListener('orvexa:store-updated', handleStoreUpdated)
+    // Cross-tab localStorage writes only — same-tab persist already updates React state via patchTenant.
+    window.addEventListener('storage', scheduleReload)
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer)
       window.removeEventListener('popstate', handleLocationChange)
-      window.removeEventListener('storage', handleStoreUpdated)
-      window.removeEventListener('orvexa:store-updated', handleStoreUpdated)
+      window.removeEventListener('storage', scheduleReload)
     }
   }, [loadTenant])
 

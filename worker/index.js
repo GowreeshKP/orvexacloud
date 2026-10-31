@@ -68,10 +68,26 @@ function corsAllowOrigin(request, fallbackOrigin) {
   return fallbackOrigin
 }
 
+function withCors(response, allowOrigin) {
+  const out = new Headers(response.headers)
+  out.set('access-control-allow-origin', allowOrigin)
+  out.set('access-control-allow-credentials', 'true')
+  out.set('vary', 'Origin')
+  return new Response(response.body, { status: response.status, headers: out })
+}
+
 async function proxyApi(request, url, env) {
   const origin = String(env.RENDER_API_ORIGIN || DEFAULT_ORIGIN).replace(/\/+$/, '')
   const target = `${origin}${url.pathname}${url.search}`
   const allowOrigin = corsAllowOrigin(request, url.origin)
+
+  // Short edge cache for store bootstrap — stops admin/storefront refresh storms from 429ing Render.
+  const isResolveGet = request.method === 'GET' && url.pathname === '/api/public/resolve'
+  if (isResolveGet) {
+    const cacheKey = new Request(target, { method: 'GET' })
+    const cached = await caches.default.match(cacheKey)
+    if (cached) return withCors(cached, allowOrigin)
+  }
 
   // Browser preflight from marketing storefronts (orvexacloud.in → app /api).
   if (request.method === 'OPTIONS') {
@@ -200,5 +216,14 @@ async function proxyApi(request, url, env) {
   out.set('access-control-allow-origin', allowOrigin)
   out.set('access-control-allow-credentials', 'true')
   out.set('vary', 'Origin')
+
+  if (isResolveGet && upstream.ok) {
+    out.set('cache-control', 'public, max-age=30')
+    const cacheable = new Response(upstream.body, { status: upstream.status, headers: out })
+    const cacheKey = new Request(target, { method: 'GET' })
+    await caches.default.put(cacheKey, cacheable.clone()).catch(() => null)
+    return cacheable
+  }
+
   return new Response(upstream.body, { status: upstream.status, headers: out })
 }

@@ -102,11 +102,11 @@ export function createApp() {
   // Automated test suites only; ignored in production.
   const skip = () => process.env.DISABLE_RATE_LIMITS === 'true' && process.env.NODE_ENV !== 'production'
 
-  // Global rate limit — 300 requests / 15 min per IP
+  // Global rate limit — storefront + admin + probes share one NAT IP in production.
   const globalLimiter = rateLimit({
     skip,
     windowMs: 15 * 60 * 1000,
-    max: 300,
+    max: 1200,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many requests. Please slow down and try again later.' },
@@ -123,8 +123,17 @@ export function createApp() {
   })
   const credentialPaths = /\/(login|forgot-password|reset-password|change-password|bootstrap)$/
 
-  // Signup connector — 60 requests / minute per IP
-  const publicLimiter = rateLimit({
+  // Store bootstrap (resolve / slug-check) is read-heavy — admin + storefront share one office IP.
+  const publicReadLimiter = rateLimit({
+    skip,
+    windowMs: 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests. Please retry shortly.' },
+  })
+  // Signup connector writes — keep tight to stop abuse.
+  const publicWriteLimiter = rateLimit({
     skip,
     windowMs: 60 * 1000,
     max: 60,
@@ -135,7 +144,9 @@ export function createApp() {
 
   app.use(globalLimiter)
   // Must precede express.json(): signup signatures are verified against the raw body bytes.
-  app.use('/api/public', publicLimiter, publicRoutes)
+  app.use('/api/public/resolve', publicReadLimiter)
+  app.use('/api/public/slug-available', publicReadLimiter)
+  app.use('/api/public', publicWriteLimiter, publicRoutes)
   // Product images may be inline data URLs (≤ ~1.5 MB each); nothing legitimate needs more.
   app.use(express.json({ limit: '5mb' }))
   app.use(express.urlencoded({ extended: false, limit: '100kb' }))
