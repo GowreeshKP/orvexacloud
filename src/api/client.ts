@@ -156,8 +156,9 @@ class ApiClient {
 
   async updateStoreProfile(tenantSlug: string, updates: Partial<TenantConfig>): Promise<TenantConfig | null> {
     const logo = sanitizeImageUrl(updates.logo || updates.logoUrl)
+    const brandName = updates.brandName || updates.name
     const payload = compactPayload({
-      brandName: updates.brandName || updates.name,
+      brandName,
       name: updates.name || updates.brandName,
       tagline: updates.tagline,
       aboutStory: updates.aboutStory,
@@ -165,16 +166,52 @@ class ApiClient {
       logoUrl: logo,
       contact: updates.contact,
     } as Record<string, unknown>)
-    const data = await this.request<{ success: boolean; tenant: TenantConfig }>(`/stores/${tenantSlug}/profile`, {
-      method: 'PUT',
-      body: JSON.stringify(payload),
+
+    // Prefer /profile when the API has it. Older Render deploys 404 — fall back to theme.copy.
+    try {
+      const token = await authService.getStoreAccessToken()
+      const res = await fetch(`${API_BASE_URL}/stores/${tenantSlug}/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        const data = (await res.json()) as { success?: boolean; tenant?: TenantConfig }
+        const tenant = mockStore.getTenantBySlug(tenantSlug)
+        if (tenant) mockStore.updateTenant(tenant.id, updates)
+        return data?.tenant || (tenant ? { ...tenant, ...updates } : null)
+      }
+      if (res.status !== 404) {
+        const errBody = await res.json().catch(() => ({}))
+        console.warn('[api] profile update failed', res.status, errBody)
+      }
+    } catch (e) {
+      console.warn('[api] profile update error', e)
+    }
+
+    // Persist brand / contact / logo through the working theme endpoint until /profile is live.
+    const contact = updates.contact || {}
+    await this.updateTheme(tenantSlug, {
+      logoUrl: logo === undefined ? undefined : logo,
+      tagline: updates.tagline,
+      aboutStory: updates.aboutStory,
+      copy: compactPayload({
+        _profileBrandName: brandName,
+        _profileAbout: updates.aboutStory,
+        _profilePhone: contact.phone,
+        _profileEmail: contact.email,
+        _profileAddress: contact.address,
+        _profileHours: contact.workingHours,
+        _profileShipping: contact.shippingThresholdFormatted,
+      }) as Record<string, string>,
     })
 
     const tenant = mockStore.getTenantBySlug(tenantSlug)
-    if (tenant) {
-      mockStore.updateTenant(tenant.id, updates)
-    }
-    return data?.tenant || (tenant ? { ...tenant, ...updates } : null)
+    if (tenant) mockStore.updateTenant(tenant.id, updates)
+    return tenant ? { ...tenant, ...updates } : null
   }
 
   // --- ORDERS ---

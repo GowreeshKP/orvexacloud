@@ -18,6 +18,34 @@ function deepCloneTenant(config: TenantConfig): TenantConfig {
   return JSON.parse(JSON.stringify(config))
 }
 
+/** Promote profile fields stored in theme.copy when PUT /profile is not available on the API. */
+function hydrateTenantProfile(raw: TenantConfig): TenantConfig {
+  const copy = raw.theme?.copy || {}
+  const brandName = raw.brandName || copy._profileBrandName || raw.name || ''
+  const logo = raw.logo || raw.logoUrl || raw.theme?.logoUrl || ''
+  const aboutStory = raw.aboutStory || copy._profileAbout || raw.theme?.aboutStory || ''
+  const contact = {
+    phone: raw.contact?.phone || copy._profilePhone || '',
+    email: raw.contact?.email || copy._profileEmail || raw.ownerEmail || '',
+    address: raw.contact?.address || copy._profileAddress || '',
+    workingHours: raw.contact?.workingHours || copy._profileHours || '',
+    shippingThresholdFormatted: raw.contact?.shippingThresholdFormatted || copy._profileShipping || '',
+  }
+  return {
+    ...raw,
+    brandName,
+    name: raw.name || brandName,
+    logo,
+    logoUrl: raw.logoUrl || logo,
+    aboutStory,
+    contact,
+    theme: {
+      ...raw.theme,
+      logoUrl: raw.theme?.logoUrl || logo,
+    },
+  }
+}
+
 interface TenantContextValue {
   tenant: TenantConfig | null
   loading: boolean
@@ -99,7 +127,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     try {
       const fromApi = await fetchPublicTenant(slug)
       if (fromApi?.slug) {
-        setTenant(deepCloneTenant(fromApi))
+        setTenant(hydrateTenantProfile(deepCloneTenant(fromApi)))
         setError(null)
         return
       }
@@ -108,7 +136,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         mockStore.reloadFromStorage()
         const local = mockStore.getTenantBySlug(slug) || (slug.includes('.') ? mockStore.getTenantByDomain?.(slug) : null)
         if (local) {
-          setTenant(deepCloneTenant(local))
+          setTenant(hydrateTenantProfile(deepCloneTenant(local)))
           setError(null)
           return
         }

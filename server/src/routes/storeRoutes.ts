@@ -240,7 +240,17 @@ router.get('/theme', async (req: Request, res: Response) => {
 })
 
 const THEME_COLOR_KEYS = ['primaryColor', 'accentColor', 'backgroundColor'] as const
-const THEME_TEXT_KEYS = ['fontDisplay', 'fontSans', 'heroHeadline', 'heroSubhead', 'heroCtaText', 'secondaryCtaText', 'discountCode'] as const
+const THEME_TEXT_KEYS = [
+  'fontDisplay',
+  'fontSans',
+  'heroHeadline',
+  'heroSubhead',
+  'heroCtaText',
+  'secondaryCtaText',
+  'discountCode',
+  'tagline',
+  'aboutStory',
+] as const
 const THEME_FLAG_KEYS = ['enableAnimations', 'enableReviews', 'enableOrderTracking'] as const
 const HOME_SECTION_IDS = new Set(['trustBar', 'bestsellers', 'categories', 'featured', 'triptych', 'mission'])
 

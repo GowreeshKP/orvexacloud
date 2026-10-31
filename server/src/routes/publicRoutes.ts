@@ -104,14 +104,32 @@ function storeTypeFor(niche: string): string {
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
 
 function publicTenant(t: ITenant) {
+  const theme = (t.theme || {}) as Record<string, unknown>
+  const copy = (theme.copy && typeof theme.copy === 'object' ? theme.copy : {}) as Record<string, string>
+  // Profile fields may live in theme.copy until PUT /stores/:slug/profile is deployed on Render.
+  const brandName = t.brandName || copy._profileBrandName || ''
+  const logo = t.logo || (typeof theme.logoUrl === 'string' ? theme.logoUrl : '') || ''
+  const aboutStory = (t as { aboutStory?: string }).aboutStory || copy._profileAbout || (typeof theme.aboutStory === 'string' ? theme.aboutStory : '') || ''
+  const contact = {
+    phone: (t as { contact?: { phone?: string } }).contact?.phone || copy._profilePhone || '',
+    email: (t as { contact?: { email?: string } }).contact?.email || copy._profileEmail || t.ownerEmail || '',
+    address: (t as { contact?: { address?: string } }).contact?.address || copy._profileAddress || '',
+    workingHours: (t as { contact?: { workingHours?: string } }).contact?.workingHours || copy._profileHours || '',
+    shippingThresholdFormatted:
+      (t as { contact?: { shippingThresholdFormatted?: string } }).contact?.shippingThresholdFormatted ||
+      copy._profileShipping ||
+      '',
+  }
   return {
     id: t.id,
     slug: t.slug,
-    brandName: t.brandName,
+    brandName,
     ownerName: t.ownerName,
     ownerEmail: t.ownerEmail,
     ownerPhone: t.ownerPhone,
-    logo: t.logo || '',
+    logo,
+    aboutStory,
+    contact,
     status: t.status,
     plan: t.plan,
     customDomain: t.customDomain || '',
