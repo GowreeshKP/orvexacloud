@@ -7,6 +7,26 @@ import { mockStore } from './mock-store'
 import { authService } from './auth'
 import { API_BASE as API_BASE_URL } from './base'
 
+/** Keep only absolute http(s)/data image URLs (or '' to clear). Drop relative paths that 400 the API. */
+function sanitizeImageUrl(v: unknown): string | undefined {
+  if (v === undefined || v === null) return undefined
+  if (typeof v !== 'string') return undefined
+  const s = v.trim()
+  if (s === '') return ''
+  if (s.startsWith('data:image/')) return s
+  try {
+    const u = new URL(s)
+    if (u.protocol === 'http:' || u.protocol === 'https:') return s
+  } catch {
+    /* relative / invalid */
+  }
+  return undefined
+}
+
+function compactPayload<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>
+}
+
 class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T | null> {
     try {
@@ -21,12 +41,20 @@ class ApiClient {
       })
 
       if (!res.ok) {
-        throw new Error(`API error ${res.status}: ${res.statusText}`)
+        let detail = res.statusText
+        try {
+          const body = await res.json()
+          if (body?.error) detail = String(body.error)
+        } catch {
+          /* ignore */
+        }
+        throw new Error(`API error ${res.status}: ${detail}`)
       }
 
       return await res.json()
     } catch (error) {
       // Backend not running or endpoint failed; return null to trigger mockStore fallback
+      console.warn('[api]', endpoint, error)
       return null
     }
   }
@@ -108,9 +136,14 @@ class ApiClient {
   }
 
   async updateTheme(tenantSlug: string, updates: Partial<ThemeConfig>): Promise<ThemeConfig | null> {
+    const payload = compactPayload({
+      ...updates,
+      heroImage: sanitizeImageUrl(updates.heroImage),
+      logoUrl: sanitizeImageUrl(updates.logoUrl),
+    } as Record<string, unknown>)
     const data = await this.request<{ success: boolean; theme: ThemeConfig }>(`/stores/${tenantSlug}/theme`, {
       method: 'PUT',
-      body: JSON.stringify(updates),
+      body: JSON.stringify(payload),
     })
 
     const tenant = mockStore.getTenantBySlug(tenantSlug)
@@ -122,15 +155,16 @@ class ApiClient {
   }
 
   async updateStoreProfile(tenantSlug: string, updates: Partial<TenantConfig>): Promise<TenantConfig | null> {
-    const payload = {
+    const logo = sanitizeImageUrl(updates.logo || updates.logoUrl)
+    const payload = compactPayload({
       brandName: updates.brandName || updates.name,
       name: updates.name || updates.brandName,
       tagline: updates.tagline,
       aboutStory: updates.aboutStory,
-      logo: updates.logo || updates.logoUrl,
-      logoUrl: updates.logoUrl || updates.logo,
+      logo,
+      logoUrl: logo,
       contact: updates.contact,
-    }
+    } as Record<string, unknown>)
     const data = await this.request<{ success: boolean; tenant: TenantConfig }>(`/stores/${tenantSlug}/profile`, {
       method: 'PUT',
       body: JSON.stringify(payload),

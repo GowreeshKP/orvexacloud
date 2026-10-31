@@ -294,12 +294,15 @@ function themeFields(body: unknown): Record<string, unknown> {
     }).filter((t) => t.text)
   }
   if (Array.isArray(body.homeSections)) {
-    out.homeSections = body.homeSections.slice(0, 12).map((item, i) => {
+    const sections: { id: string; visible: boolean }[] = []
+    for (let i = 0; i < Math.min(body.homeSections.length, 12); i++) {
+      const item = body.homeSections[i]
       if (!isPlainObject(item)) throw new ValidationError(`homeSections[${i}] is invalid.`)
       const id = optString(item.id, `homeSections[${i}].id`, 40) || ''
-      if (!HOME_SECTION_IDS.has(id)) throw new ValidationError(`homeSections[${i}].id is not a known section.`)
-      return { id, visible: item.visible !== false }
-    })
+      if (!HOME_SECTION_IDS.has(id)) continue
+      sections.push({ id, visible: item.visible !== false })
+    }
+    out.homeSections = sections
   }
   if (isPlainObject(body.pdpOptions)) {
     const pdp: Record<string, boolean> = {}
@@ -375,12 +378,14 @@ router.put('/profile', ...ownerOfTenant, async (req: Request, res: Response) => 
       if (workingHours !== undefined) $set['contact.workingHours'] = workingHours
       if (shippingThresholdFormatted !== undefined) $set['contact.shippingThresholdFormatted'] = shippingThresholdFormatted
     }
+    const masterDb = await connectMasterDatabase()
+    const Tenant = getTenantModel(masterDb)
     if (Object.keys($set).length === 0) {
-      res.status(400).json({ error: 'No profile fields to update.' })
+      const current = await Tenant.findOne({ slug: req.tenant!.slug })
+      res.json({ success: true, tenant: current, unchanged: true })
       return
     }
-    const masterDb = await connectMasterDatabase()
-    const updated = await getTenantModel(masterDb).findOneAndUpdate(
+    const updated = await Tenant.findOneAndUpdate(
       { slug: req.tenant!.slug },
       { $set },
       { new: true }

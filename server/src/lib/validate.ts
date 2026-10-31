@@ -69,6 +69,8 @@ export function optImageUrl(v: unknown, field: string): string | undefined {
     if (!IMAGE_DATA_URL.test(s)) throw new ValidationError(`${field} must be a PNG, JPEG, WebP, GIF or AVIF image.`)
     return s
   }
+  // Relative paths (/brand/logo.svg) and bare filenames are common from the form — treat as cleared.
+  if (s.startsWith('/') || !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(s)) return ''
   if (s.length > 2048) throw new ValidationError(`${field} URL is too long.`)
   let url: URL
   try {
