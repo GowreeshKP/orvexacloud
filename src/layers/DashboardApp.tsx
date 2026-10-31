@@ -177,6 +177,15 @@ export default function DashboardApp() {
   const [navOpen, setNavOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
+  // Hooks must stay above every early return — otherwise login/loading flips crash with React #300.
+  const { orders: allOrders } = useTenantOrders()
+  const inboxMessages = useMemo(() => {
+    const tenantId = tenant?.id || ''
+    return storeInbox.getMessages(tenantId)
+  }, [tenant?.id])
+  const unreadOrders = allOrders.filter((o) => o.status === 'Processing').length
+  const unreadMsgs = inboxMessages.filter((m) => !m.read).length
+
   const showToast = (msg: string) => {
     setToastMessage(msg)
     setTimeout(() => setToastMessage(null), 3500)
@@ -208,6 +217,12 @@ export default function DashboardApp() {
       cancelled = true
     }
   }, [session])
+
+  const navBadge = (id: string) => {
+    if (id === 'orders') return unreadOrders
+    if (id === 'inbox') return unreadMsgs
+    return 0
+  }
 
   if (loading) {
     return (
@@ -249,21 +264,6 @@ export default function DashboardApp() {
         onLoginSuccess={(next) => setSession(next)}
       />
     )
-  }
-
-  // Derive badge counts from live data for nav items
-  const { orders: allOrders } = useTenantOrders()
-  const { messages: _msgs } = useMemo(() => {
-    const tenantId = tenant?.id || ''
-    return { messages: storeInbox.getMessages(tenantId) }
-  }, [tenant?.id])
-  const unreadOrders = allOrders.filter((o) => o.status === 'Processing').length
-  const unreadMsgs = _msgs.filter((m) => !m.read).length
-
-  const navBadge = (id: string) => {
-    if (id === 'orders') return unreadOrders
-    if (id === 'inbox') return unreadMsgs
-    return 0
   }
 
   return (
@@ -735,13 +735,12 @@ function ProductManager({ onToast }: { onToast: (msg: string) => void }) {
   }
 
   const filteredProducts = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim()
     return products.filter((p) => {
       const matchesCat = filterCategory === 'all' || p.category === filterCategory
-      const matchesSearch =
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.fabricTech.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.category.toLowerCase().includes(searchQuery.toLowerCase())
-      return matchesCat && matchesSearch
+      if (!q) return matchesCat
+      const hay = `${p.name} ${p.fabricTech || ''} ${p.category || ''} ${p.badge || ''}`.toLowerCase()
+      return matchesCat && hay.includes(q)
     })
   }, [products, filterCategory, searchQuery])
 
@@ -862,32 +861,14 @@ function ProductManager({ onToast }: { onToast: (msg: string) => void }) {
                     </td>
 
                     {/* Colors & Sizes */}
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-1 mb-1">
-                        {product.colors.slice(0, 4).map((c, i) => (
-                          <span
-                            key={i}
-                            className="w-3 h-3 rounded-full border border-black/20"
-                            style={{ backgroundColor: c.hex }}
-                            title={c.name}
-                          />
-                        ))}
-                        {product.colors.length > 4 && (
-                          <span className="text-[9px] text-black/50">+{product.colors.length - 4}</span>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-black/50">{product.sizes?.join(', ') || (isTemplate ? '—' : 'S, M, L, XL')}</p>
-                    </td>
-
-                    {/* Colors & Sizes */}
                     <td>
                       <div className="row" style={{ gap: 4, flexWrap: 'wrap', marginBottom: 4 }}>
-                        {product.colors.slice(0, 4).map((c, i) => (
+                        {(product.colors || []).slice(0, 4).map((c, i) => (
                           <span key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: c.hex, border: '1px solid var(--line)', display: 'inline-block' }} title={c.name} />
                         ))}
-                        {product.colors.length > 4 && <span className="small muted">+{product.colors.length - 4}</span>}
+                        {(product.colors?.length || 0) > 4 && <span className="small muted">+{(product.colors?.length || 0) - 4}</span>}
                       </div>
-                      <p className="cell-sub">{product.sizes?.join(', ') || (isTemplate ? '—' : 'S, M, L, XL')}</p>
+                      <p className="cell-sub">{product.sizes?.join(', ') || '—'}</p>
                     </td>
 
                     {/* Rating */}
@@ -1139,47 +1120,45 @@ function ProductFormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden animate-slide-down my-8 border border-black/10">
-        {/* Header */}
-        <div className="bg-black text-white p-6 flex items-center justify-between">
+    <>
+      <div className="overlay" onClick={onClose} aria-hidden />
+      <div className="modal" style={{ width: 'min(720px, calc(100vw - 24px))', maxHeight: 'calc(100vh - 32px)' }} role="dialog" aria-modal="true" aria-labelledby="product-form-title">
+        <div className="drawer-head">
           <div>
-            <span className="text-[10px] font-mono tracking-[0.25em] text-white/60 uppercase">
-              {isEditing ? 'EDIT PRODUCT' : 'NEW PRODUCT CREATION'}
-            </span>
-            <h2 className="text-xl font-serif">{isEditing ? product.name : 'Add New Product to Store'}</h2>
+            <p className="eyebrow">{isEditing ? 'Edit product' : 'New product'}</p>
+            <h2 id="product-form-title" className="card-title">{isEditing ? product!.name : 'Add product'}</h2>
           </div>
-          <button onClick={onClose} className="text-white/60 hover:text-white text-xl cursor-pointer">
+          <button type="button" className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Close">
             ✕
           </button>
         </div>
 
-        {/* Form Tabs */}
-        <div className="flex border-b border-black/10 bg-stone-50 px-6">
-          {[
-            { id: 'info' as const, label: '1. Basic Info & Price' },
-            { id: 'images' as const, label: '2. Photos & Gallery 📸' },
-            { id: 'variants' as const, label: isTemplate ? '3. Colors & Options 🎨' : '3. Colors & Sizes 🎨' },
-            { id: 'craft' as const, label: isTemplate ? '4. Details 📝' : '4. Fabric & Details 🌿' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
-                activeTab === tab.id
-                  ? 'border-black text-black bg-white'
-                  : 'border-transparent text-black/50 hover:text-black'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div style={{ padding: '0 24px' }}>
+          <div className="tabs" role="tablist">
+            {[
+              { id: 'info' as const, label: 'Basics' },
+              { id: 'images' as const, label: 'Photos' },
+              { id: 'variants' as const, label: isTemplate ? 'Options' : 'Colors & sizes' },
+              { id: 'craft' as const, label: 'Details' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                className="tab"
+                aria-selected={activeTab === tab.id}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-6 max-h-[75vh] overflow-y-auto">
+        <form id="product-form" onSubmit={handleSubmit} className="drawer-body" style={{ overflowY: 'auto' }}>
           {formError && (
-            <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium">
-              {formError}
+            <div className="callout bad">
+              <span>{formError}</span>
             </div>
           )}
           {/* TAB 1: BASIC INFO */}
@@ -1596,25 +1575,17 @@ function ProductFormModal({
             </div>
           )}
 
-          {/* Actions */}
-          <div className="flex items-center justify-between pt-4 border-t border-black/10">
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-xs font-bold tracking-widest uppercase px-5 py-2.5 border border-black/20 hover:border-black rounded-lg transition-colors cursor-pointer"
-            >
-              CANCEL
+          <div className="drawer-foot" style={{ margin: '8px -24px -4px', padding: '16px 24px' }}>
+            <button type="button" className="btn btn-outline" onClick={onClose}>
+              Cancel
             </button>
-            <button
-              type="submit"
-              className="bg-black text-white text-xs font-bold tracking-widest uppercase px-7 py-3 rounded-lg hover:bg-stone-800 transition-all cursor-pointer shadow-md"
-            >
-              {isEditing ? 'SAVE CHANGES' : 'PUBLISH PRODUCT TO STORE'}
+            <button type="submit" className="btn btn-primary">
+              {isEditing ? 'Save changes' : 'Publish product'}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </>
   )
 }
 
