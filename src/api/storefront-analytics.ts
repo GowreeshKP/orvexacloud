@@ -35,15 +35,27 @@ export async function submitStorefrontOrder(
     paymentMethod: string
     discountCode?: string
   }
-) {
-  const res = await fetch(`${API_BASE}/stores/${encodeURIComponent(slug)}/orders`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...body, sessionId: sessionId() }),
-  })
-  const data = await res.json().catch(() => null)
-  if (!res.ok) return null
-  return data
+): Promise<{ ok: true; order: any } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`${API_BASE}/stores/${encodeURIComponent(slug)}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, sessionId: sessionId() }),
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: (data && typeof data.error === 'string' && data.error) || 'Could not place the order. Please try again.',
+      }
+    }
+    if (!data?.id) {
+      return { ok: false, error: 'The store did not confirm this order. Please try again.' }
+    }
+    return { ok: true, order: data }
+  } catch {
+    return { ok: false, error: 'Could not reach the store. Check your connection and try again.' }
+  }
 }
 
 export async function fetchStoreAnalytics(slug: string, days = 7) {

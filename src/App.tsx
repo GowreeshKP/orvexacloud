@@ -92,12 +92,14 @@ export interface OrderItem {
 export interface TrackedOrder {
   id: string
   date: string
-  status: 'Processing' | 'In Transit' | 'Out for Delivery' | 'Delivered'
+  status: 'Processing' | 'In Transit' | 'Out for Delivery' | 'Delivered' | 'Cancelled'
   courier: string
   awb: string
   estimatedDelivery: string
   items: OrderItem[]
   subtotal: number
+  discount?: number
+  discountCode?: string
   shipping: number
   total: number
   paymentMethod: string
@@ -2790,62 +2792,39 @@ function CheckoutModal({
     paymentMethod: 'upi',
   })
   const [orderId, setOrderId] = useState('')
+  const [placing, setPlacing] = useState(false)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
+  const [confirmedOrder, setConfirmedOrder] = useState<TrackedOrder | null>(null)
 
   if (!isOpen) return null
 
   const shippingCost = getShippingConfig(tenant).costFor(subtotal)
-  const finalTotal = subtotal + shippingCost
+  const finalTotal = Math.max(subtotal - discountAmount + shippingCost, 0)
 
   const handleShippingSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setStep('payment')
   }
 
-  const copy = getStorefrontCopy(tenant)
   const brandName = tenant?.brandName || tenant?.name || 'The Lunar Clothing'
 
   const handlePlaceOrder = async () => {
-    const orderPrefix = isTemplateStore(tenant) ? (tenant?.slug || 'ORDER').toUpperCase().slice(0, 8) : 'LUNAR'
-    const generatedId = `${orderPrefix}-` + Math.floor(100000 + Math.random() * 900000)
-    const awbCode = 'BD' + Math.floor(100000000 + Math.random() * 900000000) + 'IN'
+    if (!tenant?.slug || placing) return
+    setPlacing(true)
+    setCheckoutError(null)
+
     const paymentMethod =
       formData.paymentMethod === 'cod' ? 'COD' : formData.paymentMethod === 'card' ? 'Card' : 'UPI'
-    let confirmedId = generatedId
-    if (tenant?.slug) {
-      const remote = await submitStorefrontOrder(tenant.slug, {
-        items: cart.map((i) => ({
-          productId: i.product.id,
-          quantity: i.quantity,
-          size: i.selectedSize,
-          lining: i.selectedLining,
-          zip: i.selectedZip,
-          length: i.selectedLength,
-        })),
-        shippingAddress: {
-          name: formData.name,
-          phone: formData.phone,
-          address: formData.address,
-          city: formData.city,
-          state: formData.state,
-          pincode: formData.pincode,
-        },
-        customerEmail: formData.email,
-        paymentMethod,
-        discountCode: discountCode || undefined,
-      })
-      if (remote?.id) confirmedId = remote.id
-    }
-    const newTrackedOrder: TrackedOrder = {
-      id: confirmedId,
-      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      status: 'Processing',
-      courier: 'Blue Dart Express',
-      awb: awbCode,
-      estimatedDelivery: '3 - 5 Business Days',
-      subtotal,
-      shipping: shippingCost,
-      total: finalTotal,
-      paymentMethod,
+
+    const remote = await submitStorefrontOrder(tenant.slug, {
+      items: cart.map((i) => ({
+        productId: i.product.id,
+        quantity: i.quantity,
+        size: i.selectedSize,
+        lining: i.selectedLining,
+        zip: i.selectedZip,
+        length: i.selectedLength,
+      })),
       shippingAddress: {
         name: formData.name,
         phone: formData.phone,
@@ -2854,48 +2833,30 @@ function CheckoutModal({
         state: formData.state,
         pincode: formData.pincode,
       },
-      items: cart.map((i) => ({
-        name: i.product.name,
-        price: i.product.price,
-        quantity: i.quantity,
-        size: i.selectedSize,
-        lining: i.selectedLining,
-        zip: i.selectedZip,
-        length: i.selectedLength,
-        image: i.product.imgMain,
-      })),
-      timeline: [
-        {
-          title: 'Order Confirmed & Payment Verified',
-          time: 'Just now',
-          desc: `Order received and logged by the ${brandName} fulfillment team.`,
-          completed: true,
-          current: true,
-        },
-        {
-          title: copy.orderStepTitle,
-          time: 'Pending Next Step',
-          desc: copy.orderStepDesc,
-          completed: false,
-        },
-        {
-          title: 'Dispatched with Blue Dart Express',
-          time: 'Expected Tomorrow',
-          desc: `Will be dispatched via Blue Dart Express (AWB: ${awbCode}).`,
-          completed: false,
-        },
-        {
-          title: 'Delivered to Doorstep',
-          time: '3 - 5 Business Days',
-          desc: `Doorstep delivery to ${formData.city}.`,
-          completed: false,
-        },
-      ],
+      customerEmail: formData.email,
+      paymentMethod,
+      discountCode: discountCode || undefined,
+    })
+
+    if (!remote.ok) {
+      setCheckoutError(remote.error)
+      setPlacing(false)
+      return
     }
 
-    setOrderId(confirmedId)
+    const { normalizeTrackedOrder } = await import('@/lib/orders')
+    const newTrackedOrder = normalizeTrackedOrder(remote.order)
+    if (!newTrackedOrder) {
+      setCheckoutError('The store confirmed the order but returned incomplete details. Please contact the store with your phone number.')
+      setPlacing(false)
+      return
+    }
+
+    setOrderId(newTrackedOrder.id)
+    setConfirmedOrder(newTrackedOrder)
     onOrderPlaced(newTrackedOrder, formData.email)
     setStep('success')
+    setPlacing(false)
   }
 
   return (
@@ -3095,16 +3056,22 @@ function CheckoutModal({
                 </label>
               </div>
 
+              {checkoutError && (
+                <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
+                  {checkoutError}
+                </div>
+              )}
               <div className="border-t border-black/10 pt-4 flex items-center justify-between">
                 <div>
                   <p className="text-xs text-black/60">Amount Payable</p>
-                  <p className="text-xl font-bold text-black">₹{finalTotal.toLocaleString()}</p>
+                  <p className="text-xl font-bold text-black">₹{(confirmedOrder?.total ?? finalTotal).toLocaleString()}</p>
                 </div>
                 <button
                   onClick={handlePlaceOrder}
-                  className="bg-black text-white font-bold text-xs tracking-[0.2em] uppercase px-8 py-3.5 hover:bg-stone-800 shadow-lg cursor-pointer"
+                  disabled={placing}
+                  className="bg-black text-white font-bold text-xs tracking-[0.2em] uppercase px-8 py-3.5 hover:bg-stone-800 shadow-lg cursor-pointer disabled:opacity-60 disabled:cursor-wait"
                 >
-                  PLACE ORDER NOW ✓
+                  {placing ? 'PLACING ORDER…' : 'PLACE ORDER NOW ✓'}
                 </button>
               </div>
             </div>
@@ -3119,45 +3086,71 @@ function CheckoutModal({
                 ORDER SUCCESSFULLY PLACED!
               </p>
               <h2 className="text-3xl font-serif text-black mb-2">Thank you for your order, {formData.name}!</h2>
-              <p className="text-xs text-black/60 mb-6">
-                Order ID: <span className="font-bold text-black font-mono">{orderId}</span> • A confirmation has been sent to <span className="font-medium text-black">{formData.email}</span>.
+              <p className="text-xs text-black/60 mb-2">
+                Order ID: <span className="font-bold text-black font-mono">{orderId}</span>
+                {formData.email ? (
+                  <>
+                    {' '}• Confirmation details saved for <span className="font-medium text-black">{formData.email}</span>.
+                  </>
+                ) : null}
               </p>
+              {confirmedOrder && (
+                <p className="text-xs text-black/55 mb-6">
+                  Total charged: <span className="font-bold text-black">₹{confirmedOrder.total.toLocaleString()}</span>
+                  {' '}· Payment: <span className="font-bold text-black">{confirmedOrder.paymentMethod}</span>
+                  {' '}· Status: <span className="font-bold text-black">{confirmedOrder.status}</span>
+                </p>
+              )}
+              {!confirmedOrder && <div className="mb-6" />}
 
               <div className="bg-stone-50 border border-black/10 p-4 text-left mb-6 text-xs space-y-3">
                 <div className="flex justify-between border-b border-black/10 pb-2">
                   <span className="font-bold uppercase text-black/60">Shipping To:</span>
-                  <span className="text-right text-black font-medium">{formData.address}, {formData.city}, {formData.pincode}</span>
+                  <span className="text-right text-black font-medium">
+                    {(confirmedOrder?.shippingAddress.address || formData.address)}, {(confirmedOrder?.shippingAddress.city || formData.city)}, {(confirmedOrder?.shippingAddress.pincode || formData.pincode)}
+                  </span>
                 </div>
                 <div className="flex justify-between border-b border-black/10 pb-2">
                   <span className="font-bold uppercase text-black/60">Estimated Delivery:</span>
-                  <span className="text-emerald-700 font-bold">3 - 5 Business Days (Blue Dart Express)</span>
+                  <span className="text-emerald-700 font-bold">
+                    {confirmedOrder?.estimatedDelivery || '3 - 5 Business Days'}
+                    {confirmedOrder?.courier ? ` (${confirmedOrder.courier})` : ''}
+                  </span>
                 </div>
                 <div>
                   <p className="font-bold uppercase text-black/60 mb-2">Itemized Summary:</p>
-                  {cart.map((item, idx) => (
+                  {(confirmedOrder?.items || cart.map((item) => ({
+                    quantity: item.quantity,
+                    name: item.product.name,
+                    price: item.product.price,
+                    size: item.selectedSize,
+                    lining: item.selectedLining,
+                    zip: item.selectedZip,
+                    length: item.selectedLength,
+                  }))).map((item: any, idx: number) => (
                     <div key={idx} className="flex justify-between py-1 border-b border-black/5 text-[11px]">
                       <span>
-                        {item.quantity}x {item.product.name}
-                        {[item.selectedSize, item.selectedLining, item.selectedZip, item.selectedLength].some(Boolean) &&
-                          ` (${[item.selectedSize && (isTemplateStore(tenant) ? item.selectedSize : `Size: ${item.selectedSize}`), item.selectedLining, item.selectedZip, item.selectedLength].filter(Boolean).join(', ')})`}
+                        {item.quantity}x {item.name}
+                        {[item.size, item.lining, item.zip, item.length].some(Boolean) &&
+                          ` (${[item.size && (isTemplateStore(tenant) ? item.size : `Size: ${item.size}`), item.lining, item.zip, item.length].filter(Boolean).join(', ')})`}
                       </span>
-                      <span className="font-bold">₹{(item.product.price * item.quantity).toLocaleString()}</span>
+                      <span className="font-bold">₹{(item.price * item.quantity).toLocaleString()}</span>
                     </div>
                   ))}
                 </div>
-                {discountAmount > 0 && (
+                {(confirmedOrder?.discount || 0) > 0 && (
                   <div className="flex justify-between text-xs text-emerald-700">
-                    <span>Discount</span>
-                    <span>-₹{discountAmount.toLocaleString()}</span>
+                    <span>Discount{confirmedOrder?.discountCode ? ` (${confirmedOrder.discountCode})` : ''}</span>
+                    <span>-₹{(confirmedOrder?.discount || 0).toLocaleString()}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-xs text-black/60">
                   <span>Shipping</span>
-                  <span>{shippingCost === 0 ? 'Free' : `₹${shippingCost}`}</span>
+                  <span>{(confirmedOrder?.shipping ?? shippingCost) === 0 ? 'Free' : `₹${confirmedOrder?.shipping ?? shippingCost}`}</span>
                 </div>
                 <div className="flex justify-between pt-2 text-sm font-bold text-black">
-                  <span>{formData.paymentMethod === 'cod' ? 'Total Payable on Delivery' : 'Grand Total Paid'}</span>
-                  <span>₹{finalTotal.toLocaleString()}</span>
+                  <span>{(confirmedOrder?.paymentMethod || formData.paymentMethod) === 'COD' || formData.paymentMethod === 'cod' ? 'Total Payable on Delivery' : 'Grand Total Paid'}</span>
+                  <span>₹{(confirmedOrder?.total ?? finalTotal).toLocaleString()}</span>
                 </div>
               </div>
 

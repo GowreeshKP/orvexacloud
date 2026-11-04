@@ -10,6 +10,7 @@ import { createStoreFolder } from '@/tenants/scaffold'
 import type { Product, Review, TrackedOrder } from '@/types'
 import type { TenantConfig, TenantApplication, PlatformStats, DashboardStats, ThemeConfig } from '@/types/tenant'
 import { normalizePlanId } from '@/data/plans'
+import { normalizeTrackedOrder } from '@/lib/orders'
 import { API_BASE } from '@/api/base'
 
 // =================================================================
@@ -63,20 +64,33 @@ export function useTenantOrders(): {
   const refresh = useCallback(() => {
     if (!tenant) return
     void authService.getStoreAccessToken().then((token) =>
-      fetch(`${API_BASE}/stores/${encodeURIComponent(tenant.slug)}/orders`, {
+      fetch(`${API_BASE}/stores/${encodeURIComponent(tenant.slug)}/orders?limit=200`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
-          if (Array.isArray(data)) setOrders(data)
-          else setOrders([...mockStore.getOrders(tenant.id)])
+          if (Array.isArray(data)) {
+            setOrders(data.map(normalizeTrackedOrder).filter(Boolean) as TrackedOrder[])
+          } else {
+            setOrders([...mockStore.getOrders(tenant.id)].map(normalizeTrackedOrder).filter(Boolean) as TrackedOrder[])
+          }
         })
-        .catch(() => setOrders([...mockStore.getOrders(tenant.id)]))
+        .catch(() => {
+          setOrders([...mockStore.getOrders(tenant.id)].map(normalizeTrackedOrder).filter(Boolean) as TrackedOrder[])
+        })
     )
   }, [tenant])
 
   useEffect(() => {
     refresh()
+    // Keep seller Orders in sync with live storefront checkouts.
+    const timer = window.setInterval(refresh, 20000)
+    const onFocus = () => refresh()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [refresh])
 
   const placeOrder = useCallback((order: TrackedOrder) => {

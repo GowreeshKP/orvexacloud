@@ -52,6 +52,7 @@ export interface UserAccount {
 }
 
 export interface OrderItem {
+  productId?: number
   name: string
   price: number
   quantity: number
@@ -65,12 +66,14 @@ export interface OrderItem {
 export interface TrackedOrder {
   id: string
   date: string
-  status: 'Processing' | 'In Transit' | 'Out for Delivery' | 'Delivered'
+  status: 'Processing' | 'In Transit' | 'Out for Delivery' | 'Delivered' | 'Cancelled'
   courier: string
   awb: string
   estimatedDelivery: string
   items: OrderItem[]
   subtotal: number
+  discount?: number
+  discountCode?: string
   shipping: number
   total: number
   paymentMethod: string

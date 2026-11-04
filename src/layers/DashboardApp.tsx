@@ -2893,6 +2893,7 @@ function OrderManager({ onToast }: { onToast: (msg: string) => void }) {
             <option value="In Transit">In Transit</option>
             <option value="Out for Delivery">Out for Delivery</option>
             <option value="Delivered">Delivered</option>
+            <option value="Cancelled">Cancelled</option>
           </select>
         </div>
 
@@ -2963,10 +2964,11 @@ function OrderManager({ onToast }: { onToast: (msg: string) => void }) {
                           <option value="In Transit">In Transit</option>
                           <option value="Out for Delivery">Out for Delivery</option>
                           <option value="Delivered">Delivered</option>
+                          <option value="Cancelled">Cancelled</option>
                         </select>
                       </td>
 
-                      <td className="num money">₹{order.total.toLocaleString()}</td>
+                      <td className="num money">₹{(order.total || 0).toLocaleString()}</td>
 
                       <td className="actions">
                         <button
@@ -3020,13 +3022,17 @@ function OrderManager({ onToast }: { onToast: (msg: string) => void }) {
                   <option value="In Transit">In Transit</option>
                   <option value="Out for Delivery">Out for Delivery</option>
                   <option value="Delivered">Delivered</option>
+                  <option value="Cancelled">Cancelled</option>
                 </select>
               </div>
 
               {/* Shipping Address */}
               <div className="border border-black/10 p-4 rounded-xl space-y-1">
-                <p className="font-bold uppercase tracking-wider text-black text-[10px]">Shipping Address</p>
+                <p className="font-bold uppercase tracking-wider text-black text-[10px]">Customer & Shipping</p>
                 <p className="font-bold text-black">{selectedOrder.shippingAddress?.name}</p>
+                {selectedOrder.customerEmail && (
+                  <p className="text-black/70">Email: <span className="font-mono">{selectedOrder.customerEmail}</span></p>
+                )}
                 <p className="text-black/70">{selectedOrder.shippingAddress?.address}</p>
                 <p className="text-black/70">{selectedOrder.shippingAddress?.city}, {selectedOrder.shippingAddress?.state} - {selectedOrder.shippingAddress?.pincode}</p>
                 <p className="text-black/70 font-mono">Phone: {selectedOrder.shippingAddress?.phone}</p>
@@ -3056,33 +3062,34 @@ function OrderManager({ onToast }: { onToast: (msg: string) => void }) {
                   ))}
                 </div>
 
-                {(() => {
-                  const subtotal = (selectedOrder.items || []).reduce((sum: number, it: any) => sum + it.price * it.quantity, 0)
-                  const extra = selectedOrder.total - subtotal
-                  return extra !== 0 && subtotal > 0 ? (
-                    <div className="pt-2 border-t border-black/10 space-y-1 text-[11px] text-black/60">
-                      <div className="flex justify-between">
-                        <span>Items Subtotal</span>
-                        <span>₹{subtotal.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>{extra > 0 ? 'Shipping & Charges' : 'Discounts'}</span>
-                        <span>{extra > 0 ? '+' : '−'}₹{Math.abs(extra).toLocaleString()}</span>
-                      </div>
+                <div className="pt-2 border-t border-black/10 space-y-1 text-[11px] text-black/60">
+                  <div className="flex justify-between">
+                    <span>Items Subtotal</span>
+                    <span>₹{(selectedOrder.subtotal || 0).toLocaleString()}</span>
+                  </div>
+                  {(selectedOrder.discount || 0) > 0 && (
+                    <div className="flex justify-between text-emerald-700">
+                      <span>Discount{selectedOrder.discountCode ? ` (${selectedOrder.discountCode})` : ''}</span>
+                      <span>−₹{(selectedOrder.discount || 0).toLocaleString()}</span>
                     </div>
-                  ) : null
-                })()}
+                  )}
+                  <div className="flex justify-between">
+                    <span>Shipping</span>
+                    <span>{(selectedOrder.shipping || 0) === 0 ? 'Free' : `₹${(selectedOrder.shipping || 0).toLocaleString()}`}</span>
+                  </div>
+                </div>
                 <div className="pt-2 border-t border-black/10 flex justify-between font-bold text-sm">
                   <span>Total Amount</span>
-                  <span>₹{selectedOrder.total.toLocaleString()}</span>
+                  <span>₹{(selectedOrder.total || 0).toLocaleString()}</span>
                 </div>
               </div>
 
               {/* Courier & Tracking */}
               <div className="border border-black/10 p-4 rounded-xl space-y-1 text-[11px]">
                 <p className="font-bold uppercase tracking-wider text-black text-[10px]">Courier & Tracking AWB</p>
-                <p className="text-black/70">Courier: <strong>{selectedOrder.courier || 'Blue Dart Express'}</strong></p>
-                <p className="text-black/70 font-mono">AWB Code: <strong>{selectedOrder.awb || 'BD492810482IN'}</strong></p>
+                <p className="text-black/70">Courier: <strong>{selectedOrder.courier || 'Not assigned yet'}</strong></p>
+                <p className="text-black/70 font-mono">AWB Code: <strong>{selectedOrder.awb || 'Pending dispatch'}</strong></p>
+                <p className="text-black/70">ETA: <strong>{selectedOrder.estimatedDelivery || '—'}</strong></p>
                 <p className="text-black/70">Payment: <strong>{selectedOrder.paymentMethod}</strong></p>
               </div>
             </div>
