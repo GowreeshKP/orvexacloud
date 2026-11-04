@@ -328,7 +328,7 @@ function AdminPortal({
         onSuccess={(newTenant) => {
           refreshTenants()
           setActiveView('stores')
-          setAdminToast(`✅ Store "${newTenant.brandName}" provisioned with isolated database orvexa_tenant_${newTenant.slug}!`)
+          setAdminToast(`✅ Store "${newTenant.brandName}" provisioned successfully!`)
           setTimeout(() => setAdminToast(null), 5000)
         }}
       />
@@ -513,7 +513,7 @@ function PlatformOverview({
                     </span>
                     <div className="grow min-w-0">
                       <p className="strong truncate">{t.brandName}</p>
-                      <p className="muted small mono">{storeAddress(t.slug)} · orvexa_tenant_{t.slug}</p>
+                      <p className="muted small mono">{storeAddress(t.slug)}</p>
                     </div>
                   </div>
                   <div className="row">
@@ -609,10 +609,10 @@ function ApplicationQueue() {
       action: 'STORE_PROVISIONED',
       category: 'provisioning',
       severity: 'info',
-      details: `Super Admin approved merchant application and provisioned store "${brandName}" with isolated database orvexa_tenant_${slug}.`,
+      details: `Super Admin approved merchant application and provisioned store "${brandName}".`,
       metadata: { applicationId: id, slug, brandName },
     })
-    setProvisionMessage(`✅ Successfully approved ${brandName}! Generated client folder 'src/tenants/${slug}/', initialized 'tenant.env', and provisioned isolated database 'orvexa_tenant_${slug}'.`)
+    setProvisionMessage(`✅ Successfully approved ${brandName}! Generated client folder 'src/tenants/${slug}/' and initialized 'tenant.env'.`)
     setTimeout(() => setProvisionMessage(null), 6000)
   }
 
@@ -785,10 +785,6 @@ function ApplicationQueue() {
                       <div className="row between">
                         <span className="muted">📁 Client folder:</span>
                         <code className="mono strong">src/tenants/{slugEdits[app.id] || app.requestedSlug}/</code>
-                      </div>
-                      <div className="row between">
-                        <span className="muted">🗄️ Isolated DB:</span>
-                        <code className="mono" style={{ color: 'var(--leaf)' }}>orvexa_tenant_{slugEdits[app.id] || app.requestedSlug}</code>
                       </div>
                     </div>
 
@@ -1087,11 +1083,6 @@ CUSTOM_DOMAIN=${t.customDomain || ''}
 PRIMARY_COLOR="${t.theme.primaryColor}"
 ACCENT_COLOR="${t.theme.accentColor}"
 
-# --- Isolated Database Configuration ---
-MONGODB_DB_NAME=orvexa_tenant_${t.slug}
-MONGODB_URI=mongodb://localhost:27017/orvexa_tenant_${t.slug}
-MONGODB_ISOLATION_MODE=dedicated_database
-
 # --- Store Service Secrets ---
 JWT_SECRET=orvexa_jwt_${t.slug}_sec_live
 API_PORT=5000
@@ -1192,7 +1183,6 @@ ENABLE_CUSTOMER_REVIEWS=${t.theme.enableReviews}`
                     <td>
                       <p className="cell-main">{tenant.brandName}</p>
                       <code className="cell-sub mono" style={{ color: 'var(--indigo)' }}>{storeAddress(tenant.slug)}</code>
-                      <p className="cell-sub mono">db: orvexa_tenant_{tenant.slug}</p>
                     </td>
                     <td>
                       <div className="col" style={{ gap: 4, alignItems: 'flex-start' }}>
@@ -1291,7 +1281,7 @@ ENABLE_CUSTOMER_REVIEWS=${t.theme.enableReviews}`
             </div>
             <div className="drawer-body">
               <div className="row between" style={{ marginBottom: 8 }}>
-                <span className="muted small mono">Isolated database config</span>
+                <span className="muted small mono">Store environment</span>
                 <button type="button" className="btn btn-outline btn-sm" onClick={() => handleCopyEnv(getTenantEnvString(inspectTenant))}>
                   {copiedEnv ? '✓ Copied!' : 'Copy .env'}
                 </button>

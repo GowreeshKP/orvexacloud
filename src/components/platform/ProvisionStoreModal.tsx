@@ -94,7 +94,7 @@ export default function ProvisionStoreModal({ isOpen, onClose, onProvision, onSu
         action: 'STORE_PROVISIONED',
         category: 'provisioning',
         severity: 'info',
-        details: `Super Admin provisioned new store "${newTenant.brandName}" with isolated database orvexa_tenant_${cleanSlug}. Password reset email sent to ${ownerEmail}.`,
+        details: `Super Admin provisioned new store "${newTenant.brandName}". Password reset email sent to ${ownerEmail}.`,
         metadata: { slug: cleanSlug, ownerEmail, plan },
       })
 
@@ -125,7 +125,7 @@ export default function ProvisionStoreModal({ isOpen, onClose, onProvision, onSu
             <div>
               <h2 className="text-base font-bold text-slate-900 tracking-tight">Provision New Store</h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Instant isolated database schema, client folder, and owner credentials
+                Instant client folder and owner credentials
               </p>
             </div>
           </div>
@@ -272,12 +272,6 @@ export default function ProvisionStoreModal({ isOpen, onClose, onProvision, onSu
           {/* Architecture & Security Summary */}
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 text-xs">
             <div className="flex items-center justify-between text-[11px] font-mono">
-              <span className="text-slate-500">🗄️ Isolated Database:</span>
-              <code className="text-emerald-700 font-bold">
-                orvexa_tenant_{slug || 'slug'}
-              </code>
-            </div>
-            <div className="flex items-center justify-between text-[11px] font-mono">
               <span className="text-slate-500">📁 Client Directory:</span>
               <code className="text-slate-900 font-bold">
                 src/tenants/{slug || 'slug'}/
@@ -308,10 +302,10 @@ export default function ProvisionStoreModal({ isOpen, onClose, onProvision, onSu
               {isSubmitting ? (
                 <>
                   <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Provisioning Database & Store...</span>
+                  <span>Provisioning store...</span>
                 </>
               ) : (
-                <span>🚀 Provision Store & Database</span>
+                <span>🚀 Provision Store</span>
               )}
             </button>
           </div>

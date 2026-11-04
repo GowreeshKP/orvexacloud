@@ -304,9 +304,6 @@ Login ID / Email: ${ownerEmail || tenant.ownerEmail}
 Login Username: ${tenant.slug}
 Password Status: ${passwordStatusDescription}
 ${resetDetails ? `Direct Password Reset Link: ${resetDetails.url}\n` : ''}Owner Contact: ${ownerName || tenant.ownerName} (${ownerPhone || 'N/A'})
-
-🗄️ Isolated Database: orvexa_tenant_${tenant.slug}
-Security Level: Dedicated Database Isolation
 ================================================`
 
   const handleCopyAccessPass = () => {
@@ -904,9 +901,6 @@ Security Level: Dedicated Database Isolation
                 </div>
 
                 <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-500 flex-wrap gap-2">
-                  <span>
-                    Database: <code className="text-emerald-700 font-bold">orvexa_tenant_{tenant.slug}</code>
-                  </span>
                   <span>
                     Owner: <strong className="text-slate-800">{ownerName || tenant.ownerName}</strong>
                   </span>
