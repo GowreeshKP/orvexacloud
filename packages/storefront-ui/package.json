@@ -1,0 +1,5 @@
+{ "name": "@orvexa/storefront-ui", "version": "1.0.0", "private": true, "type": "module",
+  "main": "./src/index.tsx", "types": "./src/index.tsx",
+  "exports": { ".": "./src/index.tsx", "./storefront.css": "./src/storefront.css" },
+  "dependencies": { "@orvexa/theme": "1.0.0" },
+  "peerDependencies": { "react": "^19.0.0" } }

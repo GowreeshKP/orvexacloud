@@ -46,6 +46,11 @@ export interface ITenant extends Document {
   status: TenantStatus
   plan: 'starter' | 'growth' | 'pro' | 'enterprise'
   createdAt: string
+  /** When true, live storefront prefers Storefront Studio published theme. */
+  storefrontStudioEnabled?: boolean
+  storefrontThemeVersion?: number
+  storefrontPublishedAt?: string
+  storefrontThemeUrl?: string
   storeType?: string
   niche?: string
   categories?: Array<{ id: string; name: string; slug: string; desc?: string; image?: string }>
@@ -123,6 +128,10 @@ export const TenantSchema = new Schema<ITenant>(
     status: { type: String, enum: TENANT_STATUSES, default: 'active' },
     plan: { type: String, enum: ['starter', 'growth', 'pro', 'enterprise'], default: 'starter' },
     createdAt: { type: String, default: () => new Date().toISOString() },
+    storefrontStudioEnabled: { type: Boolean, default: false },
+    storefrontThemeVersion: { type: Number, default: 0 },
+    storefrontPublishedAt: { type: String, default: '' },
+    storefrontThemeUrl: { type: String, default: '' },
     storeType: { type: String, default: '' },
     niche: { type: String, default: '' },
     categories: {

@@ -9,6 +9,7 @@ import masterRoutes from './routes/masterRoutes.js'
 import storeRoutes from './routes/storeRoutes.js'
 import authRoutes from './routes/authRoutes.js'
 import publicRoutes from './routes/publicRoutes.js'
+import studioWebhook from './routes/studioWebhook.js'
 import { emailConfigured } from './services/mailer.js'
 import { PLATFORM_ROOT_DOMAIN } from './config/plans.js'
 import { hostLookupKeys } from './lib/hosts.js'
@@ -147,6 +148,8 @@ export function createApp() {
   app.use('/api/public/resolve', publicReadLimiter)
   app.use('/api/public/slug-available', publicReadLimiter)
   app.use('/api/public', publicWriteLimiter, publicRoutes)
+  // Studio publish webhook must see the raw body for HMAC verification.
+  app.use('/api/webhooks/studio', express.raw({ type: 'application/json' }), studioWebhook)
   // Product images may be inline data URLs (≤ ~1.5 MB each); nothing legitimate needs more.
   app.use(express.json({ limit: '5mb' }))
   app.use(express.urlencoded({ extended: false, limit: '100kb' }))

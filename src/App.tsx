@@ -23,6 +23,7 @@ import { LegalComplianceModal, ComplianceFooterLinks, type ComplianceDocType } f
 import { StoreModuleContext, applyStoreTheme, useStoreComponent, useStoreModule } from './tenants/loader'
 import type { StoreModule, StoreSection } from './tenants/store-module'
 import StoreNotFound from './components/platform/StoreNotFound'
+import StudioLiveStorefront, { shouldUseStudioStorefront } from './components/store/StudioLiveStorefront'
 import { submitStorefrontOrder, trackStorefrontEvent } from './api/storefront-analytics'
 import { storefrontUrl } from './lib/store-urls'
 import { apiClient } from './api/client'
@@ -4945,6 +4946,22 @@ export default function App() {
   }
 
   // Storefront hooks live in TenantStorefront so early returns above never change hook order.
+  // Stores that published with Storefront Studio render the studio theme first.
+  return <StorefrontRouter tenant={tenant} />
+}
+
+function StorefrontRouter({ tenant }: { tenant: TenantConfig }) {
+  const [useLegacy, setUseLegacy] = useState(() => !shouldUseStudioStorefront(tenant))
+
+  if (!useLegacy && shouldUseStudioStorefront(tenant)) {
+    return (
+      <StudioLiveStorefront
+        tenant={tenant}
+        onUnavailable={() => setUseLegacy(true)}
+      />
+    )
+  }
+
   return <TenantStorefront tenant={tenant} />
 }
 

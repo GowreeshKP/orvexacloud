@@ -47,6 +47,11 @@ export interface TenantConfig {
     isolationMode: string
     folderPath: string
   }
+  /** Live storefront uses Storefront Studio published theme when enabled. */
+  storefrontStudioEnabled?: boolean
+  storefrontThemeVersion?: number
+  storefrontPublishedAt?: string
+  storefrontThemeUrl?: string
 }
 
 export interface ThemeConfig {

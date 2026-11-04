@@ -738,7 +738,83 @@ router.post('/reviews', checkoutLimiter, async (req: Request, res: Response) => 
 })
 
 // ====================================================================
-// 5. DATABASE SETTINGS (Bring-Your-Own-Database / Custom Mongo URI)
+// 5. STOREFRONT STUDIO LAUNCH (signed one-time link — docs/INTEGRATION.md)
+// ====================================================================
+
+function studioPlan(plan: string | undefined): 'starter' | 'growth' | 'enterprise' {
+  const id = String(plan || 'starter').toLowerCase()
+  if (id === 'enterprise') return 'enterprise'
+  if (id === 'pro' || id === 'growth') return 'growth'
+  return 'starter'
+}
+
+function studioConfigured(): { url: string; secret: string } | null {
+  const url = String(process.env.STUDIO_URL || '').replace(/\/+$/, '')
+  const secret = String(process.env.STUDIO_LAUNCH_TOKEN_SECRET || process.env.LAUNCH_TOKEN_SECRET || '').trim()
+  if (!url || secret.length < 32) return null
+  return { url, secret }
+}
+
+// GET studio status for the seller dashboard Storefront panel
+router.get('/studio', ...staffOfTenant, async (req: Request, res: Response) => {
+  try {
+    const cfg = studioConfigured()
+    res.json({
+      configured: Boolean(cfg),
+      studioUrl: cfg?.url || null,
+      studioEnabled: Boolean(req.tenant!.storefrontStudioEnabled),
+      themeVersion: req.tenant!.storefrontThemeVersion || null,
+      publishedAt: req.tenant!.storefrontPublishedAt || null,
+      themeUrl: req.tenant!.storefrontThemeUrl || null,
+    })
+  } catch (err) {
+    sendError(res, err, 'Failed to load studio status', 'studio status')
+  }
+})
+
+// POST signed launch URL — store staff/owner; only owners may publish inside the studio
+router.post('/studio-launch', ...staffOfTenant, async (req: Request, res: Response) => {
+  try {
+    const cfg = studioConfigured()
+    if (!cfg) {
+      res.status(503).json({
+        error: 'Storefront Studio is not configured. Set STUDIO_URL and STUDIO_LAUNCH_TOKEN_SECRET on the API.',
+      })
+      return
+    }
+
+    const user = req.authUser!
+    const tenant = req.tenant!
+    const role: 'owner' | 'staff' =
+      user.role === 'seller' || user.role === 'super_admin' ? 'owner' : 'staff'
+
+    const { default: jwt } = await import('jsonwebtoken')
+    const token = jwt.sign(
+      {
+        store: tenant.slug,
+        storeName: tenant.brandName,
+        role,
+        plan: studioPlan(tenant.plan),
+      },
+      cfg.secret,
+      {
+        algorithm: 'HS256',
+        issuer: 'orvexacloud',
+        audience: 'orvexa-studio',
+        subject: String(user.userId),
+        jwtid: crypto.randomUUID(),
+        expiresIn: '2m',
+      }
+    )
+
+    res.json({ url: `${cfg.url}/launch?token=${encodeURIComponent(token)}` })
+  } catch (err) {
+    sendError(res, err, 'Failed to open Storefront Studio', 'studio launch')
+  }
+})
+
+// ====================================================================
+// 6. DATABASE SETTINGS (Bring-Your-Own-Database / Custom Mongo URI)
 // ====================================================================
 
 // GET database connection status — store staff only; never reveals hosts or connection strings.

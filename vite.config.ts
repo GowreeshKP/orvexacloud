@@ -29,6 +29,8 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(import.meta.dirname || process.cwd(), './src'),
+        '@orvexa/theme': path.resolve(import.meta.dirname || process.cwd(), './packages/theme/src'),
+        '@orvexa/storefront-ui': path.resolve(import.meta.dirname || process.cwd(), './packages/storefront-ui/src'),
       },
     },
     server: {

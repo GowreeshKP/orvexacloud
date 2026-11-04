@@ -8,7 +8,9 @@
     "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@orvexa/theme": ["./packages/theme/src"],
+      "@orvexa/storefront-ui": ["./packages/storefront-ui/src"]
     },
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
@@ -19,5 +21,6 @@
     "strict": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "packages", "vite.config.ts"],
+  "exclude": ["packages/**/*.test.ts", "packages/**/*.test.tsx", "node_modules", "dist", "server"]
 }
