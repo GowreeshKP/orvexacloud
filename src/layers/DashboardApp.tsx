@@ -205,6 +205,7 @@ export default function DashboardApp() {
       try {
         const health = await fetch(`${API_BASE}/health`)
         if (!cancelled && health.ok) {
+          // Access + refresh are dead — force a clean re-login instead of 401 refresh loops.
           authService.logoutSeller()
           setSession(null)
         }
@@ -216,6 +217,13 @@ export default function DashboardApp() {
       cancelled = true
     }
   }, [session])
+
+  useEffect(() => {
+    if (!tenant?.brandName) return
+    document.title = `${tenant.brandName} | Seller Portal`
+    const icon = document.querySelector<HTMLLinkElement>("link[rel='icon']")
+    if (icon) icon.href = '/favicon-orvexa.png'
+  }, [tenant?.brandName])
 
   const navBadge = (id: string) => {
     if (id === 'orders') return unreadOrders

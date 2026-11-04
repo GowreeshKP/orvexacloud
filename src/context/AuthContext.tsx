@@ -108,6 +108,17 @@ function clearStoredRefreshToken(): void {
   }
 }
 
+function persistAccessTokenForRole(accessToken: string, role: string | null | undefined): void {
+  try {
+    if (role === 'super_admin') localStorage.setItem('lunar_admin_token', accessToken)
+    else if (role === 'seller' || role === 'staff' || role === 'manager') {
+      localStorage.setItem('lunar_seller_token', accessToken)
+    }
+  } catch {
+    // Ignore
+  }
+}
+
 // ─────────────────────────────────────────────────────────
 // Context
 // ─────────────────────────────────────────────────────────
@@ -147,28 +158,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Core: perform token refresh against the server
   // ───────────────────────────────────────────────────────
   const silentRefresh = useCallback(async (): Promise<string | null> => {
-    const storedRefresh = getStoredRefreshToken()
-    if (!storedRefresh) return null
-
-    try {
-      const res = await fetch(`${API_BASE}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: storedRefresh }),
-      })
-
-      if (!res.ok) {
-        clearStoredRefreshToken()
-        setState((prev) => ({ ...prev, accessToken: null, session: null, isAuthenticated: false }))
-        return null
-      }
-
-      const data = await res.json()
-      storeRefreshToken(data.refreshToken)
-      return data.accessToken
-    } catch {
+    // Use the shared single-flight rotator so AuthContext and authService never
+    // burn the same one-time refresh token in parallel (that caused 401 storms).
+    const newToken = await authService.refreshAccessToken()
+    if (!newToken) {
+      setState((prev) => ({ ...prev, accessToken: null, session: null, isAuthenticated: false }))
       return null
     }
+    const payload = decodeJwtPayload(newToken)
+    persistAccessTokenForRole(newToken, payload?.role)
+    return newToken
   }, [])
 
   // ───────────────────────────────────────────────────────
@@ -328,11 +327,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return
         }
 
-        storeRefreshToken(data.refreshToken)
+        if (data.refreshToken) storeRefreshToken(data.refreshToken)
+        if (data.accessToken) persistAccessTokenForRole(data.accessToken, data.session?.role)
 
         const session: AuthSession = {
           ...data.session,
           name: data.session.name || data.session.email,
+        }
+
+        // Keep authService session keys in sync for DashboardApp / AdminApp.
+        try {
+          if (session.role === 'super_admin') {
+            localStorage.setItem('lunar_admin_session', JSON.stringify(session))
+          } else if (session.role === 'seller' || session.role === 'staff') {
+            localStorage.setItem('lunar_seller_session', JSON.stringify(session))
+          }
+        } catch {
+          // Ignore
         }
 
         setState({

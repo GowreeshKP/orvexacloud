@@ -90,7 +90,102 @@ const SELLER_SESSION_KEY = 'lunar_seller_session'
 const ADMIN_SESSION_KEY = 'lunar_admin_session'
 const SELLER_TOKEN_KEY = 'lunar_seller_token'
 const ADMIN_TOKEN_KEY = 'lunar_admin_token'
+const REFRESH_TOKEN_KEY = 'orvexa_refresh_token'
 const STORE_CREDENTIALS_KEY = 'orvexa_store_credentials_v1'
+
+/** Single-flight refresh — refresh tokens are one-time use on the server. */
+let refreshInFlight: Promise<string | null> | null = null
+
+function readRefreshToken(): string | null {
+  try {
+    return localStorage.getItem(REFRESH_TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+function writeRefreshToken(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(REFRESH_TOKEN_KEY, token)
+    else localStorage.removeItem(REFRESH_TOKEN_KEY)
+  } catch {
+    // storage disabled
+  }
+}
+
+function clearAuthTokens(): void {
+  try {
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
+    localStorage.removeItem(SELLER_TOKEN_KEY)
+    localStorage.removeItem(ADMIN_TOKEN_KEY)
+  } catch {
+    // ignored
+  }
+}
+
+/**
+ * Rotate the refresh token once and fan the new access token into the right role key.
+ * Concurrent callers share one in-flight request so we never burn a rotated token.
+ */
+async function rotateAccessToken(): Promise<string | null> {
+  if (refreshInFlight) return refreshInFlight
+
+  refreshInFlight = (async () => {
+    const storedRefresh = readRefreshToken()
+    if (!storedRefresh) return null
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: storedRefresh }),
+      })
+
+      if (!res.ok) {
+        clearAuthTokens()
+        return null
+      }
+
+      const data = await res.json().catch(() => ({}))
+      const newToken = data.accessToken || data.token
+      if (!newToken) {
+        clearAuthTokens()
+        return null
+      }
+
+      if (data.refreshToken) writeRefreshToken(data.refreshToken)
+
+      const role = data.session?.role || (() => {
+        try {
+          const parts = String(newToken).split('.')
+          if (parts.length !== 3) return null
+          const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+          return JSON.parse(atob(base64)).role as string | null
+        } catch {
+          return null
+        }
+      })()
+
+      try {
+        if (role === 'super_admin') {
+          localStorage.setItem(ADMIN_TOKEN_KEY, newToken)
+        } else {
+          localStorage.setItem(SELLER_TOKEN_KEY, newToken)
+        }
+      } catch {
+        // storage disabled
+      }
+
+      return newToken as string
+    } catch {
+      return null
+    }
+  })().finally(() => {
+    refreshInFlight = null
+  })
+
+  return refreshInFlight
+}
 
 /**
  * Offline demo mode: local credential fallbacks and the browser-only credentials registry.
@@ -603,7 +698,7 @@ export const authService = {
       try {
         localStorage.setItem(SELLER_SESSION_KEY, JSON.stringify(session))
         localStorage.setItem(SELLER_TOKEN_KEY, token)
-        if (data.refreshToken) localStorage.setItem('orvexa_refresh_token', data.refreshToken)
+        if (data.refreshToken) writeRefreshToken(data.refreshToken)
       } catch {
         // storage disabled
       }
@@ -711,35 +806,19 @@ export const authService = {
 
   getSellerToken(): string | null {
     try {
-      const token = localStorage.getItem(SELLER_TOKEN_KEY)
-      if (token && isTokenExpired(token)) {
-        void this.refreshSellerToken()
-      }
-      return token
+      return localStorage.getItem(SELLER_TOKEN_KEY)
     } catch {
       return null
     }
   },
 
+  /** Shared single-flight refresh used by seller + admin + AuthContext. */
+  async refreshAccessToken(): Promise<string | null> {
+    return rotateAccessToken()
+  },
+
   async refreshSellerToken(): Promise<string | null> {
-    try {
-      const storedRefresh = typeof window !== 'undefined' ? localStorage.getItem('orvexa_refresh_token') : null
-      if (!storedRefresh) return null
-      const res = await fetch(`${API_BASE}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: storedRefresh }),
-      })
-      if (!res.ok) return null
-      const data = await res.json()
-      const newToken = data.accessToken || data.token
-      if (!newToken) return null
-      localStorage.setItem(SELLER_TOKEN_KEY, newToken)
-      if (data.refreshToken) localStorage.setItem('orvexa_refresh_token', data.refreshToken)
-      return newToken
-    } catch {
-      return null
-    }
+    return rotateAccessToken()
   },
 
   async getValidSellerToken(): Promise<string | null> {
@@ -761,6 +840,8 @@ export const authService = {
     try {
       localStorage.removeItem(SELLER_SESSION_KEY)
       localStorage.removeItem(SELLER_TOKEN_KEY)
+      // Drop refresh only when there is no platform admin session still signed in.
+      if (!localStorage.getItem(ADMIN_SESSION_KEY)) writeRefreshToken(null)
     } catch {
       // ignored
     }
@@ -790,14 +871,14 @@ export const authService = {
             localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(data.session))
             const token = data.accessToken || data.token
             if (token) localStorage.setItem(ADMIN_TOKEN_KEY, token)
-            if (data.refreshToken) localStorage.setItem('orvexa_refresh_token', data.refreshToken)
+            if (data.refreshToken) writeRefreshToken(data.refreshToken)
           } catch {}
         } else {
           try {
             localStorage.setItem(SELLER_SESSION_KEY, JSON.stringify(data.session))
             const token = data.accessToken || data.token
             if (token) localStorage.setItem(SELLER_TOKEN_KEY, token)
-            if (data.refreshToken) localStorage.setItem('orvexa_refresh_token', data.refreshToken)
+            if (data.refreshToken) writeRefreshToken(data.refreshToken)
           } catch {}
         }
         return { success: true, session: data.session }
@@ -873,7 +954,7 @@ export const authService = {
         localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session))
         localStorage.setItem(ADMIN_TOKEN_KEY, token)
         if (data.refreshToken) {
-          localStorage.setItem('orvexa_refresh_token', data.refreshToken)
+          writeRefreshToken(data.refreshToken)
         }
       } catch {
         // storage disabled
@@ -898,7 +979,7 @@ export const authService = {
         try {
           localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session))
           localStorage.removeItem(ADMIN_TOKEN_KEY)
-          localStorage.removeItem('orvexa_refresh_token')
+          writeRefreshToken(null)
         } catch {
           // ignored
         }
@@ -926,43 +1007,14 @@ export const authService = {
 
   getAdminToken(): string | null {
     try {
-      const token = localStorage.getItem(ADMIN_TOKEN_KEY)
-      if (token && isTokenExpired(token)) {
-        // Asynchronously renew expired token in the background
-        this.refreshAdminToken()
-      }
-      return token
+      return localStorage.getItem(ADMIN_TOKEN_KEY)
     } catch {
       return null
     }
   },
 
   async refreshAdminToken(): Promise<string | null> {
-    try {
-      const storedRefresh = typeof window !== 'undefined' ? localStorage.getItem('orvexa_refresh_token') : null
-      if (storedRefresh) {
-        const res = await fetch(`${API_BASE}/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: storedRefresh }),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          const newToken = data.accessToken || data.token
-          if (newToken) {
-            localStorage.setItem(ADMIN_TOKEN_KEY, newToken)
-            if (data.refreshToken) localStorage.setItem('orvexa_refresh_token', data.refreshToken)
-            return newToken
-          }
-        }
-      }
-    } catch {
-      // refresh failed
-    }
-
-    // Never fall back to logging in with stored or demo credentials: a session that cannot be
-    // refreshed must sign in again.
-    return null
+    return rotateAccessToken()
   },
 
   async getOwnerLoginLink(slug: string): Promise<{ url: string | null; revoked: boolean; error?: string }> {
@@ -1027,7 +1079,7 @@ export const authService = {
     try {
       localStorage.removeItem(ADMIN_SESSION_KEY)
       localStorage.removeItem(ADMIN_TOKEN_KEY)
-      localStorage.removeItem('orvexa_refresh_token')
+      if (!localStorage.getItem(SELLER_SESSION_KEY)) writeRefreshToken(null)
     } catch {
       // ignored
     }
