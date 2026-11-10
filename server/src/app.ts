@@ -118,11 +118,11 @@ export function createApp() {
     },
   })
 
-  // Credential endpoints — tighter in production; looser locally so approve/login testing is not blocked.
+  // Credential endpoints — office/NAT IPs share one budget across admin + seller retries.
   const authLimiter = rateLimit({
     skip,
     windowMs: 15 * 60 * 1000,
-    max: process.env.NODE_ENV === 'production' ? Number(process.env.AUTH_RATE_LIMIT_MAX || 40) : 200,
+    max: process.env.NODE_ENV === 'production' ? Number(process.env.AUTH_RATE_LIMIT_MAX || 120) : 200,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many login attempts. Please wait 15 minutes before trying again.' },
@@ -138,9 +138,9 @@ export function createApp() {
     legacyHeaders: false,
     message: { error: 'Too many requests. Please retry shortly.' },
   })
-  // Signup connector writes — keep tight to stop abuse.
+  // Signup connector writes only — do not stack this onto GET resolve/slug-available.
   const publicWriteLimiter = rateLimit({
-    skip,
+    skip: (req) => skip() || req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
     windowMs: 60 * 1000,
     max: 60,
     standardHeaders: true,
