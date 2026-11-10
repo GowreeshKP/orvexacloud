@@ -1,6 +1,6 @@
 # Storefront Studio — OrvexaCloud env
 
-Render API service: `orvexa-api-nskw` (repo `GowreeshKP/orvexatech-multi-store`).
+Render API service: `orvexa-api-nskw` (repo **`GowreeshKP/orvexacloud`**, branch `main`).
 Studio app: `orvexa-storefront-studio` (local folder / Vercel). Seller **Storefront** →
 **Edit with Studio** calls `POST /api/stores/:slug/studio-launch` (INTEGRATION.md).
 
