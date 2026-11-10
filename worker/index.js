@@ -76,6 +76,169 @@ function withCors(response, allowOrigin) {
   return new Response(response.body, { status: response.status, headers: out })
 }
 
+function studioConfig(env) {
+  const url = String(env.STUDIO_URL || '').replace(/\/+$/, '')
+  const secret = String(env.STUDIO_LAUNCH_TOKEN_SECRET || env.LAUNCH_TOKEN_SECRET || '').trim()
+  if (!url || secret.length < 32) return null
+  return { url, secret }
+}
+
+function b64url(bytes) {
+  let bin = ''
+  const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
+  for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i])
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+function b64urlJson(obj) {
+  return b64url(new TextEncoder().encode(JSON.stringify(obj)))
+}
+
+async function signStudioLaunchToken(claims, secret) {
+  const header = b64urlJson({ alg: 'HS256', typ: 'JWT' })
+  const now = Math.floor(Date.now() / 1000)
+  const body = b64urlJson({
+    ...claims,
+    iss: 'orvexacloud',
+    aud: 'orvexa-studio',
+    iat: now,
+    exp: now + 120,
+    jti: crypto.randomUUID(),
+  })
+  const data = `${header}.${body}`
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data))
+  return `${data}.${b64url(sig)}`
+}
+
+function studioPlan(plan) {
+  const id = String(plan || 'starter').toLowerCase()
+  if (id === 'enterprise') return 'enterprise'
+  if (id === 'pro' || id === 'growth') return 'growth'
+  return 'starter'
+}
+
+function jsonCors(status, body, allowOrigin) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'content-type': 'application/json',
+      'access-control-allow-origin': allowOrigin,
+      'access-control-allow-credentials': 'true',
+      vary: 'Origin',
+    },
+  })
+}
+
+/** Edge shim when Render is still on an older build without /studio-launch (INTEGRATION.md). */
+async function studioLaunchShim(request, url, env, allowOrigin) {
+  const m = url.pathname.match(/^\/api\/stores\/([^/]+)\/(studio-launch|studio)$/)
+  if (!m) return null
+  const slug = decodeURIComponent(m[1]).toLowerCase()
+  const kind = m[2]
+  const cfg = studioConfig(env)
+
+  if (kind === 'studio' && request.method === 'GET') {
+    if (!cfg) {
+      // Let Render answer once deployed; if it 404s the panel still needs a JSON body.
+      return null
+    }
+    const auth = request.headers.get('authorization') || ''
+    if (!auth) return jsonCors(401, { error: 'Unauthorized' }, allowOrigin)
+    const origin = String(env.RENDER_API_ORIGIN || DEFAULT_ORIGIN).replace(/\/+$/, '')
+    const probe = await fetch(`${origin}/api/stores/${encodeURIComponent(slug)}/analytics`, {
+      headers: { authorization: auth, accept: 'application/json' },
+    })
+    if (probe.status === 401 || probe.status === 403) {
+      return jsonCors(probe.status, { error: 'Unauthorized' }, allowOrigin)
+    }
+    if (!probe.ok && probe.status !== 404) {
+      return jsonCors(probe.status, { error: 'Could not verify store access.' }, allowOrigin)
+    }
+    let resolve = {}
+    try {
+      resolve = await (
+        await fetch(`${origin}/api/public/resolve?slug=${encodeURIComponent(slug)}`)
+      ).json()
+    } catch {
+      resolve = {}
+    }
+    return jsonCors(
+      200,
+      {
+        configured: true,
+        studioUrl: cfg.url,
+        studioEnabled: Boolean(resolve.storefrontStudioEnabled),
+        themeVersion: resolve.storefrontThemeVersion || null,
+        publishedAt: resolve.storefrontPublishedAt || null,
+        themeUrl: resolve.storefrontThemeUrl || null,
+        edgeShim: true,
+      },
+      allowOrigin
+    )
+  }
+
+  if (kind !== 'studio-launch' || request.method !== 'POST') return null
+  if (!cfg) return null
+
+  const auth = request.headers.get('authorization') || ''
+  if (!auth) return jsonCors(401, { error: 'Unauthorized' }, allowOrigin)
+
+  const origin = String(env.RENDER_API_ORIGIN || DEFAULT_ORIGIN).replace(/\/+$/, '')
+  const probe = await fetch(`${origin}/api/stores/${encodeURIComponent(slug)}/analytics`, {
+    headers: { authorization: auth, accept: 'application/json' },
+  })
+  if (probe.status === 401 || probe.status === 403) {
+    return jsonCors(probe.status, { error: 'Unauthorized' }, allowOrigin)
+  }
+  if (!probe.ok && probe.status !== 404) {
+    return jsonCors(502, { error: 'Could not verify store access.' }, allowOrigin)
+  }
+
+  // Decode access token claims (signature already proven via analytics).
+  let payload = {}
+  try {
+    const raw = auth.replace(/^Bearer\s+/i, '').split('.')[1]
+    payload = JSON.parse(atob(raw.replace(/-/g, '+').replace(/_/g, '/')))
+  } catch {
+    payload = {}
+  }
+  if (payload.tenantSlug && String(payload.tenantSlug).toLowerCase() !== slug) {
+    return jsonCors(403, { error: 'Token is not for this store.' }, allowOrigin)
+  }
+
+  let brandName = payload.brandName || slug
+  let plan = 'starter'
+  try {
+    const resolved = await (
+      await fetch(`${origin}/api/public/resolve?slug=${encodeURIComponent(slug)}`)
+    ).json()
+    if (resolved?.brandName) brandName = resolved.brandName
+    if (resolved?.plan) plan = resolved.plan
+  } catch {
+    /* keep token/resolve defaults */
+  }
+
+  const role = payload.role === 'staff' ? 'staff' : 'owner'
+  const token = await signStudioLaunchToken(
+    {
+      store: slug,
+      storeName: brandName,
+      role,
+      plan: studioPlan(plan),
+      sub: String(payload.userId || payload.sub || `seller_${slug}`),
+    },
+    cfg.secret
+  )
+  return jsonCors(200, { url: `${cfg.url}/launch?token=${encodeURIComponent(token)}`, edgeShim: true }, allowOrigin)
+}
+
 async function proxyApi(request, url, env) {
   const origin = String(env.RENDER_API_ORIGIN || DEFAULT_ORIGIN).replace(/\/+$/, '')
   const target = `${origin}${url.pathname}${url.search}`
@@ -104,6 +267,9 @@ async function proxyApi(request, url, env) {
       },
     })
   }
+
+  const studioShim = await studioLaunchShim(request, url, env, allowOrigin)
+  if (studioShim) return studioShim
 
   const headers = new Headers(request.headers)
   headers.delete('host')

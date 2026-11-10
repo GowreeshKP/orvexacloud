@@ -14,6 +14,8 @@
     { "pattern": "app.orvexacloud.in/*", "zone_name": "orvexacloud.in" }
   ],
   "vars": {
-    "RENDER_API_ORIGIN": "https://orvexa-api-nskw.onrender.com"
+    "RENDER_API_ORIGIN": "https://orvexa-api-nskw.onrender.com",
+    // Temporary tunnel while studio.orvexacloud.in is not live — replace with permanent STUDIO_URL.
+    "STUDIO_URL": "https://puzzles-authorities-beneficial-dad.trycloudflare.com"
   }
 }

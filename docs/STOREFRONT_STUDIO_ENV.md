@@ -1,19 +1,37 @@
 # Storefront Studio — OrvexaCloud env
 
-Set these on the **API** (Render) and optional Vite build:
+Render API service: `orvexa-api-nskw` (repo `GowreeshKP/orvexatech-multi-store`).
+Studio app: `orvexa-storefront-studio` (local folder / Vercel). Seller **Storefront** →
+**Edit with Studio** calls `POST /api/stores/:slug/studio-launch` (INTEGRATION.md).
 
-| Variable | Where | Purpose |
-| --- | --- | --- |
-| `STUDIO_URL` | API | Public studio origin, e.g. `https://studio.orvexacloud.in` |
-| `STUDIO_LAUNCH_TOKEN_SECRET` | API | Shared with studio `LAUNCH_TOKEN_SECRET` (32+ chars) |
-| `STUDIO_WEBHOOK_SECRET` | API | Shared with studio `PUBLISH_WEBHOOK_SECRET` |
-| `VITE_STUDIO_URL` | Frontend build | Same as `STUDIO_URL` so live stores can fetch published themes |
+## API (Render)
 
-Studio side (from the Storefront Studio repo):
+| Variable | Purpose |
+| --- | --- |
+| `STUDIO_URL` | Public studio origin, e.g. `https://studio.orvexacloud.in` or a Vercel URL |
+| `STUDIO_LAUNCH_TOKEN_SECRET` | Shared with studio `LAUNCH_TOKEN_SECRET` (32+ chars) |
+| `STUDIO_WEBHOOK_SECRET` | Shared with studio `PUBLISH_WEBHOOK_SECRET` |
+
+After setting env vars, **Manual Deploy** so `/studio` and `/studio-launch` load.
+
+## Frontend (Workers / Vite)
+
+| Variable | Purpose |
+| --- | --- |
+| `VITE_STUDIO_URL` | Same as `STUDIO_URL` so live stores fetch published themes |
+
+## Studio (`apps/studio/.env.local`)
 
 - `LAUNCH_TOKEN_SECRET` = same as `STUDIO_LAUNCH_TOKEN_SECRET`
 - `PUBLISH_WEBHOOK_URL` = `https://app.orvexacloud.in/api/webhooks/studio`
 - `PUBLISH_WEBHOOK_SECRET` = same as `STUDIO_WEBHOOK_SECRET`
 - `ORVEXACLOUD_URL` = `https://orvexacloud.in`
+- `CATALOG_SOURCE=store` for real tenant catalogues (e.g. `e2econn1713`)
+- `DEV_LOGIN=1` only on localhost; production must omit it
 
-Seller dashboard **Storefront** → **Edit with Studio** calls `POST /api/stores/:slug/studio-launch`.
+## Flow
+
+1. Tenant admin opens **Storefront** in `/dashboard/{slug}`
+2. **Edit with Studio** → signed `{STUDIO_URL}/launch?token=…`
+3. Publish → webhook → `storefrontStudioEnabled` + theme version on the tenant
+4. Live store loads `GET {STUDIO_URL}/api/public/stores/{slug}/theme`
