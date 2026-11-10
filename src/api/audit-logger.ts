@@ -48,6 +48,12 @@ export interface AuditFilterOptions {
 
 const STORAGE_KEY = 'orvexa_audit_logs_v1'
 
+/** After a 429, stop POSTing audit events for a while so login/admin stays usable. */
+let auditPostBlockedUntil = 0
+let auditPostInFlight = 0
+const AUDIT_POST_MAX_IN_FLIGHT = 2
+const AUDIT_POST_BACKOFF_MS = 5 * 60 * 1000
+
 // Initial pre-seeded audit history for enterprise realism
 const INITIAL_AUDIT_LOGS: AuditLogEntry[] = [
   {
@@ -240,23 +246,39 @@ export const auditLogger = {
     const updated = [newEntry, ...current].slice(0, 500) // Keep latest 500
     saveStoredLogs(updated)
 
-    // 2. Post to backend if reachable
+    // 2. Best-effort remote copy — never block UX, and back off hard on 429.
+    void this.persistRemote(newEntry)
+
+    return newEntry
+  },
+
+  async persistRemote(entry: AuditLogEntry): Promise<void> {
+    if (typeof window === 'undefined') return
+    if (Date.now() < auditPostBlockedUntil) return
+    if (auditPostInFlight >= AUDIT_POST_MAX_IN_FLIGHT) return
+
+    const token = localStorage.getItem('lunar_admin_token') || localStorage.getItem('lunar_seller_token')
+    // Unauthenticated POSTs burn the shared IP rate budget and still get discarded for security claims.
+    if (!token) return
+
+    auditPostInFlight += 1
     try {
-      const token =
-        typeof window !== 'undefined'
-          ? localStorage.getItem('lunar_admin_token') || localStorage.getItem('lunar_seller_token')
-          : null
-      fetch(`${API_BASE}/admin/audit-logs`, {
+      const res = await fetch(`${API_BASE}/admin/audit-logs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(newEntry),
-      }).catch(() => {})
-    } catch {}
-
-    return newEntry
+        body: JSON.stringify(entry),
+      })
+      if (res.status === 429) {
+        auditPostBlockedUntil = Date.now() + AUDIT_POST_BACKOFF_MS
+      }
+    } catch {
+      // offline — local log already saved
+    } finally {
+      auditPostInFlight = Math.max(0, auditPostInFlight - 1)
+    }
   },
 
   // ─────────────────────────────────────────────────────────

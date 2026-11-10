@@ -103,21 +103,26 @@ export function createApp() {
   // Automated test suites only; ignored in production.
   const skip = () => process.env.DISABLE_RATE_LIMITS === 'true' && process.env.NODE_ENV !== 'production'
 
-  // Global rate limit — storefront + admin + probes share one NAT IP in production.
+  // Global rate limit — storefront + admin + probes often share one office/NAT IP.
   const globalLimiter = rateLimit({
-    skip,
     windowMs: 15 * 60 * 1000,
-    max: 1200,
+    max: Number(process.env.API_RATE_LIMIT_MAX || 4000),
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many requests. Please slow down and try again later.' },
+    // Audit ingest is best-effort client telemetry; do not burn the shared login budget.
+    skip: (req) => {
+      if (skip()) return true
+      const path = req.originalUrl || req.path || ''
+      return req.method === 'POST' && path.includes('/admin/audit-logs')
+    },
   })
 
   // Credential endpoints — tighter in production; looser locally so approve/login testing is not blocked.
   const authLimiter = rateLimit({
     skip,
     windowMs: 15 * 60 * 1000,
-    max: process.env.NODE_ENV === 'production' ? 10 : 200,
+    max: process.env.NODE_ENV === 'production' ? Number(process.env.AUTH_RATE_LIMIT_MAX || 40) : 200,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many login attempts. Please wait 15 minutes before trying again.' },
