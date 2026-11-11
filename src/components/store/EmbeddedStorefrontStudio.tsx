@@ -106,8 +106,8 @@ export default function EmbeddedStorefrontStudio({ onToast }: { onToast: (msg: s
   }
   if (!ready) {
     return (
-      <div className="stack" style={{ padding: 48, alignItems: 'center' }}>
-        <p className="muted">Loading Storefront Studio…</p>
+      <div className="min-h-[40vh] flex items-center justify-center">
+        <p className="text-xs font-bold tracking-[0.2em] uppercase text-black/40">Loading Storefront Studio…</p>
       </div>
     )
   }

@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useMemo, useEffect } from 'react'
+﻿import { useState, useRef, useMemo, useEffect, lazy, Suspense } from 'react'
 import {
   LayoutDashboard, Package, Tag, Users, MessageSquare,
   Store, Settings, Shield, LogOut, Bell, Search,
@@ -19,7 +19,9 @@ import { storeInbox, STORE_INBOX_EVENT, type NewsletterSubscriber, type StoreMes
 import SellerLogin, { StoreDashboardGate } from '@/components/auth/SellerLogin'
 import PortalView from '@/components/platform/PortalView'
 import StoreAuditLogs from '@/components/store/StoreAuditLogs'
-import StorefrontStudioPanel from '@/components/store/StorefrontStudioPanel'
+
+/** Lazy so studio.css only loads on the Storefront tab and cannot override portals chrome. */
+const StorefrontStudioPanel = lazy(() => import('@/components/store/StorefrontStudioPanel'))
 import {
   buildTenantCategories,
   getCategoryLabel,
@@ -1715,7 +1717,17 @@ function CustomersView({ onToast: _onToast }: { onToast: (msg: string) => void }
 }
 
 function StorefrontCustomizer({ onToast }: { onToast: (msg: string) => void }) {
-  return <StorefrontStudioPanel onToast={onToast} />
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-[40vh] flex items-center justify-center">
+          <p className="text-xs font-bold tracking-[0.2em] uppercase text-black/40">Loading Storefront…</p>
+        </div>
+      }
+    >
+      <StorefrontStudioPanel onToast={onToast} />
+    </Suspense>
+  )
 }
 
 
