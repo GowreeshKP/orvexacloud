@@ -20,9 +20,13 @@ export function createApp() {
   const app = express()
   app.disable('x-powered-by')
 
-  // Behind Vercel / a load balancer the client IP is in X-Forwarded-For; rate limits key on it.
-  // TRUST_PROXY = number of trusted hops (default 1 on Vercel, 0 elsewhere).
-  const trustProxy = Number(process.env.TRUST_PROXY ?? (process.env.VERCEL ? 1 : 0))
+  // Behind Render / Cloudflare / Vercel the client IP is in X-Forwarded-For; rate limits key on it.
+  // TRUST_PROXY = number of trusted hops. Default 1 on Render/Vercel (0 only for bare local Node).
+  // If the API sits behind Cloudflare Worker → Render, set TRUST_PROXY=2 on Render when
+  // login 429s still cluster every visitor onto one shared bucket.
+  const trustProxy = Number(
+    process.env.TRUST_PROXY ?? (process.env.VERCEL || process.env.RENDER ? 1 : 0),
+  )
   if (trustProxy > 0) app.set('trust proxy', trustProxy)
 
   app.use((_req: Request, res: Response, next: NextFunction) => {
@@ -118,7 +122,8 @@ export function createApp() {
     },
   })
 
-  // Credential endpoints — office/NAT IPs share one budget across admin + seller retries.
+  // Credential endpoints — keyed per real client IP (needs TRUST_PROXY ≥ 1 behind Render/CF).
+  // Successful logins do not burn the budget; only failures / probes count.
   const authLimiter = rateLimit({
     skip,
     windowMs: 15 * 60 * 1000,
@@ -126,6 +131,7 @@ export function createApp() {
     max: process.env.NODE_ENV === 'production'
       ? Math.max(300, Number(process.env.AUTH_RATE_LIMIT_MAX || 300) || 300)
       : 500,
+    skipSuccessfulRequests: true,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many login attempts. Please wait 15 minutes before trying again.' },
