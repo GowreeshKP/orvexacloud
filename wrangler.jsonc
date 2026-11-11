@@ -1,8 +1,6 @@
 {
   "name": "d2c-multi-tenant-webapp",
   "compatibility_date": "2026-10-01",
-  // Pages production project that should serve https://app.orvexacloud.in
-  "pages_build_output_dir": "./dist",
   "main": "worker/index.js",
   "assets": {
     "directory": "./dist",
