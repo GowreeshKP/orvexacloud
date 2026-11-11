@@ -103,12 +103,28 @@ function storeTypeFor(niche: string): string {
 
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '')
 
+/** data: URLs make /public/resolve hundreds of KB and abort browser bootstrap. Keep http(s) only. */
+function publicAssetUrl(value: unknown): string {
+  const v = str(value)
+  if (!v) return ''
+  if (v.startsWith('data:')) return ''
+  return v
+}
+
+function publicTheme(raw: Record<string, unknown> | undefined) {
+  const theme = { ...(raw || {}) } as Record<string, unknown>
+  for (const key of ['logoUrl', 'heroImage', 'faviconUrl']) {
+    if (key in theme) theme[key] = publicAssetUrl(theme[key])
+  }
+  return theme
+}
+
 function publicTenant(t: ITenant) {
   const theme = (t.theme || {}) as Record<string, unknown>
   const copy = (theme.copy && typeof theme.copy === 'object' ? theme.copy : {}) as Record<string, string>
   // Profile fields may live in theme.copy until PUT /stores/:slug/profile is deployed on Render.
   const brandName = t.brandName || copy._profileBrandName || ''
-  const logo = t.logo || (typeof theme.logoUrl === 'string' ? theme.logoUrl : '') || ''
+  const logo = publicAssetUrl(t.logo || theme.logoUrl || '')
   const aboutStory = (t as { aboutStory?: string }).aboutStory || copy._profileAbout || (typeof theme.aboutStory === 'string' ? theme.aboutStory : '') || ''
   const contact = {
     phone: (t as { contact?: { phone?: string } }).contact?.phone || copy._profilePhone || '',
@@ -140,7 +156,7 @@ function publicTenant(t: ITenant) {
     storeType: t.storeType || '',
     niche: t.niche || '',
     categories: t.categories || [],
-    theme: t.theme,
+    theme: publicTheme(theme),
     storefrontStudioEnabled: Boolean(t.storefrontStudioEnabled),
     storefrontThemeVersion: t.storefrontThemeVersion || 0,
     storefrontPublishedAt: t.storefrontPublishedAt || '',

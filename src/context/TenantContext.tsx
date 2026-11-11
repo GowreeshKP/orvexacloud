@@ -12,11 +12,13 @@ import {
 import { pathPortalRedirectUrl } from '@/lib/store-urls'
 import { mockStore } from '@/api/mock-store'
 import { DEMO_MODE } from '@/api/auth'
-import { apiFetch } from '@/api/base'
+import { apiFetch, clearForcedRenderApi } from '@/api/base'
 
 function deepCloneTenant(config: TenantConfig): TenantConfig {
   return JSON.parse(JSON.stringify(config))
 }
+
+clearForcedRenderApi()
 
 /** Promote profile fields stored in theme.copy when PUT /profile is not available on the API. */
 function hydrateTenantProfile(raw: TenantConfig): TenantConfig {
@@ -89,17 +91,27 @@ async function fetchPublicTenant(slug: string): Promise<ResolveResult> {
   if (!slug) return { ok: false, kind: 'missing' }
   const looksLikeHost = slug.includes('.')
   const qs = looksLikeHost ? `host=${encodeURIComponent(slug)}` : `slug=${encodeURIComponent(slug)}`
+  // Resolve can be slow on cold Render + large theme payloads; do not abort early.
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 8000)
+  const timer = setTimeout(() => ctrl.abort(), 25000)
   try {
     const res = await apiFetch(`/public/resolve?${qs}`, { signal: ctrl.signal })
     if (res.status === 404) return { ok: false, kind: 'missing', status: 404 }
+    if (res.status === 403) return { ok: false, kind: 'missing', status: 403 }
     if (res.status === 429 || res.status >= 500) {
       return { ok: false, kind: 'transient', status: res.status }
     }
     if (!res.ok) return { ok: false, kind: 'transient', status: res.status }
     const tenant = (await res.json()) as TenantConfig
     if (!tenant?.slug) return { ok: false, kind: 'missing', status: res.status }
+    // Older API builds still return data: logos (~0.5MB+); drop them so UI stays responsive.
+    if (typeof tenant.logo === 'string' && tenant.logo.startsWith('data:')) tenant.logo = ''
+    if (tenant.theme && typeof tenant.theme === 'object') {
+      const theme = tenant.theme as Record<string, unknown>
+      for (const key of ['logoUrl', 'heroImage', 'faviconUrl']) {
+        if (typeof theme[key] === 'string' && String(theme[key]).startsWith('data:')) theme[key] = ''
+      }
+    }
     return { ok: true, tenant }
   } catch {
     return { ok: false, kind: 'transient' }
@@ -136,9 +148,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     try {
       let resolved = await fetchPublicTenant(slug)
-      // One short retry for cold starts / edge rate limits before treating as missing.
-      if (!resolved.ok && resolved.kind === 'transient') {
-        await new Promise((r) => setTimeout(r, 600))
+      // Retry cold starts / rate limits a few times before showing temporary error.
+      for (let attempt = 0; !resolved.ok && resolved.kind === 'transient' && attempt < 3; attempt++) {
+        await new Promise((r) => setTimeout(r, 700 * (attempt + 1)))
         resolved = await fetchPublicTenant(slug)
       }
 

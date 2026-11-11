@@ -66,15 +66,23 @@ export function forceRenderApi(on = true) {
   }
 }
 
+/** Drop a stale Render-direct flag left by older builds (CORS breaks tenant bootstrap). */
+export function clearForcedRenderApi() {
+  forceRenderApi(false)
+}
+
 /**
  * fetch() relative to the API root (`/public/resolve?...`).
  * On Cloudflare edge 429 against same-origin /api, retries once via Render.
+ * Public resolve always stays same-origin — never flip to Render for bootstrap.
  */
 export async function apiFetch(apiPath: string, init?: RequestInit): Promise<Response> {
   const rel = apiPath.startsWith('/') ? apiPath : `/${apiPath}`
-  const primary = `${resolveApiBase()}${rel}`
+  const isPublicResolve = rel.startsWith('/public/resolve')
+  const base = isPublicResolve ? '/api' : resolveApiBase()
+  const primary = `${base}${rel}`
   const res = await fetch(primary, init)
-  if (res.status !== 429) return res
+  if (res.status !== 429 || isPublicResolve) return res
   if (resolveApiBase() === RENDER_API_BASE) return res
   forceRenderApi(true)
   try {
