@@ -338,6 +338,27 @@ function themeFields(body: unknown): Record<string, unknown> {
     }
     out.socialLinks = social
   }
+  // Embedded Storefront Studio document (orvexa-storefront-studio theme JSON).
+  if (body.studioDraft !== undefined) {
+    if (body.studioDraft !== null && !isPlainObject(body.studioDraft)) {
+      throw new ValidationError('studioDraft must be a theme object.')
+    }
+    out.studioDraft = body.studioDraft
+  }
+  if (body.studioPublished !== undefined) {
+    if (body.studioPublished !== null && !isPlainObject(body.studioPublished)) {
+      throw new ValidationError('studioPublished must be a theme object.')
+    }
+    out.studioPublished = body.studioPublished
+  }
+  const draftRev = optNumber(body.studioDraftRevision, 'studioDraftRevision', { min: 0, max: 1_000_000_000, integer: true })
+  if (draftRev !== undefined) out.studioDraftRevision = draftRev
+  const pubVer = optNumber(body.studioPublishedVersion, 'studioPublishedVersion', { min: 0, max: 1_000_000_000, integer: true })
+  if (pubVer !== undefined) out.studioPublishedVersion = pubVer
+  const pubAt = optString(body.studioPublishedAt, 'studioPublishedAt', 40)
+  if (pubAt !== undefined) out.studioPublishedAt = pubAt
+  const pubNote = optString(body.studioPublishedNote, 'studioPublishedNote', 200)
+  if (pubNote !== undefined) out.studioPublishedNote = pubNote
   return out
 }
 
@@ -356,6 +377,53 @@ router.put('/theme', ...ownerOfTenant, async (req: Request, res: Response) => {
     res.json({ success: true, theme: savedTheme })
   } catch (err) {
     sendError(res, err, 'Failed to update theme', 'update theme')
+  }
+})
+
+// POST publish embedded Storefront Studio theme — flips live flag on the tenant
+router.post('/studio-publish', ...ownerOfTenant, async (req: Request, res: Response) => {
+  try {
+    if (!isPlainObject(req.body)) throw new ValidationError('Request body must be a JSON object.')
+    const theme = isPlainObject(req.body.theme) ? req.body.theme : null
+    if (!theme) throw new ValidationError('theme is required.')
+    const version = optNumber(req.body.version, 'version', { min: 1, max: 1_000_000_000, integer: true }) || 1
+    const note = optString(req.body.note, 'note', 200) || ''
+    const publishedAt = optString(req.body.publishedAt, 'publishedAt', 40) || new Date().toISOString()
+
+    const ThemeConfig = req.tenantDb!.ThemeConfig
+    await ThemeConfig.findOneAndUpdate(
+      {},
+      {
+        $set: {
+          studioPublished: theme,
+          studioDraft: theme,
+          studioPublishedVersion: version,
+          studioPublishedAt: publishedAt,
+          studioPublishedNote: note,
+        },
+      },
+      { upsert: true },
+    )
+
+    const masterDb = await connectMasterDatabase()
+    await getTenantModel(masterDb).updateOne(
+      { slug: req.tenant!.slug },
+      {
+        $set: {
+          storefrontStudioEnabled: true,
+          storefrontThemeVersion: version,
+          storefrontPublishedAt: publishedAt,
+          'theme.studioPublished': theme,
+          'theme.studioDraft': theme,
+          'theme.studioPublishedVersion': version,
+          'theme.studioPublishedAt': publishedAt,
+        },
+      },
+    )
+
+    res.json({ success: true, version, publishedAt })
+  } catch (err) {
+    sendError(res, err, 'Failed to publish storefront', 'studio publish')
   }
 })
 

@@ -172,6 +172,12 @@ export const TenantSchema = new Schema<ITenant>(
       pdpOptions: { type: Schema.Types.Mixed, default: undefined },
       footerOptions: { type: Schema.Types.Mixed, default: undefined },
       socialLinks: { type: Schema.Types.Mixed, default: undefined },
+      studioDraft: { type: Schema.Types.Mixed, default: undefined },
+      studioPublished: { type: Schema.Types.Mixed, default: undefined },
+      studioDraftRevision: { type: Number, default: 0 },
+      studioPublishedVersion: { type: Number, default: 0 },
+      studioPublishedAt: { type: String, default: '' },
+      studioPublishedNote: { type: String, default: '' },
     },
     subscription: {
       plan: { type: String, default: 'starter' },

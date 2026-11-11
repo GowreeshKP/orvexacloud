@@ -1611,6 +1611,19 @@ img {
   perspective: 900px;
 }
 
+.shell .page.page--flush {
+  padding: 0;
+  max-width: none;
+}
+
+.shell .page.page--flush .embedded-studio {
+  min-height: calc(100vh - var(--topbar-h, 66px));
+}
+
+.shell .page.page--flush .studio {
+  min-height: calc(100vh - var(--topbar-h, 66px));
+}
+
 .portal-view {
   animation: portal-view-flip 0.32s var(--ease-out) both;
   transform-origin: 50% 0;

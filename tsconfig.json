@@ -22,5 +22,13 @@
     "noFallthroughCasesInSwitch": true
   },
   "include": ["src", "packages", "vite.config.ts"],
-  "exclude": ["packages/**/*.test.ts", "packages/**/*.test.tsx", "node_modules", "dist", "server"]
+  "exclude": [
+    "packages/**/*.test.ts",
+    "packages/**/*.test.tsx",
+    "src/studio-editor/**/*.test.ts",
+    "src/studio-editor/**/*.test.tsx",
+    "node_modules",
+    "dist",
+    "server"
+  ]
 }

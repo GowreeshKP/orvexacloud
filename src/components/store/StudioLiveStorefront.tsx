@@ -5,13 +5,10 @@ import '@orvexa/storefront-ui/storefront.css'
 import { apiClient } from '@/api/client'
 import type { TenantConfig } from '@/types/tenant'
 
-const STUDIO_URL = (import.meta.env.VITE_STUDIO_URL as string | undefined)?.replace(/\/+$/, '') || ''
-
 type PageId = 'home' | 'product' | 'collection' | 'about' | 'contact'
 
 function parsePage(pathname: string, slug: string): { page: PageId; productHandle?: string; collectionHandle?: string; basePath: string } {
   const parts = pathname.split('/').filter(Boolean)
-  // app.orvexacloud.in/dashboard is seller; live storefronts are on orvexacloud.in/{slug}/...
   const slugIdx = parts[0] === slug ? 0 : parts[0] === 't' && parts[1] === slug ? 1 : -1
   const basePath = slugIdx === 1 ? `/t/${slug}` : slugIdx === 0 ? `/${slug}` : ''
   const rest = slugIdx >= 0 ? parts.slice(slugIdx + 1) : parts
@@ -28,8 +25,8 @@ function parsePage(pathname: string, slug: string): { page: PageId; productHandl
 }
 
 /**
- * Renders a Storefront Studio published theme when available.
- * Returns null when the store has not published with Studio yet (caller keeps legacy UI).
+ * Renders a published Storefront Studio theme from the tenant theme document
+ * (embedded editor publish) — no external STUDIO_URL required.
  */
 export default function StudioLiveStorefront({
   tenant,
@@ -43,34 +40,32 @@ export default function StudioLiveStorefront({
   const [loading, setLoading] = useState(true)
   const route = useMemo(
     () => parsePage(typeof window !== 'undefined' ? window.location.pathname : '/', tenant.slug),
-    [tenant.slug]
+    [tenant.slug],
   )
 
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      if (!STUDIO_URL && !tenant.storefrontThemeUrl) {
-        onUnavailable?.()
-        setLoading(false)
-        return
-      }
       try {
-        const themeUrl =
-          tenant.storefrontThemeUrl ||
-          `${STUDIO_URL}/api/public/stores/${encodeURIComponent(tenant.slug)}/theme`
-        const [themeRes, catalog] = await Promise.all([
-          fetch(themeUrl),
-          apiClient.getProducts(tenant.slug).catch(() => []),
-        ])
-        if (cancelled) return
-        if (themeRes.status === 404) {
+        const published =
+          (tenant.theme as { studioPublished?: Theme } | undefined)?.studioPublished || null
+        if (!published && !tenant.storefrontStudioEnabled) {
           onUnavailable?.()
           setLoading(false)
           return
         }
-        if (!themeRes.ok) throw new Error('theme fetch failed')
-        const body = await themeRes.json()
-        setTheme(body.theme as Theme)
+        const [catalog, themeDoc] = await Promise.all([
+          apiClient.getProducts(tenant.slug).catch(() => []),
+          published ? Promise.resolve(null) : apiClient.getTheme(tenant.slug).catch(() => null),
+        ])
+        if (cancelled) return
+        const fromDoc = (themeDoc as { studioPublished?: Theme } | null)?.studioPublished || published
+        if (!fromDoc) {
+          onUnavailable?.()
+          setLoading(false)
+          return
+        }
+        setTheme(fromDoc)
         setProducts(Array.isArray(catalog) ? catalog : [])
       } catch {
         if (!cancelled) onUnavailable?.()
@@ -81,7 +76,7 @@ export default function StudioLiveStorefront({
     return () => {
       cancelled = true
     }
-  }, [tenant.slug, tenant.storefrontThemeUrl, onUnavailable])
+  }, [tenant.slug, tenant.storefrontStudioEnabled, tenant.theme, onUnavailable])
 
   useEffect(() => {
     if (!theme) return
@@ -125,8 +120,8 @@ export default function StudioLiveStorefront({
   )
 }
 
-/** True when this store should try the Studio renderer first. */
 export function shouldUseStudioStorefront(tenant: TenantConfig | null | undefined): boolean {
   if (!tenant) return false
-  return Boolean(tenant.storefrontStudioEnabled || tenant.storefrontThemeVersion || tenant.storefrontThemeUrl)
+  const published = (tenant.theme as { studioPublished?: unknown } | undefined)?.studioPublished
+  return Boolean(tenant.storefrontStudioEnabled || tenant.storefrontThemeVersion || published)
 }

@@ -58,6 +58,12 @@ export interface IThemeConfigDoc extends Document {
   pdpOptions?: Record<string, boolean>
   footerOptions?: Record<string, boolean>
   socialLinks?: Record<string, string>
+  studioDraft?: Record<string, unknown>
+  studioPublished?: Record<string, unknown>
+  studioDraftRevision?: number
+  studioPublishedVersion?: number
+  studioPublishedAt?: string
+  studioPublishedNote?: string
   updatedAt: string
 }
 
@@ -88,6 +94,12 @@ export const ThemeConfigSchema = new Schema<IThemeConfigDoc>(
     pdpOptions: { type: Schema.Types.Mixed },
     footerOptions: { type: Schema.Types.Mixed },
     socialLinks: { type: Schema.Types.Mixed },
+    studioDraft: { type: Schema.Types.Mixed },
+    studioPublished: { type: Schema.Types.Mixed },
+    studioDraftRevision: { type: Number, default: 0 },
+    studioPublishedVersion: { type: Number, default: 0 },
+    studioPublishedAt: { type: String, default: '' },
+    studioPublishedNote: { type: String, default: '' },
   },
   { timestamps: true }
 )

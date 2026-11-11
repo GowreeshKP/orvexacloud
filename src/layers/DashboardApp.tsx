@@ -371,7 +371,7 @@ export default function DashboardApp() {
         </header>
 
         <main className="main">
-          <div className="page">
+          <div className={activeView === 'storefront' ? 'page page--flush' : 'page'}>
             <PortalView viewKey={activeView}>
               {activeView === 'overview'   && <DashboardOverview onNavigate={(view) => setActiveView(view)} />}
               {activeView === 'products'   && <ProductManager onToast={showToast} />}
