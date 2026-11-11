@@ -4,7 +4,9 @@
  * - Tenant admin at /dashboard/{slug}
  * - Owner sign-in at /owner/{key}
  * - /api/* proxied to Render
- * - Legacy /t/{slug} → https://orvexacloud.in/{slug}
+ * - Legacy /t/{slug}/dashboard → /dashboard/{slug}
+ * - Legacy /t/{slug} on app host (browser) → /dashboard/{slug}
+ *   (marketing storefront proxy keeps /t/{slug} via x-orvexa-storefront-proxy)
  */
 
 const DEFAULT_ORIGIN = 'https://orvexa-api-nskw.onrender.com'
@@ -39,7 +41,10 @@ function legacyPortalRedirect(request, url) {
 
   const slug = parts[1]
   const onDashboard = parts[2] === 'dashboard'
-  const dest = onDashboard
+  // App-host /t/{slug} without the storefront-proxy header = seller deep link (not shopper).
+  const treatAsSeller =
+    onDashboard || host === `app.${ROOT_DOMAIN}` || host === `admin.${ROOT_DOMAIN}`
+  const dest = treatAsSeller
     ? `https://app.${ROOT_DOMAIN}/dashboard/${slug}`
     : `https://${ROOT_DOMAIN}/${slug}`
   const rest = onDashboard ? parts.slice(3) : parts.slice(2)

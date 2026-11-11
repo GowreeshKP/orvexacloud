@@ -8,10 +8,21 @@ export function isLocalHost(hostname = typeof window !== 'undefined' ? window.lo
   return PRIVATE_HOST.test(hostname)
 }
 
+function isPreviewHost(hostname: string): boolean {
+  const host = hostname.toLowerCase()
+  return ['pages.dev', 'vercel.app', 'netlify.app', 'github.io'].some(
+    (d) => host === d || host.endsWith(`.${d}`),
+  )
+}
+
+function isDevStyleHost(hostname = typeof window !== 'undefined' ? window.location.hostname : ''): boolean {
+  return isLocalHost(hostname) || isPreviewHost(hostname)
+}
+
 export function tenantPortalPath(slug: string, layer: 'storefront' | 'dashboard' = 'storefront'): string {
   const clean = slug.trim().toLowerCase()
-  // Local / preview: keep /t/{slug} so one Vite host can run everything.
-  if (typeof window !== 'undefined' && isLocalHost(window.location.hostname)) {
+  // Local / Pages preview: keep /t/{slug} so one host can run storefront + dashboard.
+  if (typeof window !== 'undefined' && isDevStyleHost(window.location.hostname)) {
     return layer === 'dashboard' ? `/t/${clean}/dashboard` : `/t/${clean}`
   }
   return layer === 'dashboard' ? `/dashboard/${clean}` : `/${clean}`
@@ -23,7 +34,7 @@ export function storefrontUrl(slug: string, customDomain?: string): string {
     const host = customDomain.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
     return `https://${host}`
   }
-  if (typeof window !== 'undefined' && isLocalHost(window.location.hostname)) {
+  if (typeof window !== 'undefined' && isDevStyleHost(window.location.hostname)) {
     return `${window.location.origin}/t/${slug.trim().toLowerCase()}`
   }
   return `https://${MARKETING_HOST}/${slug.trim().toLowerCase()}`
@@ -31,14 +42,14 @@ export function storefrontUrl(slug: string, customDomain?: string): string {
 
 /** Tenant-isolated admin dashboard: https://app.orvexacloud.in/dashboard/{slug} */
 export function sellerPortalUrl(slug: string): string {
-  if (typeof window !== 'undefined' && isLocalHost(window.location.hostname)) {
+  if (typeof window !== 'undefined' && isDevStyleHost(window.location.hostname)) {
     return `${window.location.origin}/t/${slug.trim().toLowerCase()}/dashboard`
   }
   return `https://${APP_HOST}/dashboard/${slug.trim().toLowerCase()}`
 }
 
 export function platformAdminUrl(): string {
-  if (typeof window !== 'undefined' && isLocalHost(window.location.hostname)) {
+  if (typeof window !== 'undefined' && isDevStyleHost(window.location.hostname)) {
     return `${window.location.origin}/`
   }
   return `https://${APP_HOST}/`
@@ -52,7 +63,8 @@ export function pathPortalRedirectUrl(
   pathname = typeof window !== 'undefined' ? window.location.pathname : '',
   hostname = typeof window !== 'undefined' ? window.location.hostname : '',
 ): string | null {
-  if (!pathname || isLocalHost(hostname)) return null
+  // Keep /t/{slug} working on local + Pages previews (single-host demos).
+  if (!pathname || isLocalHost(hostname) || isPreviewHost(hostname)) return null
   const host = hostname.toLowerCase()
   const parts = pathname.toLowerCase().split('/').filter(Boolean)
 
@@ -65,19 +77,22 @@ export function pathPortalRedirectUrl(
     }
   }
 
-  // Legacy /t/{slug} on any host
+  // Legacy /t/{slug} …
+  // On the app host this almost always means “open seller dashboard” (admin deep links).
+  // Customer storefronts live on orvexacloud.in/{slug}.
   if (parts[0] === 't' && parts[1]) {
     const slug = parts[1]
     if (!/^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(slug)) return null
     const onDash = parts[2] === 'dashboard'
+    if (host === APP_HOST) return sellerPortalUrl(slug)
     return onDash ? sellerPortalUrl(slug) : storefrontUrl(slug)
   }
 
-  // Storefront accidentally opened on app host as /{slug} (not dashboard/admin/owner)
+  // Bare /{slug} on app host → seller dashboard (not a public storefront shell)
   if (host === APP_HOST && parts.length >= 1) {
     const reserved = new Set(['dashboard', 'admin', 'owner', 'api', 'assets', 'brand', 't'])
     if (!reserved.has(parts[0]) && /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/.test(parts[0])) {
-      return storefrontUrl(parts[0])
+      return sellerPortalUrl(parts[0])
     }
   }
 

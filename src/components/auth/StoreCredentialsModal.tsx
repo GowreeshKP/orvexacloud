@@ -8,6 +8,7 @@ import { authService, type StoreCredentialInfo } from '@/api/auth'
 import type { TenantConfig } from '@/types/tenant'
 import { storeAddress } from '@/data/plans'
 import { API_BASE } from '@/api/base'
+import { sellerPortalUrl, storefrontUrl } from '@/lib/store-urls'
 
 interface Props {
   tenant: TenantConfig | null
@@ -296,7 +297,8 @@ export default function StoreCredentialsModal({ tenant, isOpen, onClose, onSucce
 ================================================
 Store Name: ${tenant.brandName}
 Store portal: ${storeAddress(tenant.slug)}
-Storefront URL: ${window.location.origin}/t/${tenant.slug}
+Seller dashboard: ${sellerPortalUrl(tenant.slug)}
+Storefront URL: ${storefrontUrl(tenant.slug)}
 
 🔑 STORE OWNER LOGIN:
 Store Owner Login URL: ${ownerLoginUrl || '(not issued)'}
@@ -874,14 +876,25 @@ ${resetDetails ? `Direct Password Reset Link: ${resetDetails.url}\n` : ''}Owner 
                   </div>
 
                   <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">LIVE STOREFRONT</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">SELLER DASHBOARD</span>
                     <a
-                      href={`/t/${tenant.slug}`}
+                      href={sellerPortalUrl(tenant.slug)}
                       target="_blank"
                       rel="noreferrer"
                       className="text-blue-600 hover:underline font-semibold break-all"
                     >
-                      /t/{tenant.slug}
+                      {sellerPortalUrl(tenant.slug)}
+                    </a>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">LIVE STOREFRONT</span>
+                    <a
+                      href={storefrontUrl(tenant.slug)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-blue-600 hover:underline font-semibold break-all"
+                    >
+                      {storefrontUrl(tenant.slug)}
                     </a>
                   </div>
 

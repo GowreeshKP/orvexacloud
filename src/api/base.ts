@@ -1,8 +1,8 @@
 // Shared API origin helpers for Cloudflare Workers + local Vite.
 // Prefer VITE_API_URL (origin only). VITE_API_BASE_URL remains supported for older envs.
 //
-// On production browser hosts, call Render directly. Same-origin /api on app.orvexacloud.in
-// is proxied through Cloudflare and repeatedly returns edge 429s under dashboard traffic.
+// Default: same-origin `/api` (Pages Function / Worker → Render). Direct browser calls to
+// Render fail CORS on *.pages.dev; only flip to Render after a same-origin 429.
 
 const trimSlash = (value: string) => value.replace(/\/+$/, '')
 
@@ -10,28 +10,37 @@ const rawOrigin = typeof import.meta.env.VITE_API_URL === 'string' ? import.meta
 const rawBase =
   typeof import.meta.env.VITE_API_BASE_URL === 'string' ? import.meta.env.VITE_API_BASE_URL.trim() : ''
 
-/** Origin only, e.g. https://api.orvexacloud.in — empty means derive at runtime. */
-export const API_ORIGIN = trimSlash(rawOrigin)
-
 /** Stable Render API used when Cloudflare same-origin /api is rate-limited. */
 export const RENDER_API_BASE = 'https://orvexa-api-nskw.onrender.com/api'
+
+function isBrowserSafeApiOrigin(origin: string): boolean {
+  // Direct browser → Render is blocked by CORS on *.pages.dev / many preview hosts.
+  // Same-origin /api (Pages Function / Worker) is the supported path; Render stays fallback-only.
+  if (!origin) return false
+  try {
+    const host = new URL(origin).hostname.toLowerCase()
+    if (host.endsWith('.onrender.com')) return false
+  } catch {
+    return false
+  }
+  return true
+}
+
+/** Origin only, e.g. https://api.orvexacloud.in — empty means same-origin /api at runtime. */
+export const API_ORIGIN = isBrowserSafeApiOrigin(rawOrigin) ? trimSlash(rawOrigin) : ''
 
 const FORCE_KEY = 'orvexa_use_render_api'
 
 function preferRenderDirect(): boolean {
   try {
-    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(FORCE_KEY) === '1') return true
+    return typeof sessionStorage !== 'undefined' && sessionStorage.getItem(FORCE_KEY) === '1'
   } catch {
-    // storage disabled
+    return false
   }
-  if (typeof window === 'undefined') return false
-  const host = window.location.hostname
-  // Local Vite keeps same-origin /api (dev proxy). Production hosts go straight to Render.
-  return Boolean(host && host !== 'localhost' && host !== '127.0.0.1')
 }
 
 function runtimeApiBase(): string {
-  if (rawBase) return trimSlash(rawBase)
+  if (rawBase && isBrowserSafeApiOrigin(rawBase.replace(/\/api\/?$/, ''))) return trimSlash(rawBase)
   if (API_ORIGIN) return `${API_ORIGIN}/api`
   if (preferRenderDirect()) return RENDER_API_BASE
   return '/api'
@@ -68,5 +77,11 @@ export async function apiFetch(apiPath: string, init?: RequestInit): Promise<Res
   if (res.status !== 429) return res
   if (resolveApiBase() === RENDER_API_BASE) return res
   forceRenderApi(true)
-  return fetch(`${RENDER_API_BASE}${rel}`, init)
+  try {
+    return await fetch(`${RENDER_API_BASE}${rel}`, init)
+  } catch {
+    // Render may block CORS from preview hosts — keep the original 429 for UI retry.
+    forceRenderApi(false)
+    return res
+  }
 }

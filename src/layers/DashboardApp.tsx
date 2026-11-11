@@ -13,7 +13,7 @@ import { mockStore } from '@/api/mock-store'
 import { auditLogger } from '@/api/audit-logger'
 import { API_BASE } from '@/api/base'
 import { PLAN_CATALOG, formatPlanPrice, normalizePlanId, storeAddress } from '@/data/plans'
-import { sellerPortalUrl, tenantPortalPath } from '@/lib/store-urls'
+import { sellerPortalUrl, storefrontUrl, tenantPortalPath } from '@/lib/store-urls'
 import { fetchStoreAnalytics, fetchDomainConfig, saveCustomDomain } from '@/api/storefront-analytics'
 import { storeInbox, STORE_INBOX_EVENT, type NewsletterSubscriber, type StoreMessage } from '@/api/store-messages'
 import SellerLogin, { StoreDashboardGate } from '@/components/auth/SellerLogin'
@@ -2600,8 +2600,8 @@ function StoreSettings({ onToast }: { onToast: (msg: string) => void }) {
     const text = `================================================
 🏢 STORE OWNER ACCESS PASS — ${tenant.brandName.toUpperCase()}
 ================================================
-Merchant Dashboard: ${window.location.origin}/t/${tenant.slug}/dashboard
-Customer Storefront: ${window.location.origin}/t/${tenant.slug}
+Merchant Dashboard: ${sellerPortalUrl(tenant.slug)}
+Customer Storefront: ${storefrontUrl(tenant.slug)}
 
 🔑 CREDENTIALS:
 Login ID / Email: ${tenant.ownerEmail}

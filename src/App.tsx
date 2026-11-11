@@ -4938,7 +4938,9 @@ export default function App() {
   }
 
   if (!tenant) {
-    return <StoreNotFound slug={tenantError?.match(/"([^"]+)"/)?.[1]} />
+    const slug = tenantError?.match(/"([^"]+)"/)?.[1]
+    const temporary = Boolean(tenantError?.includes('temporarily unavailable'))
+    return <StoreNotFound slug={slug} temporary={temporary} />
   }
 
   if (layer === 'dashboard') {

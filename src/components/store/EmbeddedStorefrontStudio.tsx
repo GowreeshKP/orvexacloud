@@ -113,7 +113,7 @@ export default function EmbeddedStorefrontStudio({ onToast }: { onToast: (msg: s
   }
 
   return (
-    <div className="embedded-studio" style={{ margin: '-8px -12px 0', minHeight: 'calc(100vh - 72px)' }}>
+    <div className="embedded-studio" style={{ margin: '-8px -12px 0', minHeight: 'calc(100vh - 72px)', maxWidth: '100%', overflowX: 'clip' }}>
       <Studio
         session={session}
         initialTheme={initialTheme}

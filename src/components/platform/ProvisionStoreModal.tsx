@@ -170,7 +170,7 @@ export default function ProvisionStoreModal({ isOpen, onClose, onProvision, onSu
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-slate-400 pointer-events-none">
-                  orvexacloud.in/t/
+                  orvexacloud.in/
                 </span>
                 <input
                   type="text"

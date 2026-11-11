@@ -38,24 +38,34 @@ export function ScaledStorefront({ theme, catalog, page, handle, width, selected
   useLayoutEffect(() => {
     const measure = () => {
       if (!outer.current || !inner.current) return;
-      const available = outer.current.clientWidth || width;
+      // Measure the parent so the unscaled 1280px inner never expands the container.
+      const parent = outer.current.parentElement;
+      const available = Math.max(
+        1,
+        parent?.clientWidth || outer.current.clientWidth || width,
+      );
       const scale = Math.min(1, available / width);
       const raw = Math.max(inner.current.scrollHeight, inner.current.offsetHeight, 1);
-      setBox({ scale, height: raw * scale });
+      const scaledHeight = raw * scale;
+      setBox({
+        scale,
+        height: maxHeight ? Math.min(scaledHeight, maxHeight) : scaledHeight,
+      });
     };
     measure();
-    // Previews inside template cards can mount before width is known; remasure twice.
+    // Previews inside template cards can mount before width is known; remeasure twice.
     const raf = requestAnimationFrame(measure);
     const timer = window.setTimeout(measure, 120);
     const observer = new ResizeObserver(measure);
-    if (outer.current) observer.observe(outer.current);
+    if (outer.current.parentElement) observer.observe(outer.current.parentElement);
+    else observer.observe(outer.current);
     if (inner.current) observer.observe(inner.current);
     return () => {
       cancelAnimationFrame(raf);
       window.clearTimeout(timer);
       observer.disconnect();
     };
-  }, [width, theme, catalog, page, handle]);
+  }, [width, theme, catalog, page, handle, maxHeight]);
 
   useEffect(() => {
     if (!selected || !inner.current) return;
@@ -65,7 +75,7 @@ export function ScaledStorefront({ theme, catalog, page, handle, width, selected
   const head = storefrontHead(theme, catalog, page);
   const interactive = Boolean(onSelect || onNavigate);
   return (
-    <div ref={outer} className="scaled" style={{ height: maxHeight ? Math.min(box.height, maxHeight) : box.height }}>
+    <div ref={outer} className="scaled" style={{ height: box.height || undefined }}>
       <link rel="stylesheet" href={head.fontHref} />
       <div
         ref={inner}

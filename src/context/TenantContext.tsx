@@ -81,18 +81,28 @@ export function useSwitchLayer() {
   return useContext(TenantContext).switchLayer
 }
 
-async function fetchPublicTenant(slug: string): Promise<TenantConfig | null> {
-  if (!slug) return null
+type ResolveResult =
+  | { ok: true; tenant: TenantConfig }
+  | { ok: false; kind: 'missing' | 'transient'; status?: number }
+
+async function fetchPublicTenant(slug: string): Promise<ResolveResult> {
+  if (!slug) return { ok: false, kind: 'missing' }
   const looksLikeHost = slug.includes('.')
   const qs = looksLikeHost ? `host=${encodeURIComponent(slug)}` : `slug=${encodeURIComponent(slug)}`
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 4000)
+  const timer = setTimeout(() => ctrl.abort(), 8000)
   try {
     const res = await apiFetch(`/public/resolve?${qs}`, { signal: ctrl.signal })
-    if (!res.ok) return null
-    return (await res.json()) as TenantConfig
+    if (res.status === 404) return { ok: false, kind: 'missing', status: 404 }
+    if (res.status === 429 || res.status >= 500) {
+      return { ok: false, kind: 'transient', status: res.status }
+    }
+    if (!res.ok) return { ok: false, kind: 'transient', status: res.status }
+    const tenant = (await res.json()) as TenantConfig
+    if (!tenant?.slug) return { ok: false, kind: 'missing', status: res.status }
+    return { ok: true, tenant }
   } catch {
-    return null
+    return { ok: false, kind: 'transient' }
   } finally {
     clearTimeout(timer)
   }
@@ -125,9 +135,15 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
     setLoading(true)
     try {
-      const fromApi = await fetchPublicTenant(slug)
-      if (fromApi?.slug) {
-        setTenant(hydrateTenantProfile(deepCloneTenant(fromApi)))
+      let resolved = await fetchPublicTenant(slug)
+      // One short retry for cold starts / edge rate limits before treating as missing.
+      if (!resolved.ok && resolved.kind === 'transient') {
+        await new Promise((r) => setTimeout(r, 600))
+        resolved = await fetchPublicTenant(slug)
+      }
+
+      if (resolved.ok) {
+        setTenant(hydrateTenantProfile(deepCloneTenant(resolved.tenant)))
         setError(null)
         return
       }
@@ -143,7 +159,11 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       }
 
       setTenant(null)
-      setError(`Store "${slug}" not found.`)
+      if (resolved.kind === 'transient') {
+        setError(`Store "${slug}" temporarily unavailable.`)
+      } else {
+        setError(`Store "${slug}" not found.`)
+      }
     } catch (e) {
       setTenant(null)
       setError('Failed to load store configuration.')
