@@ -1,7 +1,6 @@
-﻿import { useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { buildTheme, NICHES, sampleCatalog, TEMPLATES, type Catalog, type TemplateDefinition } from '@orvexa/theme';
 import { Storefront, storefrontHead } from '@orvexa/storefront-ui';
-import { ScaledStorefront } from './Canvas';
 
 const PREVIEW_WIDTH = 1280;
 
@@ -18,14 +17,66 @@ function TemplateThumb({ theme, catalog }: { theme: ReturnType<typeof buildTheme
   );
 }
 
+function TemplateCardView({
+  template,
+  brandName,
+  nicheId,
+  catalog,
+  currentId,
+  actionLabel,
+  onChoose,
+  onPreview,
+  featured = false,
+}: {
+  template: TemplateDefinition;
+  brandName: string;
+  nicheId: string;
+  catalog: Catalog;
+  currentId?: string;
+  actionLabel: string;
+  onChoose: () => void;
+  onPreview?: () => void;
+  featured?: boolean;
+}) {
+  return (
+    <article className={`template-card${template.id === currentId ? ' is-current' : ''}${featured ? ' template-card--featured' : ''}`}>
+      <div className="template-card__preview">
+        <TemplateThumb
+          theme={buildTheme(template.id, { brandName, nicheId })}
+          catalog={catalog}
+        />
+        {onPreview && (
+          <button type="button" className="template-card__zoom" onClick={onPreview}>
+            <span className="sr-only">Preview the {template.name} template</span>
+          </button>
+        )}
+      </div>
+      <div className="template-card__body">
+        <h3>{template.name}{template.id === currentId && <small> (current)</small>}</h3>
+        <p>{template.description}</p>
+        <button type="button" className="btn btn--small btn--primary" onClick={onChoose}>{actionLabel}</button>
+      </div>
+    </article>
+  );
+}
+
 /** The template library: live previews of every template with the merchant's own store name. */
 export function TemplateGallery({ brandName, nicheId, catalog, currentId, actionLabel, onChoose }: {
   brandName: string; nicheId: string; catalog: Catalog; currentId?: string; actionLabel: string; onChoose: (template: TemplateDefinition) => void;
 }) {
   const [filter, setFilter] = useState(nicheId === 'general' ? 'all' : nicheId);
   const [previewing, setPreviewing] = useState<TemplateDefinition | null>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   const list = filter === 'all' ? TEMPLATES : TEMPLATES.filter((t) => t.niches.includes(filter));
   const shownCatalog = useMemo(() => (catalog.sample ? sampleCatalog(catalog.storeId, filter === 'all' ? nicheId : filter) : catalog), [catalog, filter, nicheId]);
+
+  useEffect(() => {
+    if (!previewing) return;
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPreviewing(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [previewing]);
 
   return (
     <div className="gallery">
@@ -37,35 +88,41 @@ export function TemplateGallery({ brandName, nicheId, catalog, currentId, action
       </div>
       <ul className="gallery__grid">
         {list.map((template) => (
-          <li key={template.id} className={`template-card${template.id === currentId ? ' is-current' : ''}`}>
-            <div className="template-card__preview">
-              <TemplateThumb
-                key={`${template.id}-${filter}`}
-                theme={buildTheme(template.id, { brandName, nicheId })}
-                catalog={shownCatalog}
-              />
-              <button type="button" className="template-card__zoom" onClick={() => setPreviewing(template)}><span className="sr-only">Preview the {template.name} template</span></button>
-            </div>
-            <div className="template-card__body">
-              <h3>{template.name}{template.id === currentId && <small> (current)</small>}</h3>
-              <p>{template.description}</p>
-              <button type="button" className="btn btn--small" onClick={() => onChoose(template)}>{actionLabel}</button>
-            </div>
+          <li key={template.id}>
+            <TemplateCardView
+              template={template}
+              brandName={brandName}
+              nicheId={nicheId}
+              catalog={shownCatalog}
+              currentId={currentId}
+              actionLabel={actionLabel}
+              onChoose={() => onChoose(template)}
+              onPreview={() => setPreviewing(template)}
+            />
           </li>
         ))}
       </ul>
       {previewing && (
-        <div className="modal" role="dialog" aria-modal="true" aria-label={`${previewing.name} preview`}>
-          <div className="modal__panel modal__panel--wide">
-            <header className="modal__head">
-              <div><h2>{previewing.name}</h2><p>{previewing.description}</p></div>
-              <div className="modal__actions">
-                <button type="button" className="btn btn--primary" onClick={() => { onChoose(previewing); setPreviewing(null); }}>{actionLabel}</button>
-                <button type="button" className="btn" onClick={() => setPreviewing(null)} autoFocus>Close</button>
-              </div>
-            </header>
-            <div className="modal__scroll">
-              <ScaledStorefront theme={buildTheme(previewing.id, { brandName, nicheId })} catalog={shownCatalog} page="home" width={PREVIEW_WIDTH} maxHeight={Math.round(window.innerHeight * 0.7)} />
+        <div
+          className="modal modal--center-card"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${previewing.name} template`}
+          onClick={(e) => { if (e.target === e.currentTarget) setPreviewing(null); }}
+        >
+          <div className="modal__panel modal__panel--card">
+            <TemplateCardView
+              template={previewing}
+              brandName={brandName}
+              nicheId={nicheId}
+              catalog={shownCatalog}
+              currentId={currentId}
+              actionLabel={actionLabel}
+              featured
+              onChoose={() => { onChoose(previewing); setPreviewing(null); }}
+            />
+            <div className="modal__actions modal__actions--center">
+              <button type="button" className="btn" ref={closeRef} onClick={() => setPreviewing(null)}>Close</button>
             </div>
           </div>
         </div>

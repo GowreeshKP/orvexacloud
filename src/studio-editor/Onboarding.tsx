@@ -136,9 +136,11 @@ export function Onboarding({ storeName, catalog, imported, onDone }: {
       )}
 
       {step === 'templates' && (
-        <section>
-          <h1>Choose a template</h1>
-          <p className="lede">Each one is a starting point. Change the words, photos, colours and blocks afterwards.</p>
+        <section className="onboarding__templates">
+          <div className="onboarding__templates-intro">
+            <h1>Choose a template</h1>
+            <p className="lede">Each one is a starting point. Change the words, photos, colours and blocks afterwards.</p>
+          </div>
           <TemplateGallery brandName={storeName} nicheId={brief.nicheId} catalog={catalog} actionLabel="Start with this"
             onChoose={(t) => onDone(buildTheme(t.id, { brandName: storeName, nicheId: brief.nicheId === 'general' ? t.niches[0] : brief.nicheId }))} />
         </section>
