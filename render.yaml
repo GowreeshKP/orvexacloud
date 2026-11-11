@@ -16,7 +16,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: TRUST_PROXY
-        value: "1"
+        value: "2"
       - key: PLATFORM_ROOT_DOMAIN
         value: orvexacloud.in
       - key: PUBLIC_APP_URL

@@ -20,14 +20,29 @@ export function createApp() {
   const app = express()
   app.disable('x-powered-by')
 
-  // Behind Render / Cloudflare / Vercel the client IP is in X-Forwarded-For; rate limits key on it.
-  // TRUST_PROXY = number of trusted hops. Default 1 on Render/Vercel (0 only for bare local Node).
-  // If the API sits behind Cloudflare Worker → Render, set TRUST_PROXY=2 on Render when
-  // login 429s still cluster every visitor onto one shared bucket.
+  // Cloudflare Pages/Worker → Render is two hops. Default 2 on Render so req.ip is the browser,
+  // not the shared Worker egress (that single bucket caused recurring login 429s for everyone).
   const trustProxy = Number(
-    process.env.TRUST_PROXY ?? (process.env.VERCEL || process.env.RENDER ? 1 : 0),
+    process.env.TRUST_PROXY ?? (process.env.RENDER ? 2 : process.env.VERCEL ? 1 : 0),
   )
   if (trustProxy > 0) app.set('trust proxy', trustProxy)
+
+  /** Prefer real browser IP from CF / XFF; never key all visitors on one Worker egress address. */
+  const clientIpKey = (req: Request): string => {
+    const cf = String(req.get('cf-connecting-ip') || '').trim()
+    if (cf) return cf
+    const xff = String(req.get('x-forwarded-for') || '')
+      .split(',')
+      .map((p) => p.trim())
+      .find(Boolean)
+    if (xff) return xff
+    return req.ip || req.socket.remoteAddress || 'unknown'
+  }
+  const rateKeyOpts = {
+    keyGenerator: (req: Request) => clientIpKey(req),
+    // Custom keyGenerator reads XFF itself; disable the built-in XFF validator warning.
+    validate: { xForwardedForHeader: false },
+  } as const
 
   app.use((_req: Request, res: Response, next: NextFunction) => {
     res.setHeader('X-Content-Type-Options', 'nosniff')
@@ -109,27 +124,30 @@ export function createApp() {
 
   // Global rate limit — storefront + admin + probes often share one office/NAT IP.
   const globalLimiter = rateLimit({
+    ...rateKeyOpts,
     windowMs: 15 * 60 * 1000,
-    max: Number(process.env.API_RATE_LIMIT_MAX || 4000),
+    max: Number(process.env.API_RATE_LIMIT_MAX || 8000),
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many requests. Please slow down and try again later.' },
-    // Audit ingest is best-effort client telemetry; do not burn the shared login budget.
+    // Audit ingest + health probes must not burn the shared budget.
     skip: (req) => {
       if (skip()) return true
       const path = req.originalUrl || req.path || ''
+      if (path.includes('/api/health')) return true
       return req.method === 'POST' && path.includes('/admin/audit-logs')
     },
   })
 
-  // Credential endpoints — keyed per real client IP (needs TRUST_PROXY ≥ 1 behind Render/CF).
+  // Credential endpoints — keyed per real client IP (see clientIpKey / TRUST_PROXY).
   // Successful logins do not burn the budget; only failures / probes count.
   const authLimiter = rateLimit({
+    ...rateKeyOpts,
     skip,
     windowMs: 15 * 60 * 1000,
     // Shared office/NAT IPs burn this fast during dashboard testing; floor high and allow env raise.
     max: process.env.NODE_ENV === 'production'
-      ? Math.max(300, Number(process.env.AUTH_RATE_LIMIT_MAX || 300) || 300)
+      ? Math.max(600, Number(process.env.AUTH_RATE_LIMIT_MAX || 600) || 600)
       : 500,
     skipSuccessfulRequests: true,
     standardHeaders: true,
@@ -140,15 +158,17 @@ export function createApp() {
 
   // Store bootstrap (resolve / slug-check) is read-heavy — admin + storefront share one office IP.
   const publicReadLimiter = rateLimit({
+    ...rateKeyOpts,
     skip,
     windowMs: 60 * 1000,
-    max: 300,
+    max: 600,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many requests. Please retry shortly.' },
   })
   // Signup connector writes only — do not stack this onto GET resolve/slug-available.
   const publicWriteLimiter = rateLimit({
+    ...rateKeyOpts,
     skip: (req) => skip() || req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
     windowMs: 60 * 1000,
     max: 60,
