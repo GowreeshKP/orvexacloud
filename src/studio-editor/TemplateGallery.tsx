@@ -25,7 +25,14 @@ export function TemplateGallery({ brandName, nicheId, catalog, currentId, action
           <li key={template.id} className={`template-card${template.id === currentId ? ' is-current' : ''}`}>
             <div className="template-card__preview">
               <div inert aria-hidden="true">
-                <ScaledStorefront theme={buildTheme(template.id, { brandName, nicheId })} catalog={shownCatalog} page="home" width={1280} maxHeight={260} />
+                <ScaledStorefront
+                  key={`${template.id}-${filter}`}
+                  theme={buildTheme(template.id, { brandName, nicheId })}
+                  catalog={shownCatalog}
+                  page="home"
+                  width={1280}
+                  maxHeight={260}
+                />
               </div>
               <button type="button" className="template-card__zoom" onClick={() => setPreviewing(template)}><span className="sr-only">Preview the {template.name} template</span></button>
             </div>

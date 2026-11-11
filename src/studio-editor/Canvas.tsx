@@ -38,15 +38,24 @@ export function ScaledStorefront({ theme, catalog, page, handle, width, selected
   useLayoutEffect(() => {
     const measure = () => {
       if (!outer.current || !inner.current) return;
-      const scale = Math.min(1, outer.current.clientWidth / width);
-      setBox({ scale, height: inner.current.offsetHeight * scale });
+      const available = outer.current.clientWidth || width;
+      const scale = Math.min(1, available / width);
+      const raw = Math.max(inner.current.scrollHeight, inner.current.offsetHeight, 1);
+      setBox({ scale, height: raw * scale });
     };
     measure();
+    // Previews inside template cards can mount before width is known; remasure twice.
+    const raf = requestAnimationFrame(measure);
+    const timer = window.setTimeout(measure, 120);
     const observer = new ResizeObserver(measure);
     if (outer.current) observer.observe(outer.current);
     if (inner.current) observer.observe(inner.current);
-    return () => observer.disconnect();
-  }, [width]);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [width, theme, catalog, page, handle]);
 
   useEffect(() => {
     if (!selected || !inner.current) return;

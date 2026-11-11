@@ -289,7 +289,9 @@ export function GrapesEditor({ theme, catalog, page, device, ctx, left, pageTabs
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ------------------------------------------------------------ follow theme and device changes
-  useEffect(() => { if (editorRef.current && !loading) applyCanvasTheme(editorRef.current, theme); }, [theme.tokens, theme.brand, loading]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (editorRef.current && !loading) applyCanvasTheme(editorRef.current, theme);
+  }, [theme.tokens, theme.brand, theme.templateId, theme.header, theme.footer, loading]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!editorRef.current || loading) return;
     setDevice(editorRef.current, device, stageRef.current);

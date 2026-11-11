@@ -51,7 +51,7 @@ export function Studio({ session, initialTheme, initialRevision, catalog: storeC
   const [epoch, setEpoch] = useState(0);
   const photoInput = useRef<HTMLInputElement>(null);
   const catalog = useSample || storeCatalog.sample ? sampleCatalog(session.storeId, state.theme?.nicheId ?? 'general') : storeCatalog;
-  const storeUrl = `https://orvexacloud.in/${session.storeId}`;
+  const storeUrl = `https://orvexacloud.in/${session.storeId}${published != null ? `?v=${published}` : ''}`;
 
   // Edits always build on the newest theme, even from a debounced field commit.
   const themeRef = useRef(state.theme);
@@ -278,7 +278,9 @@ export function Studio({ session, initialTheme, initialRevision, catalog: storeC
           const ok = apply(mode === 'style' ? { op: 'apply_template_style', templateId: template.id } : { op: 'apply_template', templateId: template.id });
           if (!ok) return;
           setDialog(null);
-          if (mode === 'replace') { dispatch({ type: 'page', page: 'home' }); setEpoch((n) => n + 1); }
+          // Always remount the visual editor so template colours/layout show immediately.
+          dispatch({ type: 'page', page: mode === 'replace' ? 'home' : state.page });
+          setEpoch((n) => n + 1);
           notify(mode === 'style' ? `Now using the ${template.name} style. Your pages are unchanged; the undo arrow reverses this.` : `Your homepage now uses the ${template.name} layout. The undo arrow brings your previous homepage back.`);
         }} />
       )}

@@ -45,38 +45,47 @@ export default function StudioLiveStorefront({
 
   useEffect(() => {
     let cancelled = false
-    void (async () => {
+    const load = async () => {
       try {
-        const published =
-          (tenant.theme as { studioPublished?: Theme } | undefined)?.studioPublished || null
-        if (!published && !tenant.storefrontStudioEnabled) {
-          onUnavailable?.()
-          setLoading(false)
-          return
-        }
+        // Always fetch ThemeConfig so Publish is visible without waiting for resolve cache.
         const [catalog, themeDoc] = await Promise.all([
           apiClient.getProducts(tenant.slug).catch(() => []),
-          published ? Promise.resolve(null) : apiClient.getTheme(tenant.slug).catch(() => null),
+          apiClient.getTheme(tenant.slug).catch(() => null),
         ])
         if (cancelled) return
-        const fromDoc = (themeDoc as { studioPublished?: Theme } | null)?.studioPublished || published
-        if (!fromDoc) {
-          onUnavailable?.()
+        const fromTenant =
+          (tenant.theme as { studioPublished?: Theme } | undefined)?.studioPublished || null
+        const fromDoc = (themeDoc as { studioPublished?: Theme } | null)?.studioPublished || null
+        const published = fromDoc || fromTenant
+        if (!published) {
+          if (tenant.storefrontStudioEnabled || tenant.storefrontThemeVersion) {
+            // Flag flipped but document missing — fall back to legacy storefront.
+            onUnavailable?.()
+          } else {
+            onUnavailable?.()
+          }
           setLoading(false)
           return
         }
-        setTheme(fromDoc)
+        setTheme(published)
         setProducts(Array.isArray(catalog) ? catalog : [])
       } catch {
         if (!cancelled) onUnavailable?.()
       } finally {
         if (!cancelled) setLoading(false)
       }
-    })()
+    }
+    void load()
+    const onFocus = () => {
+      setLoading(true)
+      void load()
+    }
+    window.addEventListener('focus', onFocus)
     return () => {
       cancelled = true
+      window.removeEventListener('focus', onFocus)
     }
-  }, [tenant.slug, tenant.storefrontStudioEnabled, tenant.theme, onUnavailable])
+  }, [tenant.slug, tenant.storefrontStudioEnabled, tenant.storefrontThemeVersion, tenant.theme, onUnavailable])
 
   useEffect(() => {
     if (!theme) return

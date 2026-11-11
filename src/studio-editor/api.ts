@@ -143,13 +143,10 @@ export function createStudioApi(slug: string) {
         studioPublishedAt: summary.createdAt,
         studioPublishedNote: summary.note,
       })
-      // Flip live flag on the tenant via theme mirror fields the API already accepts as Mixed.
-      await putTheme(slug, {
-        storefrontStudioEnabled: true,
-      }).catch(() => undefined)
-      // Best-effort: also hit a lightweight owner profile-style update if theme rejects unknown keys.
-      try {
-        await authService.storeAuthFetch(`${API_BASE}/stores/${encodeURIComponent(slug)}/studio-publish`, {
+      // Flip tenant.storefrontStudioEnabled so the public storefront router uses StudioLiveStorefront.
+      const publishRes = await authService.storeAuthFetch(
+        `${API_BASE}/stores/${encodeURIComponent(slug)}/studio-publish`,
+        {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -158,9 +155,15 @@ export function createStudioApi(slug: string) {
             note: summary.note,
             publishedAt: summary.createdAt,
           }),
-        })
-      } catch {
-        /* studio-publish route may not exist yet — Mixed theme fields still hold the document */
+        },
+      )
+      if (!publishRes.ok && publishRes.status !== 404) {
+        const body = (await publishRes.json().catch(() => ({}))) as { error?: string }
+        throw new ApiError(
+          typeof body.error === 'string' ? body.error : 'Theme saved, but live storefront flag failed. Try Publish again.',
+          publishRes.status,
+          body,
+        )
       }
       return { version: summary, notified: true }
     },

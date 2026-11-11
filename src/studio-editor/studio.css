@@ -262,9 +262,12 @@
 .embedded-studio .gallery{ display: grid; gap: 1.2rem; }
 .embedded-studio .chips--filters{ position: sticky; top: 0; z-index: 2; background: inherit; padding-block: 0.25rem; }
 .embedded-studio .gallery__grid{ list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1.25rem; }
-.embedded-studio .template-card{ border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--surface); overflow: hidden; content-visibility: auto; contain-intrinsic-size: 300px 400px; }
+.embedded-studio .template-card{ border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
 .embedded-studio .template-card.is-current{ border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
-.embedded-studio .template-card__preview{ position: relative; border-bottom: 1px solid var(--line-soft); }
+.embedded-studio .template-card__preview{ position: relative; border-bottom: 1px solid var(--line-soft); min-height: 220px; background: var(--paper); }
+.embedded-studio .template-card__preview .scaled{ min-height: 220px; width: 100%; }
+.embedded-studio .template-card__preview .oxs{ pointer-events: none; }
+.embedded-studio .modal__scroll .scaled{ min-height: 70vh; width: 100%; }
 .embedded-studio .template-card__zoom{ position: absolute; inset: 0; width: 100%; border: 0; background: transparent; cursor: zoom-in; }
 .embedded-studio .template-card__zoom:focus-visible{ outline: 3px solid var(--ink); outline-offset: -3px; }
 .embedded-studio .template-card__body{ padding: 0.9rem 1rem 1rem; display: grid; gap: 0.4rem; justify-items: start; }
