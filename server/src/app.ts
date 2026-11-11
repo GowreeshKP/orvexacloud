@@ -122,10 +122,10 @@ export function createApp() {
   const authLimiter = rateLimit({
     skip,
     windowMs: 15 * 60 * 1000,
-    // Floor at 120 so a stale Render AUTH_RATE_LIMIT_MAX=10 cannot lock out office/NAT testing.
+    // Shared office/NAT IPs burn this fast during dashboard testing; floor high and allow env raise.
     max: process.env.NODE_ENV === 'production'
-      ? Math.max(120, Number(process.env.AUTH_RATE_LIMIT_MAX || 120) || 120)
-      : 200,
+      ? Math.max(300, Number(process.env.AUTH_RATE_LIMIT_MAX || 300) || 300)
+      : 500,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many login attempts. Please wait 15 minutes before trying again.' },
