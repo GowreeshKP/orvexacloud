@@ -259,15 +259,11 @@
 .embedded-studio .serp__desc{ color: #4d5156; font-size: 0.86rem; }
 
 /* ---------- gallery & modal */
-.embedded-studio .gallery{ display: grid; gap: 1.2rem; width: 100%; max-width: 56rem; min-width: 0; margin-inline: auto; justify-items: stretch; }
-.embedded-studio .chips--filters{ position: sticky; top: 0; z-index: 2; background: inherit; padding-block: 0.25rem; max-width: 100%; justify-content: center; }
-.embedded-studio .gallery__grid{ list-style: none; margin: 0 auto; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1.25rem; width: 100%; max-width: 100%; justify-content: center; }
-.embedded-studio .gallery__grid > li{ min-width: 0; display: flex; justify-content: center; }
-.embedded-studio .gallery__grid .template-card{ width: 100%; max-width: 22rem; }
+.embedded-studio .gallery{ display: grid; gap: 1.2rem; width: 100%; max-width: 100%; min-width: 0; }
+.embedded-studio .chips--filters{ position: sticky; top: 0; z-index: 2; background: inherit; padding-block: 0.25rem; max-width: 100%; }
+.embedded-studio .gallery__grid{ list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 1.25rem; width: 100%; max-width: 100%; }
 .embedded-studio .template-card{ border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--surface); overflow: hidden; min-width: 0; display: grid; grid-template-rows: auto 1fr; }
 .embedded-studio .template-card.is-current{ border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
-.embedded-studio .template-card--featured{ width: min(100%, 28rem); max-width: 28rem; box-shadow: 0 24px 60px rgb(18 22 58 / 0.22); }
-.embedded-studio .template-card--featured .template-card__preview{ height: 280px; max-height: 280px; }
 .embedded-studio .template-card__preview{
   position: relative;
   border-bottom: 1px solid var(--line-soft);
@@ -303,32 +299,14 @@
 .embedded-studio .template-card__body p{ margin: 0; font-size: 0.88rem; color: var(--ink-3); overflow-wrap: anywhere; }
 .embedded-studio .template-card__body small{ font-weight: 500; color: var(--ink-3); }
 .embedded-studio .modal{ position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: clamp(0.75rem, 2vw, 1.25rem); background: rgb(18 22 58 / 0.45); overflow: auto; }
-.embedded-studio .modal--center-card{ align-content: center; justify-items: center; }
 .embedded-studio .modal__panel{ width: min(100%, 34rem); max-width: 100%; max-height: calc(100dvh - 2rem); display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--paper); border-radius: var(--radius); box-shadow: 0 30px 80px rgb(18 22 58 / 0.35); overflow: hidden; }
 .embedded-studio .modal__panel--wide{ width: min(100%, 78rem); }
-.embedded-studio .modal__panel--card{
-  width: min(100%, 30rem);
-  max-height: calc(100dvh - 2rem);
-  margin: auto;
-  padding: 1rem;
-  display: grid;
-  gap: 0.85rem;
-  justify-items: center;
-  align-content: center;
-  grid-template-rows: none;
-  background: transparent;
-  box-shadow: none;
-  overflow: visible;
-}
-.embedded-studio .modal__panel--card .template-card{ background: var(--surface); }
 .embedded-studio .modal__head{ display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding: 1rem 1.25rem; background: var(--surface); border-bottom: 1px solid var(--line-soft); min-width: 0; }
 .embedded-studio .modal__head > div:first-child{ min-width: 0; }
 .embedded-studio .modal__head p{ margin: 0.2rem 0 0; color: var(--ink-3); font-size: 0.9rem; }
 .embedded-studio .modal__scroll{ overflow: auto; padding: 1.25rem; min-width: 0; min-height: 0; }
 .embedded-studio .modal__scroll > p:first-child{ margin-top: 0; }
 .embedded-studio .modal__actions{ display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; flex: none; }
-.embedded-studio .modal__actions--center{ margin: 0; justify-content: center; width: 100%; }
-.embedded-studio .modal__actions--center .btn{ background: var(--surface); }
 .embedded-studio .modal__head .modal__actions{ margin: 0; }
 .embedded-studio .history{ list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: 0.5rem; }
 .embedded-studio .history li{ display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.75rem 0.9rem; background: var(--surface); border-radius: var(--radius-sm); border: 1px solid var(--line-soft); }
@@ -339,9 +317,6 @@
 .embedded-studio .onboarding{ min-height: 100dvh; padding: 1.25rem clamp(1rem, 3vw, 3.5rem) 4rem; width: 100%; max-width: min(84rem, 100%); margin: 0 auto; overflow-x: clip; box-sizing: border-box; isolation: isolate; }
 .embedded-studio .onboarding > section{ min-width: 0; max-width: 100%; overflow-x: clip; }
 .embedded-studio .onboarding h1{ position: relative; z-index: 1; }
-.embedded-studio .onboarding__templates{ display: grid; gap: 1.25rem; justify-items: center; width: 100%; }
-.embedded-studio .onboarding__templates-intro{ text-align: center; max-width: 40rem; }
-.embedded-studio .onboarding__templates .gallery{ width: 100%; }
 .embedded-studio .onboarding__head{ display: flex; justify-content: space-between; align-items: center; min-height: 44px; margin-bottom: clamp(1.5rem, 5vh, 3.5rem); }
 .embedded-studio .onboarding__store{ display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0 auto; font-weight: 600; color: var(--ink-3); }
 .embedded-studio .paths{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
@@ -433,10 +408,14 @@
 .embedded-studio .workspace--grapes{ grid-template-columns: 76px minmax(0, 1fr); }
 .embedded-studio .gx{ display: grid; grid-template-columns: 330px minmax(0, 1fr) auto; min-height: 0; }
 .embedded-studio .gx-left{ background: var(--surface); border-right: 1px solid var(--line-soft); overflow-y: auto; min-height: 0; }
-.embedded-studio .gx-stage{ display: flex; flex-direction: column; gap: 0.6rem; min-height: 0; padding: 1rem 1.25rem; }
-.embedded-studio .gx-frame{ position: relative; flex: 1; min-height: 0; min-width: 0; max-width: 100%; border-radius: 12px; overflow: hidden; background: var(--surface); box-shadow: 0 1px 2px rgb(18 22 58 / 0.08), 0 12px 40px rgb(18 22 58 / 0.08); }
-.embedded-studio .gx-frame--mobile{ align-self: center; width: min(410px, 100%); max-width: 100%; border: 10px solid var(--ink); border-radius: 34px; }
+.embedded-studio .gx-stage{ display: flex; flex-direction: column; gap: 0.6rem; min-height: 0; min-width: 0; padding: 1rem 1.25rem; overflow: hidden; }
+.embedded-studio .gx-frame{ position: relative; flex: 1; min-height: 0; min-width: 0; width: 100%; max-width: 100%; margin-inline: auto; border-radius: 12px; overflow: hidden; background: var(--paper); box-shadow: 0 1px 2px rgb(18 22 58 / 0.08), 0 12px 40px rgb(18 22 58 / 0.08); }
+.embedded-studio .gx-frame--mobile{ width: min(410px, 100%); max-width: 100%; border: 10px solid var(--ink); border-radius: 34px; background: var(--surface); }
 .embedded-studio .gx-canvas{ height: 100%; width: 100%; max-width: 100%; min-width: 0; }
+/* Keep the Grapes device frame centered in the stage (not stuck to the left edge). */
+.embedded-studio .gx .gjs-cv-canvas{ width: 100%; height: 100%; top: 0; left: 0; background: var(--paper); overflow: hidden !important; }
+.embedded-studio .gx .gjs-cv-canvas .gjs-frames{ display: flex !important; justify-content: center; width: 100%; }
+.embedded-studio .gx .gjs-frame-wrapper{ margin-inline: auto; }
 .embedded-studio .gx-loading{ position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: var(--ink-3); background: var(--surface); }
 .embedded-studio .gx-title{ margin: 1rem 0 0.35rem; }
 .embedded-studio .gx-style summary{ cursor: pointer; font-weight: 650; padding: 0.5rem 0; }
@@ -446,7 +425,6 @@
 .embedded-studio .photo-actions .field__help{ flex-basis: 100%; }
 /* GrapesJS restyled to the Orvexa brand */
 .embedded-studio .gx .gjs-editor{ font-family: var(--font-body), sans-serif; }
-.embedded-studio .gx .gjs-cv-canvas{ width: 100%; height: 100%; top: 0; background: var(--surface); }
 .embedded-studio .gx .gjs-one-bg{ background-color: var(--surface); }
 .embedded-studio .gx .gjs-two-color{ color: var(--ink); }
 .embedded-studio .gx .gjs-three-bg{ background-color: var(--ink); color: #fff; }

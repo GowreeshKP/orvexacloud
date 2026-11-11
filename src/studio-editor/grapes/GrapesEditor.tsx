@@ -383,24 +383,30 @@ function applyCanvasTheme(editor: Editor, theme: Theme) {
 }
 
 /**
- * Desktop renders at a true 1280px and is scaled to fit using GrapesJS's own
- * fitViewport (so dragging and selection stay accurate); the frame is made
- * tall enough to fill the canvas after scaling. Mobile is 390px at full size.
+ * Desktop renders at a true 1280px, scaled to fit, and centered in the stage.
+ * Mobile is 390px at full size, also centered. Avoid fitViewport alone — it
+ * parks the frame in the left corner and can clip outside the visible stage.
  */
 function setDevice(editor: Editor, device: 'desktop' | 'mobile', _stage: HTMLElement | null) {
   const canvasEl = editor.Canvas.getElement();
   const width = canvasEl?.clientWidth || DESKTOP_WIDTH;
   const height = canvasEl?.clientHeight || 800;
   const model = editor.Devices.get(device);
+  const gap = 16;
   if (device === 'desktop') {
-    const zoom = Math.min(1, (width - 24) / DESKTOP_WIDTH);
-    model?.set({ height: `${Math.floor((height - 24) / zoom)}px` });
+    const zoom = Math.min(1, (width - gap * 2) / DESKTOP_WIDTH);
+    model?.set({ width: `${DESKTOP_WIDTH}px`, height: `${Math.max(640, Math.floor((height - gap * 2) / zoom))}px` });
     editor.setDevice(device);
-    editor.Canvas.fitViewport({ ignoreHeight: true, gap: 12, zoom: zoom * 100 });
+    editor.Canvas.setZoom(zoom * 100);
+    const scaledW = DESKTOP_WIDTH * zoom;
+    const x = Math.max(gap, (width - scaledW) / 2);
+    editor.Canvas.setCoords(x, gap);
   } else {
-    model?.set({ height: `${height}px` });
+    const mobileW = 390;
+    model?.set({ width: `${mobileW}px`, height: `${Math.max(640, height - gap * 2)}px` });
     editor.setDevice(device);
     editor.Canvas.setZoom(100);
-    editor.Canvas.setCoords(0, 0);
+    const x = Math.max(gap, (width - mobileW) / 2);
+    editor.Canvas.setCoords(x, gap);
   }
 }
