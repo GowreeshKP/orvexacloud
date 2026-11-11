@@ -41,24 +41,20 @@ function versionsKey(slug: string) {
   return `oxs:versions:${slug}`
 }
 
-async function authHeaders(): Promise<HeadersInit> {
-  const token = await authService.getStoreAccessToken()
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  }
-}
-
 async function putTheme(slug: string, updates: Record<string, unknown>) {
-  const res = await fetch(`${API_BASE}/stores/${encodeURIComponent(slug)}/theme`, {
+  const res = await authService.storeAuthFetch(`${API_BASE}/stores/${encodeURIComponent(slug)}/theme`, {
     method: 'PUT',
-    headers: await authHeaders(),
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
   })
   const body = (await res.json().catch(() => ({}))) as Record<string, unknown>
   if (!res.ok) {
     throw new ApiError(
-      typeof body.error === 'string' ? body.error : 'Could not save storefront.',
+      res.status === 401
+        ? 'Your store session expired. Sign in again to save storefront changes.'
+        : typeof body.error === 'string'
+          ? body.error
+          : 'Could not save storefront.',
       res.status,
       body,
     )
@@ -153,13 +149,9 @@ export function createStudioApi(slug: string) {
       }).catch(() => undefined)
       // Best-effort: also hit a lightweight owner profile-style update if theme rejects unknown keys.
       try {
-        const token = await authService.getStoreAccessToken()
-        await fetch(`${API_BASE}/stores/${encodeURIComponent(slug)}/studio-publish`, {
+        await authService.storeAuthFetch(`${API_BASE}/stores/${encodeURIComponent(slug)}/studio-publish`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             theme: draft.theme,
             version,

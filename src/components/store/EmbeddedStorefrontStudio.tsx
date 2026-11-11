@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { fromOrvexaProducts, fromLegacyTheme, type Theme } from '@orvexa/theme'
 import { useTenant } from '@/context/TenantContext'
 import { apiClient } from '@/api/client'
+import { authService } from '@/api/auth'
 import { Studio } from '@/studio-editor/Studio'
 import { bindStudioApi } from '@/studio-editor/api'
 import '@/studio-editor/studio.css'
@@ -29,6 +30,14 @@ export default function EmbeddedStorefrontStudio({ onToast }: { onToast: (msg: s
     let cancelled = false
     void (async () => {
       try {
+        const token = await authService.getStoreAccessToken()
+        if (!token) {
+          if (!cancelled) {
+            setError('Sign in again to edit and save this storefront.')
+            onToast('Your store session expired. Sign in again.')
+          }
+          return
+        }
         const [products, themeDoc] = await Promise.all([
           apiClient.getProducts(slug).catch(() => []),
           apiClient.getTheme(slug).catch(() => null),

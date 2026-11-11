@@ -836,6 +836,45 @@ export const authService = {
     return this.getValidAdminToken()
   },
 
+  /**
+   * Authenticated store API fetch. On 401, rotates the refresh token once and retries —
+   * covers expired access JWTs and tokens invalidated after a JWT secret / password change
+   * (client-side exp checks cannot detect those).
+   */
+  async storeAuthFetch(input: string, init: RequestInit = {}): Promise<Response> {
+    const withAuth = (token: string | null): RequestInit => {
+      const headers = new Headers(init.headers || {})
+      if (token) headers.set('Authorization', `Bearer ${token}`)
+      if (
+        init.body != null &&
+        !(init.body instanceof FormData) &&
+        !headers.has('Content-Type')
+      ) {
+        headers.set('Content-Type', 'application/json')
+      }
+      return { ...init, headers }
+    }
+
+    let token = await this.getStoreAccessToken()
+    let res = await fetch(input, withAuth(token))
+    if (res.status !== 401) return res
+
+    token = await this.refreshAccessToken()
+    if (!token) {
+      try {
+        if (localStorage.getItem(SELLER_SESSION_KEY)) {
+          localStorage.removeItem(SELLER_SESSION_KEY)
+          localStorage.removeItem(SELLER_TOKEN_KEY)
+          window.dispatchEvent(new Event('orvexa:seller-auth-lost'))
+        }
+      } catch {
+        // storage disabled
+      }
+      return res
+    }
+    return fetch(input, withAuth(token))
+  },
+
   logoutSeller() {
     try {
       localStorage.removeItem(SELLER_SESSION_KEY)

@@ -158,10 +158,17 @@ export default function DashboardApp() {
     setSession(null)
   }
 
-  // Store APIs (products, analytics) need a JWT. Tokenless demo sessions only work offline.
+  // Store APIs (products, analytics, storefront studio) need a JWT. Tokenless demo sessions only work offline.
   useEffect(() => {
     if (!session) return
     let cancelled = false
+    const dropSession = () => {
+      if (cancelled) return
+      authService.logoutSeller()
+      setSession(null)
+    }
+    const onAuthLost = () => dropSession()
+    window.addEventListener('orvexa:seller-auth-lost', onAuthLost)
     void (async () => {
       const token = await authService.getStoreAccessToken()
       if (cancelled || token) return
@@ -169,8 +176,7 @@ export default function DashboardApp() {
         const health = await fetch(`${API_BASE}/health`)
         if (!cancelled && health.ok) {
           // Access + refresh are dead — force a clean re-login instead of 401 refresh loops.
-          authService.logoutSeller()
-          setSession(null)
+          dropSession()
         }
       } catch {
         // API offline — keep local demo session.
@@ -178,6 +184,7 @@ export default function DashboardApp() {
     })()
     return () => {
       cancelled = true
+      window.removeEventListener('orvexa:seller-auth-lost', onAuthLost)
     }
   }, [session])
 

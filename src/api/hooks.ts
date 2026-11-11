@@ -63,22 +63,33 @@ export function useTenantOrders(): {
 
   const refresh = useCallback(() => {
     if (!tenant) return
-    void authService.getStoreAccessToken().then((token) =>
-      fetch(`${API_BASE}/stores/${encodeURIComponent(tenant.slug)}/orders?limit=200`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (Array.isArray(data)) {
-            setOrders(data.map(normalizeTrackedOrder).filter(Boolean) as TrackedOrder[])
-          } else {
-            setOrders([...mockStore.getOrders(tenant.id)].map(normalizeTrackedOrder).filter(Boolean) as TrackedOrder[])
-          }
-        })
-        .catch(() => {
-          setOrders([...mockStore.getOrders(tenant.id)].map(normalizeTrackedOrder).filter(Boolean) as TrackedOrder[])
-        })
-    )
+    void (async () => {
+      const token = await authService.getStoreAccessToken()
+      // No JWT yet (login screen / dead session) — do not spam 401s every 20s.
+      if (!token) {
+        setOrders(
+          [...mockStore.getOrders(tenant.id)].map(normalizeTrackedOrder).filter(Boolean) as TrackedOrder[],
+        )
+        return
+      }
+      try {
+        const res = await authService.storeAuthFetch(
+          `${API_BASE}/stores/${encodeURIComponent(tenant.slug)}/orders?limit=200`,
+        )
+        const data = res.ok ? await res.json() : null
+        if (Array.isArray(data)) {
+          setOrders(data.map(normalizeTrackedOrder).filter(Boolean) as TrackedOrder[])
+        } else {
+          setOrders(
+            [...mockStore.getOrders(tenant.id)].map(normalizeTrackedOrder).filter(Boolean) as TrackedOrder[],
+          )
+        }
+      } catch {
+        setOrders(
+          [...mockStore.getOrders(tenant.id)].map(normalizeTrackedOrder).filter(Boolean) as TrackedOrder[],
+        )
+      }
+    })()
   }, [tenant])
 
   useEffect(() => {
@@ -103,16 +114,16 @@ export function useTenantOrders(): {
   const updateOrderStatus = useCallback((orderId: string, status: TrackedOrder['status'], courier?: string, awb?: string) => {
     if (!tenant) return
     mockStore.updateOrderStatus(tenant.id, orderId, status, courier, awb)
-    void authService.getStoreAccessToken().then((token) =>
-      fetch(`${API_BASE}/stores/${encodeURIComponent(tenant.slug)}/orders/${encodeURIComponent(orderId)}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    void authService
+      .storeAuthFetch(
+        `${API_BASE}/stores/${encodeURIComponent(tenant.slug)}/orders/${encodeURIComponent(orderId)}/status`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status, courier, awb }),
         },
-        body: JSON.stringify({ status, courier, awb }),
-      }).catch(() => undefined)
-    )
+      )
+      .catch(() => undefined)
     refresh()
   }, [tenant, refresh])
 

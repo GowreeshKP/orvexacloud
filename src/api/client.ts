@@ -30,12 +30,10 @@ function compactPayload<T extends Record<string, unknown>>(obj: T): Partial<T> {
 class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T | null> {
     try {
-      const token = await authService.getStoreAccessToken()
-      const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const res = await authService.storeAuthFetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(options.headers || {}),
         },
       })
