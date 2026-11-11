@@ -855,8 +855,29 @@ export const authService = {
       return { ...init, headers }
     }
 
+    // Cloudflare edge 429s — pause authenticated polls briefly instead of hammering.
+    try {
+      const until = Number(sessionStorage.getItem('orvexa_api_backoff_until') || 0)
+      if (until > Date.now()) {
+        return new Response(JSON.stringify({ error: 'Too many requests. Please wait a moment.' }), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+    } catch {
+      // storage disabled
+    }
+
     let token = await this.getStoreAccessToken()
     let res = await fetch(input, withAuth(token))
+    if (res.status === 429) {
+      try {
+        sessionStorage.setItem('orvexa_api_backoff_until', String(Date.now() + 60_000))
+      } catch {
+        // storage disabled
+      }
+      return res
+    }
     if (res.status !== 401) return res
 
     token = await this.refreshAccessToken()

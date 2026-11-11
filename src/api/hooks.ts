@@ -94,8 +94,8 @@ export function useTenantOrders(): {
 
   useEffect(() => {
     refresh()
-    // Keep seller Orders in sync with live storefront checkouts.
-    const timer = window.setInterval(refresh, 20000)
+    // Keep seller Orders in sync with live storefront checkouts (60s — avoid Cloudflare edge 429s).
+    const timer = window.setInterval(refresh, 60_000)
     const onFocus = () => refresh()
     window.addEventListener('focus', onFocus)
     return () => {

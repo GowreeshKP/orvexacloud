@@ -76,8 +76,11 @@ export default function StudioLiveStorefront({
       }
     }
     void load()
+    // Soft refresh on focus (no loading spinner) so Publish shows up without spamming the API.
+    let last = Date.now()
     const onFocus = () => {
-      setLoading(true)
+      if (Date.now() - last < 30_000) return
+      last = Date.now()
       void load()
     }
     window.addEventListener('focus', onFocus)
