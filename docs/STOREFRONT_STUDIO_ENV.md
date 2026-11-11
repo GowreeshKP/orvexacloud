@@ -15,10 +15,16 @@ build is stale — redeploy `app.orvexacloud.in` from this repo (`wrangler deplo
 
 ## Deploy the UI
 
+Git remotes for this product (only these two):
+
+- `origin` → `Multi-Tenant-Webapp-orvexacloud/D2C-Multi-tenant-webapp` (frontend)
+- `orvexacloud` → `GowreeshKP/orvexacloud` (Render API)
+
 ```bash
 npm run build
 npx wrangler deploy
 npx wrangler pages deploy dist --project-name=orvexatech-multi-store
 ```
 
-Git push alone does **not** update `app.orvexacloud.in` — the Pages project has no Git provider linked.
+`orvexatech-multi-store` above is only the **Cloudflare Pages project name**, not a GitHub repo.
+Git push alone does **not** update `app.orvexacloud.in` unless Pages is linked to the D2C repo.

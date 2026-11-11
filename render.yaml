@@ -1,6 +1,5 @@
-# Render Blueprint — Express API for Orvexa multi-store
-# Dashboard: connect GowreeshKP/orvexacloud (API). Frontend UI is D2C-Multi-tenant-webapp → Cloudflare.
-# Do not deploy from GowreeshKP/orvexatech-multi-store — that repo is an old divergent fork.
+# Render Blueprint — Express API for Orvexa
+# Git remotes: origin = D2C-Multi-tenant-webapp (frontend), orvexacloud = GowreeshKP/orvexacloud (this API).
 # Custom domain: api.orvexacloud.in (CNAME to the Render hostname in Cloudflare DNS)
 
 services:

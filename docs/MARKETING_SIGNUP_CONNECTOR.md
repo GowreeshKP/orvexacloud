@@ -10,7 +10,8 @@ This multi-store repo only **receives** signed applications and shows them under
 
 | Role | Repo | Local path |
 |------|------|------------|
-| Multi-tenant Super Admin + API | [orvexatech-multi-store](https://github.com/GowreeshKP/orvexatech-multi-store) (this repo) | `D:\lunar final` |
+| Frontend (Cloudflare Pages / app UI) | [D2C-Multi-tenant-webapp](https://github.com/Multi-Tenant-Webapp-orvexacloud/D2C-Multi-tenant-webapp) | `D:\lunar final` (`origin`) |
+| Backend API (Render) | [orvexacloud](https://github.com/GowreeshKP/orvexacloud) | same folder (`orvexacloud` remote) |
 | Platform marketing site | [marketing-site-orvexacloud-](https://github.com/Multi-Tenant-Webapp-orvexacloud/marketing-site-orvexacloud-) | `D:\lunar final\marketing-site-orvexatechcloud` |
 
 ## Flow

@@ -1,6 +1,6 @@
 {
   "zone": "orvexacloud.in",
-  "note": "Add these in the Cloudflare account that owns orvexacloud.in (not the Pages-only account). Or run: CLOUDFLARE_API_TOKEN=... RENDER_HOSTNAME=<svc>.onrender.com node scripts/setup-cloudflare-dns.mjs",
+  "note": "Frontend git = D2C-Multi-tenant-webapp; API git = GowreeshKP/orvexacloud. orvexatech-multi-store.pages.dev is only the Cloudflare Pages hostname. Or run: CLOUDFLARE_API_TOKEN=... RENDER_HOSTNAME=<svc>.onrender.com node scripts/setup-cloudflare-dns.mjs",
   "records": [
     {
       "type": "CNAME",

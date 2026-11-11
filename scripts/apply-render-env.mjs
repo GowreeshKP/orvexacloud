@@ -41,7 +41,7 @@ if (!serviceId) {
 }
 if (!serviceId) {
   console.error(
-    `Service "${wantName}" not found. Create it first: Render → New → Blueprint → select orvexatech-multi-store (render.yaml).`
+    `Service "${wantName}" not found. Create it first: Render → New → Blueprint → select GowreeshKP/orvexacloud (render.yaml).`
   )
   process.exit(1)
 }
