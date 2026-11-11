@@ -1,5 +1,4 @@
-﻿
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+﻿import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Storefront, storefrontHead } from '@orvexa/storefront-ui';
 import type { Catalog, PageId, Theme } from '@orvexa/theme';
 import type { Proposal } from './state';
@@ -25,7 +24,10 @@ export function resolveLink(href: string): NavTarget {
   return { notice: 'This page is not part of the storefront design.' };
 }
 
-/** Render a storefront at a real device width, scaled to fit the available space. */
+/**
+ * Render a storefront at a real device width, scaled to fit the available space.
+ * Outer width is locked from the parent so the 1280px inner never expands the layout.
+ */
 export function ScaledStorefront({ theme, catalog, page, handle, width, selected, onSelect, onPhoto, onNavigate, live, maxHeight }: {
   theme: Theme; catalog: Catalog; page: PageId; handle?: string | null; width: number; selected?: string | null;
   onSelect?: (id: string | null) => void; onPhoto?: (sectionId: string, path: string, hasPhoto: boolean) => void;
@@ -33,36 +35,39 @@ export function ScaledStorefront({ theme, catalog, page, handle, width, selected
 }) {
   const outer = useRef<HTMLDivElement>(null);
   const inner = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState({ scale: 1, height: 0 });
+  const [box, setBox] = useState({ scale: 0.01, height: maxHeight ?? 1, raw: 1 });
 
   useLayoutEffect(() => {
     const measure = () => {
       if (!outer.current || !inner.current) return;
-      // Measure the parent so the unscaled 1280px inner never expands the container.
       const parent = outer.current.parentElement;
       const available = Math.max(
         1,
-        parent?.clientWidth || outer.current.clientWidth || width,
+        parent?.getBoundingClientRect().width || outer.current.getBoundingClientRect().width || 1,
       );
+      // Lock outer to parent width so children cannot widen the page.
+      outer.current.style.width = `${available}px`;
       const scale = Math.min(1, available / width);
       const raw = Math.max(inner.current.scrollHeight, inner.current.offsetHeight, 1);
       const scaledHeight = raw * scale;
       setBox({
         scale,
+        raw,
         height: maxHeight ? Math.min(scaledHeight, maxHeight) : scaledHeight,
       });
     };
     measure();
-    // Previews inside template cards can mount before width is known; remeasure twice.
     const raf = requestAnimationFrame(measure);
-    const timer = window.setTimeout(measure, 120);
+    const timer = window.setTimeout(measure, 80);
+    const timer2 = window.setTimeout(measure, 320);
     const observer = new ResizeObserver(measure);
     if (outer.current.parentElement) observer.observe(outer.current.parentElement);
-    else observer.observe(outer.current);
+    observer.observe(outer.current);
     if (inner.current) observer.observe(inner.current);
     return () => {
       cancelAnimationFrame(raf);
       window.clearTimeout(timer);
+      window.clearTimeout(timer2);
       observer.disconnect();
     };
   }, [width, theme, catalog, page, handle, maxHeight]);
@@ -75,16 +80,27 @@ export function ScaledStorefront({ theme, catalog, page, handle, width, selected
   const head = storefrontHead(theme, catalog, page);
   const interactive = Boolean(onSelect || onNavigate);
   return (
-    <div ref={outer} className="scaled" style={{ height: box.height || undefined }}>
+    <div
+      ref={outer}
+      className="scaled"
+      style={{ height: box.height, maxHeight: maxHeight || undefined }}
+    >
       <link rel="stylesheet" href={head.fontHref} />
       <div
         ref={inner}
         className="scaled__inner"
-        style={{ width, transform: `scale(${box.scale})` }}
+        style={{
+          width,
+          height: box.raw,
+          transform: `scale(${box.scale})`,
+          // Collapse unused layout space after CSS transform (transform does not shrink layout box).
+          marginBottom: box.scale < 1 ? -((1 - box.scale) * box.raw) : 0,
+          marginRight: box.scale < 1 ? -((1 - box.scale) * width) : 0,
+        }}
         onClickCapture={(event) => {
           if (!interactive) return;
           const el = event.target as HTMLElement;
-          if (el.closest('summary')) return; // let menus and dropdowns open
+          if (el.closest('summary')) return;
           event.preventDefault();
           const photo = !live && el.closest<HTMLElement>('[data-photo]');
           if (photo && onPhoto) {

@@ -225,9 +225,8 @@
 .embedded-studio .canvas__note{ margin: 0; font-size: 0.85rem; color: var(--ink-3); }
 .embedded-studio .device{ width: 100%; max-width: 100%; min-width: 0; background: var(--surface); border-radius: 12px; box-shadow: 0 1px 2px rgb(18 22 58 / 0.08), 0 12px 40px rgb(18 22 58 / 0.08); overflow: hidden; }
 .embedded-studio .canvas--mobile .device{ width: min(390px, 100%); max-width: 100%; margin-inline: auto; border-radius: 34px; border: 10px solid var(--ink); }
-/* Inner is position:absolute so the unscaled 1280px storefront never widens the page. */
-.embedded-studio .scaled{ position: relative; overflow: hidden; width: 100%; max-width: 100%; min-width: 0; }
-.embedded-studio .scaled__inner{ position: absolute; top: 0; left: 0; transform-origin: top left; will-change: transform; }
+.embedded-studio .scaled{ position: relative; overflow: hidden; width: 100%; max-width: 100%; min-width: 0; contain: paint; isolation: isolate; }
+.embedded-studio .scaled__inner{ transform-origin: top left; display: block; max-width: none; }
 .embedded-studio .proposal-bar{ width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.9rem 1rem; border-radius: var(--radius); background: var(--ink); color: #fff; }
 .embedded-studio .proposal-bar ul{ margin: 0.35rem 0 0; padding-left: 1.1rem; font-size: 0.88rem; color: rgb(255 255 255 / 0.85); }
 .embedded-studio .proposal-bar__actions{ display: flex; gap: 0.5rem; flex: none; }
@@ -265,11 +264,34 @@
 .embedded-studio .gallery__grid{ list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 1.25rem; width: 100%; max-width: 100%; }
 .embedded-studio .template-card{ border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--surface); overflow: hidden; min-width: 0; display: grid; grid-template-rows: auto 1fr; }
 .embedded-studio .template-card.is-current{ border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
-.embedded-studio .template-card__preview{ position: relative; border-bottom: 1px solid var(--line-soft); height: 220px; max-height: 220px; background: var(--paper); overflow: hidden; min-width: 0; }
-.embedded-studio .template-card__scaled{ position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; }
-.embedded-studio .template-card__preview .scaled{ height: 100%; width: 100%; min-height: 0; }
+.embedded-studio .template-card__preview{
+  position: relative;
+  border-bottom: 1px solid var(--line-soft);
+  height: 220px;
+  max-height: 220px;
+  background: var(--paper);
+  overflow: hidden;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: template-preview;
+  isolation: isolate;
+  contain: paint;
+  clip-path: inset(0);
+}
+/* CSS-only scale: card width / 1280 — no JS race that can paint a full storefront on the page. */
+.embedded-studio .template-card__frame{
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.embedded-studio .template-card__stage{
+  transform-origin: top left;
+  transform: scale(calc(100cqw / 1280));
+  pointer-events: none;
+}
 .embedded-studio .template-card__preview .oxs{ pointer-events: none; }
-.embedded-studio .modal__scroll .scaled{ width: 100%; max-width: 100%; min-height: min(70vh, 640px); }
+.embedded-studio .modal__scroll .scaled{ width: 100%; max-width: 100%; }
 .embedded-studio .template-card__zoom{ position: absolute; inset: 0; width: 100%; border: 0; background: transparent; cursor: zoom-in; z-index: 1; }
 .embedded-studio .template-card__zoom:focus-visible{ outline: 3px solid var(--ink); outline-offset: -3px; }
 .embedded-studio .template-card__body{ padding: 0.9rem 1rem 1rem; display: grid; gap: 0.4rem; justify-items: start; min-width: 0; }
@@ -292,8 +314,9 @@
 .embedded-studio .history small{ color: var(--ink-3); }
 
 /* ---------- onboarding */
-.embedded-studio .onboarding{ min-height: 100dvh; padding: 1.25rem clamp(1rem, 3vw, 3.5rem) 4rem; width: 100%; max-width: min(84rem, 100%); margin: 0 auto; overflow-x: clip; box-sizing: border-box; }
-.embedded-studio .onboarding > section{ min-width: 0; max-width: 100%; }
+.embedded-studio .onboarding{ min-height: 100dvh; padding: 1.25rem clamp(1rem, 3vw, 3.5rem) 4rem; width: 100%; max-width: min(84rem, 100%); margin: 0 auto; overflow-x: clip; box-sizing: border-box; isolation: isolate; }
+.embedded-studio .onboarding > section{ min-width: 0; max-width: 100%; overflow-x: clip; }
+.embedded-studio .onboarding h1{ position: relative; z-index: 1; }
 .embedded-studio .onboarding__head{ display: flex; justify-content: space-between; align-items: center; min-height: 44px; margin-bottom: clamp(1.5rem, 5vh, 3.5rem); }
 .embedded-studio .onboarding__store{ display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0 auto; font-weight: 600; color: var(--ink-3); }
 .embedded-studio .paths{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }

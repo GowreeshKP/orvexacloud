@@ -1,7 +1,22 @@
-﻿
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import { buildTheme, NICHES, sampleCatalog, TEMPLATES, type Catalog, type TemplateDefinition } from '@orvexa/theme';
+import { Storefront, storefrontHead } from '@orvexa/storefront-ui';
 import { ScaledStorefront } from './Canvas';
+
+const PREVIEW_WIDTH = 1280;
+
+/** Card thumbnail: CSS container-query scale so live previews never escape the card. */
+function TemplateThumb({ theme, catalog }: { theme: ReturnType<typeof buildTheme>; catalog: Catalog }) {
+  const head = storefrontHead(theme, catalog, 'home');
+  return (
+    <div className="template-card__frame" inert aria-hidden="true">
+      <link rel="stylesheet" href={head.fontHref} />
+      <div className="template-card__stage" style={{ width: PREVIEW_WIDTH }}>
+        <Storefront theme={theme} catalog={catalog} page="home" mode="live" hideHiddenSections />
+      </div>
+    </div>
+  );
+}
 
 /** The template library: live previews of every template with the merchant's own store name. */
 export function TemplateGallery({ brandName, nicheId, catalog, currentId, actionLabel, onChoose }: {
@@ -24,16 +39,11 @@ export function TemplateGallery({ brandName, nicheId, catalog, currentId, action
         {list.map((template) => (
           <li key={template.id} className={`template-card${template.id === currentId ? ' is-current' : ''}`}>
             <div className="template-card__preview">
-              <div className="template-card__scaled" inert aria-hidden="true">
-                <ScaledStorefront
-                  key={`${template.id}-${filter}`}
-                  theme={buildTheme(template.id, { brandName, nicheId })}
-                  catalog={shownCatalog}
-                  page="home"
-                  width={1280}
-                  maxHeight={220}
-                />
-              </div>
+              <TemplateThumb
+                key={`${template.id}-${filter}`}
+                theme={buildTheme(template.id, { brandName, nicheId })}
+                catalog={shownCatalog}
+              />
               <button type="button" className="template-card__zoom" onClick={() => setPreviewing(template)}><span className="sr-only">Preview the {template.name} template</span></button>
             </div>
             <div className="template-card__body">
@@ -55,7 +65,7 @@ export function TemplateGallery({ brandName, nicheId, catalog, currentId, action
               </div>
             </header>
             <div className="modal__scroll">
-              <ScaledStorefront theme={buildTheme(previewing.id, { brandName, nicheId })} catalog={shownCatalog} page="home" width={1280} />
+              <ScaledStorefront theme={buildTheme(previewing.id, { brandName, nicheId })} catalog={shownCatalog} page="home" width={PREVIEW_WIDTH} maxHeight={Math.round(window.innerHeight * 0.7)} />
             </div>
           </div>
         </div>
