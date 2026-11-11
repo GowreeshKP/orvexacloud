@@ -1,8 +1,9 @@
 # Storefront Studio (embedded)
 
 Tenant admin **Storefront** embeds the editor from `orvexa-storefront-studio`
-directly in the dashboard. There is **no** separate `STUDIO_URL` / launch JWT for
-editing.
+directly in the dashboard. There is **no** `STUDIO_URL` / `STUDIO_LAUNCH_TOKEN_SECRET`
+setup for editing. If the UI still asks for those, the Cloudflare Worker/Pages
+build is stale — redeploy `app.orvexacloud.in` from this repo (`wrangler deploy`).
 
 ## How it works
 
@@ -12,14 +13,12 @@ editing.
 4. **Publish** calls `POST /api/stores/:slug/studio-publish` and sets `storefrontStudioEnabled`.
 5. Live storefront reads `theme.studioPublished` (no external studio host required).
 
-## Optional (legacy external studio)
+## Deploy the UI
 
-If you still host a separate Studio service, these remain documented for that path only:
+```bash
+npm run build
+npx wrangler deploy
+npx wrangler pages deploy dist --project-name=orvexatech-multi-store
+```
 
-| Variable | Where | Purpose |
-| --- | --- | --- |
-| `STUDIO_URL` | API / Vite | Public studio origin |
-| `STUDIO_LAUNCH_TOKEN_SECRET` | API | Shared with studio `LAUNCH_TOKEN_SECRET` |
-| `STUDIO_WEBHOOK_SECRET` | API | Shared with studio `PUBLISH_WEBHOOK_SECRET` |
-
-The embedded dashboard editor does **not** need those keys.
+Git push alone does **not** update `app.orvexacloud.in` — the Pages project has no Git provider linked.
