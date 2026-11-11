@@ -6,7 +6,16 @@ import type { TenantConfig } from '@/types/tenant'
 import { MOCK_TENANTS } from '@/data/mock-tenants'
 import { mockStore } from '@/api/mock-store'
 import { auditLogger } from '@/api/audit-logger'
-import { API_BASE } from '@/api/base'
+import { API_BASE as API_BASE_FALLBACK, resolveApiBase, RENDER_API_BASE, forceRenderApi } from '@/api/base'
+
+/** Live API root — flips to Render when Cloudflare same-origin /api returns 429. */
+const apiRoot = () => {
+  try {
+    return resolveApiBase()
+  } catch {
+    return API_BASE_FALLBACK
+  }
+}
 import { absoluteOwnerLoginUrl, demoOwnerLogin, lookupDemoOwnerLogin, updateDemoOwnerLogin } from '@/lib/owner-login'
 
 export interface SellerSession {
@@ -135,7 +144,7 @@ async function rotateAccessToken(): Promise<string | null> {
     if (!storedRefresh) return null
 
     try {
-      const res = await fetch(`${API_BASE}/auth/refresh`, {
+      const res = await fetch(`${apiRoot()}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken: storedRefresh }),
@@ -309,7 +318,7 @@ export const authService = {
     let backendData: any = null
 
     try {
-      let res = await fetch(`${API_BASE}/admin/tenants/${slug}/trigger-password-reset`, {
+      let res = await fetch(`${apiRoot()}/admin/tenants/${slug}/trigger-password-reset`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -321,7 +330,7 @@ export const authService = {
       if (res.status === 401) {
         token = await this.refreshAdminToken()
         if (token) {
-          res = await fetch(`${API_BASE}/admin/tenants/${slug}/trigger-password-reset`, {
+          res = await fetch(`${apiRoot()}/admin/tenants/${slug}/trigger-password-reset`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -403,7 +412,7 @@ export const authService = {
     const slug = tenantSlug.trim().toLowerCase()
 
     try {
-      const res = await fetch(`${API_BASE}/auth/seller/reset-password`, {
+      const res = await fetch(`${apiRoot()}/auth/seller/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tenantSlug: slug, resetToken, newPassword }),
@@ -470,7 +479,7 @@ export const authService = {
 
     // 1. Update remote backend API if reachable
     try {
-      let response = await fetch(`${API_BASE}/admin/tenants/${slug}/credentials`, {
+      let response = await fetch(`${apiRoot()}/admin/tenants/${slug}/credentials`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -482,7 +491,7 @@ export const authService = {
       if (response.status === 401) {
         token = await this.refreshAdminToken()
         if (token) {
-          response = await fetch(`${API_BASE}/admin/tenants/${slug}/credentials`, {
+          response = await fetch(`${apiRoot()}/admin/tenants/${slug}/credentials`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -590,7 +599,7 @@ export const authService = {
 
     // 1. Attempt backend update
     try {
-      const response = await fetch(`${API_BASE}/auth/seller/change-password`, {
+      const response = await fetch(`${apiRoot()}/auth/seller/change-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -667,7 +676,7 @@ export const authService = {
     const cleanPass = password.trim()
 
     try {
-      const response = await fetch(`${API_BASE}/auth/seller/login`, {
+      const response = await fetch(`${apiRoot()}/auth/seller/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -868,13 +877,30 @@ export const authService = {
       // storage disabled
     }
 
+    const toRender = (target: string) =>
+      target
+        .replace(/^\/api(?=\/|$)/, RENDER_API_BASE)
+        .replace(/https?:\/\/[^/]+\/api(?=\/|$)/, RENDER_API_BASE)
+
+    let url = typeof input === 'string' ? input : String(input)
+    // If a caller still built a same-origin /api URL, rewrite to the active base.
+    if (url.startsWith('/api/') || url.startsWith('/api?')) {
+      url = `${apiRoot()}${url.slice(4)}`
+    } else if (apiRoot() === RENDER_API_BASE && /https?:\/\/(?!orvexa-api-nskw\.onrender\.com)[^/]+\/api\//.test(url)) {
+      url = toRender(url)
+    }
+
     let token = await this.getStoreAccessToken()
-    let res = await fetch(input, withAuth(token))
+    let res = await fetch(url, withAuth(token))
     if (res.status === 429) {
       try {
         sessionStorage.setItem('orvexa_api_backoff_until', String(Date.now() + 60_000))
       } catch {
         // storage disabled
+      }
+      if (!url.includes('onrender.com')) {
+        forceRenderApi(true)
+        res = await fetch(toRender(url), withAuth(token))
       }
       return res
     }
@@ -893,7 +919,7 @@ export const authService = {
       }
       return res
     }
-    return fetch(input, withAuth(token))
+    return fetch(url, withAuth(token))
   },
 
   logoutSeller() {
@@ -918,7 +944,7 @@ export const authService = {
     const cleanPass = password.trim()
 
     try {
-      const response = await fetch(`${API_BASE}/auth/login`, {
+      const response = await fetch(`${apiRoot()}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ loginId: cleanId, password: cleanPass }),
@@ -977,7 +1003,7 @@ export const authService = {
     const cleanPass = password.trim()
 
     try {
-      const response = await fetch(`${API_BASE}/auth/admin/login`, {
+      const response = await fetch(`${apiRoot()}/auth/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ loginId: cleanId, password: cleanPass }),
@@ -1088,7 +1114,7 @@ export const authService = {
   async getOwnerLoginLink(slug: string): Promise<{ url: string | null; revoked: boolean; error?: string }> {
     try {
       const token = await this.getValidAdminToken()
-      const response = await fetch(`${API_BASE}/admin/tenants/${encodeURIComponent(slug)}/credentials`, {
+      const response = await fetch(`${apiRoot()}/admin/tenants/${encodeURIComponent(slug)}/credentials`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
       if (response.ok) {
@@ -1114,7 +1140,7 @@ export const authService = {
   ): Promise<{ success: boolean; url?: string | null; revoked?: boolean; error?: string }> {
     try {
       const token = await this.getValidAdminToken()
-      const response = await fetch(`${API_BASE}/admin/tenants/${encodeURIComponent(slug)}/owner-login`, {
+      const response = await fetch(`${apiRoot()}/admin/tenants/${encodeURIComponent(slug)}/owner-login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

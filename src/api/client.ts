@@ -5,7 +5,7 @@ import type { Product, Review, TrackedOrder } from '@/types'
 import type { TenantConfig, ThemeConfig, PlatformStats, TenantApplication } from '@/types/tenant'
 import { mockStore } from './mock-store'
 import { authService } from './auth'
-import { API_BASE as API_BASE_URL } from './base'
+import { resolveApiBase } from './base'
 
 /** Keep only absolute http(s)/data image URLs (or '' to clear). Drop relative paths that 400 the API. */
 function sanitizeImageUrl(v: unknown): string | undefined {
@@ -30,7 +30,7 @@ function compactPayload<T extends Record<string, unknown>>(obj: T): Partial<T> {
 class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T | null> {
     try {
-      const res = await authService.storeAuthFetch(`${API_BASE_URL}${endpoint}`, {
+      const res = await authService.storeAuthFetch(`${resolveApiBase()}${endpoint}`, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
@@ -167,13 +167,9 @@ class ApiClient {
 
     // Prefer /profile when the API has it. Older Render deploys 404 — fall back to theme.copy.
     try {
-      const token = await authService.getStoreAccessToken()
-      const res = await fetch(`${API_BASE_URL}/stores/${tenantSlug}/profile`, {
+      const res = await authService.storeAuthFetch(`${resolveApiBase()}/stores/${tenantSlug}/profile`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
       if (res.ok) {

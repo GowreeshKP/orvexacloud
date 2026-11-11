@@ -11,7 +11,7 @@ import type { Product, Review, TrackedOrder } from '@/types'
 import type { TenantConfig, TenantApplication, PlatformStats, DashboardStats, ThemeConfig } from '@/types/tenant'
 import { normalizePlanId } from '@/data/plans'
 import { normalizeTrackedOrder } from '@/lib/orders'
-import { API_BASE } from '@/api/base'
+import { resolveApiBase } from '@/api/base'
 
 // =================================================================
 // STOREFRONT HOOKS (scoped to current tenant)
@@ -74,7 +74,7 @@ export function useTenantOrders(): {
       }
       try {
         const res = await authService.storeAuthFetch(
-          `${API_BASE}/stores/${encodeURIComponent(tenant.slug)}/orders?limit=200`,
+          `${resolveApiBase()}/stores/${encodeURIComponent(tenant.slug)}/orders?limit=200`,
         )
         const data = res.ok ? await res.json() : null
         if (Array.isArray(data)) {
@@ -116,7 +116,7 @@ export function useTenantOrders(): {
     mockStore.updateOrderStatus(tenant.id, orderId, status, courier, awb)
     void authService
       .storeAuthFetch(
-        `${API_BASE}/stores/${encodeURIComponent(tenant.slug)}/orders/${encodeURIComponent(orderId)}/status`,
+        `${resolveApiBase()}/stores/${encodeURIComponent(tenant.slug)}/orders/${encodeURIComponent(orderId)}/status`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -402,7 +402,7 @@ export function useAdminTenants(): {
       const token = typeof window !== 'undefined' ? localStorage.getItem('lunar_admin_token') : null
 
       try {
-        await fetch(`${API_BASE}/admin/tenants`, {
+        await fetch(`${resolveApiBase()}/admin/tenants`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -441,8 +441,6 @@ export function useAdminTenants(): {
 
   return { tenants, syncing, syncError, suspend, reactivate, changePlan, provisionTenant, refresh: reload }
 }
-
-const ADMIN_API_BASE = API_BASE
 
 // Shape of an Application document returned by GET /api/admin/applications.
 interface BackendApplication {
@@ -504,7 +502,7 @@ async function adminApiFetch(path: string, init: RequestInit = {}): Promise<Resp
       headers: { 'Content-Type': 'application/json' },
     })
   }
-  return fetch(`${ADMIN_API_BASE}${path}`, {
+  return fetch(`${resolveApiBase()}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...init.headers },
   })

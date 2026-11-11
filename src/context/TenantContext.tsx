@@ -12,7 +12,7 @@ import {
 import { pathPortalRedirectUrl } from '@/lib/store-urls'
 import { mockStore } from '@/api/mock-store'
 import { DEMO_MODE } from '@/api/auth'
-import { API_BASE } from '@/api/base'
+import { apiFetch } from '@/api/base'
 
 function deepCloneTenant(config: TenantConfig): TenantConfig {
   return JSON.parse(JSON.stringify(config))
@@ -88,7 +88,7 @@ async function fetchPublicTenant(slug: string): Promise<TenantConfig | null> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 4000)
   try {
-    const res = await fetch(`${API_BASE}/public/resolve?${qs}`, { signal: ctrl.signal })
+    const res = await apiFetch(`/public/resolve?${qs}`, { signal: ctrl.signal })
     if (!res.ok) return null
     return (await res.json()) as TenantConfig
   } catch {

@@ -1,5 +1,5 @@
 import type { Check, GenerateBrief, RewriteStyle, Theme } from '@orvexa/theme'
-import { API_BASE } from '@/api/base'
+import { resolveApiBase } from '@/api/base'
 import { authService } from '@/api/auth'
 
 export class ApiError extends Error {
@@ -42,7 +42,7 @@ function versionsKey(slug: string) {
 }
 
 async function putTheme(slug: string, updates: Record<string, unknown>) {
-  const res = await authService.storeAuthFetch(`${API_BASE}/stores/${encodeURIComponent(slug)}/theme`, {
+  const res = await authService.storeAuthFetch(`${resolveApiBase()}/stores/${encodeURIComponent(slug)}/theme`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
@@ -145,7 +145,7 @@ export function createStudioApi(slug: string) {
       })
       // Flip tenant.storefrontStudioEnabled so the public storefront router uses StudioLiveStorefront.
       const publishRes = await authService.storeAuthFetch(
-        `${API_BASE}/stores/${encodeURIComponent(slug)}/studio-publish`,
+        `${resolveApiBase()}/stores/${encodeURIComponent(slug)}/studio-publish`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
