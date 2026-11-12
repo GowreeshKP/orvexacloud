@@ -272,9 +272,26 @@ export function GrapesEditor({ theme, catalog, page, device, ctx, left, pageTabs
         else if (type === 'link') c2.setTraits([{ type: 'text', name: 'href', label: 'Link' }, { type: 'checkbox', name: 'target', label: 'Open in a new tab', valueTrue: '_blank', valueFalse: '' }] as never);
         else if (type !== 'oxs-live') c2.setTraits([]);
         setSelected(c2);
+        requestAnimationFrame(() => {
+          try { editor?.refresh(); } catch { /* ignore */ }
+          if (editor) keepToolsInView(editor);
+        });
       });
       editor.on('component:deselected', () => setSelected(editor?.getSelected() ?? null));
       editor.on('component:update', () => refresh());
+      editor.on('rteToolbarPosUpdate', (pos: { left?: number; top?: number }) => {
+        const canvasEl = editor?.Canvas.getElement();
+        const rte = (editor as unknown as { RichTextEditor?: { getToolbarEl?: () => HTMLElement | null } }).RichTextEditor?.getToolbarEl?.();
+        if (!canvasEl || !rte || !pos) return;
+        const rect = canvasEl.getBoundingClientRect();
+        const tw = rte.scrollWidth || 200;
+        const th = rte.scrollHeight || 40;
+        if (typeof pos.left === 'number' && pos.left + tw > rect.width - 8) pos.left = Math.max(8, rect.width - tw - 8);
+        if (typeof pos.left === 'number' && pos.left < 8) pos.left = 8;
+        if (typeof pos.top === 'number' && pos.top < 8) pos.top = 8;
+        if (typeof pos.top === 'number' && pos.top + th > rect.height - 8) pos.top = Math.max(8, rect.height - th - 8);
+      });
+      editor.on('canvas:updateTools', () => { if (editor) keepToolsInView(editor); });
       // Photo actions requested from the settings panel.
       (editor as unknown as { oxsPhoto: typeof requestPhoto }).oxsPhoto = requestPhoto;
     })();
@@ -300,11 +317,15 @@ export function GrapesEditor({ theme, catalog, page, device, ctx, left, pageTabs
     return () => window.removeEventListener('resize', onResize);
   }, [device, loading]);
 
-  // When the settings panel opens/closes, the stage width changes — re-center the canvas.
+  // When the settings panel opens/closes, re-center the canvas and clamp selection tools.
   useEffect(() => {
     if (!editorRef.current || loading) return;
     const id = window.requestAnimationFrame(() => {
-      if (editorRef.current) setDevice(editorRef.current, device, stageRef.current);
+      const ed = editorRef.current;
+      if (!ed) return;
+      setDevice(ed, device, stageRef.current);
+      try { ed.refresh(); } catch { /* ignore */ }
+      keepToolsInView(ed);
     });
     return () => window.cancelAnimationFrame(id);
   }, [selected, device, loading]);
@@ -316,6 +337,7 @@ export function GrapesEditor({ theme, catalog, page, device, ctx, left, pageTabs
   const isText = Boolean(selected && !isLive && !isImage && (selected.is('text') || selected.is('link') || TEXT_TAGS.has(tag)));
   const text = isText ? ((selected!.getEl() as HTMLElement | undefined)?.innerText ?? '').trim() : '';
   const label = isLive ? String(selected!.get('name')) : isImage ? 'Photo' : isText ? 'Text' : selected ? String(selected.getName?.() ?? 'Block') : '';
+  const clearSelection = () => editor?.select(undefined as never);
 
   return (
     <div className="gx">
@@ -339,6 +361,9 @@ export function GrapesEditor({ theme, catalog, page, device, ctx, left, pageTabs
         </div>
       </main>
 
+      {selected && (
+        <button type="button" className="gx-inspector-scrim" aria-label="Close settings" onClick={clearSelection} />
+      )}
       <aside className="inspector gx-right" aria-label="Selected item settings" hidden={!selected}>
         {selected && (
           <header className="inspector__head">
@@ -346,7 +371,7 @@ export function GrapesEditor({ theme, catalog, page, device, ctx, left, pageTabs
               <h2>{label}</h2>
               <p>{isLive ? 'Shows live data from Orvexa Cloud. Change what it shows below.' : isImage ? 'Double-click the photo, or use the buttons below.' : isText ? 'Double-click the text on the page to type.' : 'Change its style below.'}</p>
             </div>
-            <button type="button" className="icon-button" aria-label="Close settings" onClick={() => editor?.select(undefined as never)}><X size={16} /></button>
+            <button type="button" className="icon-button" aria-label="Close settings" onClick={clearSelection}><X size={16} /></button>
           </header>
         )}
         {isText && (
@@ -417,5 +442,42 @@ function setDevice(editor: Editor, device: 'desktop' | 'mobile', _stage: HTMLEle
     editor.Canvas.setZoom(100);
     const x = Math.max(gap, (width - mobileW) / 2);
     editor.Canvas.setCoords(x, gap);
+  }
+  keepToolsInView(editor);
+}
+
+/** Keep Grapes selection/RTE toolbars inside the visible canvas so they never spill off-screen. */
+function keepToolsInView(editor: Editor) {
+  const canvas = editor.Canvas.getElement();
+  if (!canvas) return;
+  const bounds = canvas.getBoundingClientRect();
+  const pad = 10;
+  const clampEl = (el: HTMLElement | null | undefined) => {
+    if (!el || el.style.display === 'none') return;
+    const r = el.getBoundingClientRect();
+    if (!r.width && !r.height) return;
+    let dx = 0;
+    let dy = 0;
+    if (r.right > bounds.right - pad) dx = bounds.right - pad - r.right;
+    if (r.left + dx < bounds.left + pad) dx += bounds.left + pad - (r.left + dx);
+    if (r.top + dy < bounds.top + pad) dy = bounds.top + pad - r.top;
+    if (r.bottom + dy > bounds.bottom - pad) dy += bounds.bottom - pad - (r.bottom + dy);
+    if (!dx && !dy) return;
+    const left = (parseFloat(el.style.left) || 0) + dx;
+    const top = (parseFloat(el.style.top) || 0) + dy;
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(top)}px`;
+  };
+  const canvasApi = editor.Canvas as unknown as {
+    getToolbarEl?: () => HTMLElement | null;
+    getBadgeEl?: () => HTMLElement | null;
+  };
+  clampEl(canvasApi.getToolbarEl?.());
+  clampEl(canvasApi.getBadgeEl?.());
+  try {
+    const rte = (editor as unknown as { RichTextEditor?: { getToolbarEl?: () => HTMLElement | null } }).RichTextEditor;
+    clampEl(rte?.getToolbarEl?.());
+  } catch {
+    /* RTE may be inactive */
   }
 }

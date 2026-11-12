@@ -190,11 +190,11 @@ export function Studio({ session, initialTheme, initialRevision, catalog: storeC
           <button type="button" className="icon-button icon-button--dark" aria-label="Redo" title="Redo" disabled={!grapesReady && !state.future.length} onClick={() => history('redo')}><Redo2 size={16} /></button>
           <span className={`save-state save-state--${state.saveState}`} role="status">{SAVE_LABEL[state.saveState]}</span>
           {state.saveState === 'error' && <button type="button" className="btn btn--small btn--on-dark" onClick={() => void save()}>Retry</button>}
-          <button type="button" className="btn btn--small btn--on-dark" aria-pressed={state.mode === 'preview'} onClick={() => dispatch({ type: 'mode', mode: state.mode === 'preview' ? 'edit' : 'preview' })}>
-            {state.mode === 'preview' ? <><PencilLine size={14} aria-hidden="true" /> Back to editing</> : <><Eye size={14} aria-hidden="true" /> Preview</>}
+          <button type="button" className="btn btn--small btn--on-dark" aria-pressed={state.mode === 'preview'} title={state.mode === 'preview' ? 'Back to editing' : 'Preview'} onClick={() => dispatch({ type: 'mode', mode: state.mode === 'preview' ? 'edit' : 'preview' })}>
+            {state.mode === 'preview' ? <><PencilLine size={14} aria-hidden="true" /> <span className="topbar__label">Edit</span></> : <><Eye size={14} aria-hidden="true" /> <span className="topbar__label">Preview</span></>}
           </button>
-          <button type="button" className="btn btn--small btn--on-dark" onClick={() => setDialog('history')}><History size={14} aria-hidden="true" /> History</button>
-          {published !== null && <a className="btn btn--small btn--on-dark" href={storeUrl} target="_blank" rel="noopener noreferrer">Live store <ExternalLink size={13} aria-hidden="true" /></a>}
+          <button type="button" className="btn btn--small btn--on-dark" title="History" onClick={() => setDialog('history')}><History size={14} aria-hidden="true" /> <span className="topbar__label">History</span></button>
+          {published !== null && <a className="btn btn--small btn--on-dark" href={storeUrl} target="_blank" rel="noopener noreferrer" title="Open live store">Live <ExternalLink size={13} aria-hidden="true" /></a>}
           <button type="button" className="btn btn--publish" onClick={() => setDialog('publish')}>Publish</button>
         </div>
       </header>

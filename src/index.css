@@ -1607,21 +1607,60 @@ img {
   to { opacity: 1; transform: translateY(0); }
 }
 
+.shell {
+  min-height: 100dvh;
+}
+
+.shell:has(.main--studio) {
+  height: 100dvh;
+  overflow: hidden;
+}
+
 .shell .page {
   perspective: 900px;
+}
+
+.shell .main.main--studio {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
 }
 
 .shell .page.page--flush {
   padding: 0;
   max-width: none;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.shell .page.page--flush .embedded-studio {
-  min-height: calc(100vh - var(--topbar-h, 66px));
+.shell .page.page--flush .portal-view {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  /* Skip the page-flip transform here — it causes overflow/clipping in the editor. */
+  animation: none;
+  transform: none;
 }
 
-.shell .page.page--flush .studio {
-  min-height: calc(100vh - var(--topbar-h, 66px));
+.shell .page.page--flush .embedded-studio,
+.shell .page.page--flush .embedded-studio .studio {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .portal-view {

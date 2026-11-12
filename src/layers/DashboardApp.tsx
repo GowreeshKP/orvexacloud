@@ -338,8 +338,8 @@ export default function DashboardApp() {
         </div>
       </aside>
 
-      {/* Main column */}
-      <div className="min-w-0 flex flex-col min-h-screen">
+      {/* Main column — lock height on Storefront so the studio fills the pane without page scroll/clipping */}
+      <div className={`min-w-0 flex flex-col ${activeView === 'storefront' ? 'h-dvh overflow-hidden' : 'min-h-screen'}`}>
         <header className="topbar">
           <button type="button" className="menu-btn btn btn-outline btn-icon" onClick={() => setNavOpen(true)} aria-label="Open menu">
             <Menu size={18} strokeWidth={2} />
@@ -353,11 +353,14 @@ export default function DashboardApp() {
             </strong>
           </div>
 
-          {/* Search */}
-          <div className="search grow" style={{ maxWidth: 340 }}>
-            <Search size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', pointerEvents: 'none' }} />
-            <input className="input" placeholder="Search…" style={{ height: 40, background: '#fff', paddingLeft: 40 }} />
-          </div>
+          {/* Search — hide on storefront to free horizontal space for the editor */}
+          {activeView !== 'storefront' && (
+            <div className="search grow" style={{ maxWidth: 340 }}>
+              <Search size={15} style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', pointerEvents: 'none' }} />
+              <input className="input" placeholder="Search…" style={{ height: 40, background: '#fff', paddingLeft: 40 }} />
+            </div>
+          )}
+          {activeView === 'storefront' && <div className="grow" />}
 
           <div className="right row" style={{ gap: 8 }}>
             <a
@@ -379,7 +382,7 @@ export default function DashboardApp() {
           </div>
         </header>
 
-        <main className="main">
+        <main className={activeView === 'storefront' ? 'main main--studio' : 'main'}>
           <div className={activeView === 'storefront' ? 'page page--flush' : 'page'}>
             <PortalView viewKey={activeView}>
               {activeView === 'overview'   && <DashboardOverview onNavigate={(view) => setActiveView(view)} />}
