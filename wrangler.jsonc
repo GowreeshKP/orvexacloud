@@ -2,6 +2,9 @@
   "name": "d2c-multi-tenant-webapp",
   "compatibility_date": "2026-10-01",
   "main": "worker/index.js",
+  // Keep workers.dev for preview while app.orvexacloud.in DNS/zone lives on another CF account.
+  "workers_dev": true,
+  "preview_urls": true,
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
@@ -9,10 +12,11 @@
     // Worker first for API proxy + legacy /t/{slug} redirects to production portals.
     "run_worker_first": ["/t", "/t/*", "/api", "/api/*"]
   },
-  // Platform control plane only. Marketing + /{slug} storefronts stay on orvexacloud.in.
-  "routes": [
-    { "pattern": "app.orvexacloud.in/*", "zone_name": "orvexacloud.in" }
-  ],
+  // Route attach needs the CF account that owns zone orvexacloud.in.
+  // Until then, ship via Pages (orvexatech-multi-store) + workers.dev.
+  // "routes": [
+  //   { "pattern": "app.orvexacloud.in/*", "zone_name": "orvexacloud.in" }
+  // ],
   "vars": {
     "RENDER_API_ORIGIN": "https://orvexa-api-nskw.onrender.com"
   }
