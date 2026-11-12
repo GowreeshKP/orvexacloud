@@ -169,13 +169,13 @@
 }
 .embedded-studio .studio{ height: 100%; max-height: 100%; max-width: 100%; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr); overflow: hidden; }
 .embedded-studio:not(.embedded-studio--dashboard) .studio{ height: 100dvh; max-height: none; }
-.embedded-studio .topbar{ display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 0.75rem 1rem; padding: 0.55rem 0.85rem; background: var(--ink); color: #fff; min-width: 0; }
-.embedded-studio .topbar__brand{ display: flex; align-items: center; gap: 0.65rem; min-width: 0; }
-.embedded-studio .topbar__brand div{ display: grid; line-height: 1.2; min-width: 0; }
+.embedded-studio .topbar{ display: grid; grid-template-columns: minmax(0, 1.1fr) auto minmax(0, 1.2fr); align-items: center; gap: 0.5rem 0.75rem; padding: 0.5rem 0.75rem; background: var(--ink); color: #fff; min-width: 0; overflow: hidden; }
+.embedded-studio .topbar__brand{ display: flex; align-items: center; gap: 0.55rem; min-width: 0; overflow: hidden; }
+.embedded-studio .topbar__brand div{ display: grid; line-height: 1.2; min-width: 0; overflow: hidden; }
 .embedded-studio .topbar__brand strong{ font-family: var(--font-display), sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.embedded-studio .topbar__brand span:not(.mark){ font-size: 0.8rem; color: rgb(255 255 255 / 0.65); }
-.embedded-studio .topbar__center{ justify-self: center; min-width: 0; }
-.embedded-studio .topbar__actions{ display: flex; align-items: center; justify-content: end; flex-wrap: wrap; gap: 0.35rem; min-width: 0; }
+.embedded-studio .topbar__brand span:not(.mark){ font-size: 0.8rem; color: rgb(255 255 255 / 0.65); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.embedded-studio .topbar__center{ justify-self: center; min-width: 0; flex: none; }
+.embedded-studio .topbar__actions{ display: flex; align-items: center; justify-content: end; flex-wrap: nowrap; gap: 0.3rem; min-width: 0; overflow: hidden; }
 .embedded-studio .topbar__actions form{ display: contents; }
 .embedded-studio .save-state{ font-size: 0.83rem; color: rgb(255 255 255 / 0.72); padding-inline: 0.4rem; white-space: nowrap; }
 .embedded-studio .save-state--error, .embedded-studio .save-state--conflict{ color: #ffb3b8; font-weight: 600; }
@@ -467,22 +467,28 @@
 .embedded-studio .gx-frame--mobile{ width: min(410px, 100%); max-width: 100%; border: 10px solid var(--ink); border-radius: 34px; background: var(--surface); }
 .embedded-studio .gx-canvas{ height: 100%; width: 100%; max-width: 100%; min-width: 0; position: relative; }
 .embedded-studio .gx .gjs-editor, .embedded-studio .gx .gjs-cv-canvas{ width: 100% !important; height: 100% !important; }
-/* Keep the Grapes device frame centered in the middle of the stage. */
+/* Keep the Grapes device frame centered via setCoords/zoom — do NOT max-width the
+   wrapper to 100% or flex-center it; that double-scales Desktop (1280) into a thin strip. */
 .embedded-studio .gx .gjs-cv-canvas{ top: 0; left: 0; background: transparent; overflow: hidden !important; }
 .embedded-studio .gx .gjs-cv-canvas .gjs-frames{
-  display: flex !important;
-  justify-content: center !important;
-  align-items: flex-start;
+  display: block !important;
   width: 100%;
   height: 100%;
 }
 .embedded-studio .gx .gjs-frame-wrapper{
-  margin-inline: auto !important;
-  max-width: 100%;
+  /* Never set width here — Grapes inline width (1280/390) must win. max-width:100% was double-scaling Desktop. */
+  max-width: none !important;
+  margin: 0 !important;
+  right: auto !important;
   box-shadow: 0 10px 36px rgb(18 22 58 / 0.12);
   background: var(--surface);
 }
 .embedded-studio .gx .gjs-frame{ border: 0 !important; }
+/* Hide Grapes device chrome — we already have Desktop/Mobile in the studio topbar. */
+.embedded-studio .gx .gjs-frame-wrapper__top,
+.embedded-studio .gx .gjs-frame-wrapper__bottom,
+.embedded-studio .gx .gjs-frame-wrapper__left,
+.embedded-studio .gx .gjs-frame-wrapper__right{ display: none !important; }
 .embedded-studio .gx .gjs-tools{ z-index: 5; max-width: 100%; }
 .embedded-studio .gx .gjs-toolbar{
   display: inline-flex !important;

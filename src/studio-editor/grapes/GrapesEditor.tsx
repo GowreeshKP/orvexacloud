@@ -439,26 +439,33 @@ function applyCanvasTheme(editor: Editor, theme: Theme) {
  */
 function setDevice(editor: Editor, device: 'desktop' | 'mobile', stage: HTMLElement | null) {
   const canvasEl = editor.Canvas.getElement();
-  // Prefer the visible stage width so the page stays centered after the inspector opens.
-  const width = Math.max(stage?.clientWidth || 0, canvasEl?.clientWidth || 0, 320);
-  const height = Math.max(stage?.clientHeight ? stage.clientHeight - 48 : 0, canvasEl?.clientHeight || 0, 480);
+  // Measure the Grapes canvas itself — stage padding must not inflate the zoom math.
+  const width = Math.max(canvasEl?.clientWidth || 0, 280);
+  const height = Math.max(canvasEl?.clientHeight || 0, 360);
   const model = editor.Devices.get(device);
-  const gap = 16;
-  if (device === 'desktop') {
-    const zoom = Math.min(1, (width - gap * 2) / DESKTOP_WIDTH);
-    model?.set({ width: `${DESKTOP_WIDTH}px`, height: `${Math.max(640, Math.floor((height - gap * 2) / zoom))}px` });
-    editor.setDevice(device);
-    editor.Canvas.setZoom(zoom * 100);
-    const scaledW = DESKTOP_WIDTH * zoom;
-    const x = Math.max(gap, (width - scaledW) / 2);
-    editor.Canvas.setCoords(x, gap);
-  } else {
-    const mobileW = 390;
-    model?.set({ width: `${mobileW}px`, height: `${Math.max(640, height - gap * 2)}px` });
-    editor.setDevice(device);
-    editor.Canvas.setZoom(100);
-    const x = Math.max(gap, (width - mobileW) / 2);
-    editor.Canvas.setCoords(x, gap);
+  const gap = 12;
+  const deviceW = device === 'desktop' ? DESKTOP_WIDTH : 390;
+  const zoom = Math.min(1, Math.max(device === 'desktop' ? 0.2 : 0.5, (width - gap * 2) / deviceW));
+  model?.set({
+    width: `${deviceW}px`,
+    height: `${Math.max(device === 'desktop' ? 720 : 640, Math.floor((height - gap * 2) / zoom))}px`,
+  });
+  editor.setDevice(device);
+  editor.Canvas.setZoom(zoom * 100);
+  const scaledW = deviceW * zoom;
+  const x = Math.max(gap, (width - scaledW) / 2);
+  editor.Canvas.setCoords(x, gap);
+  // Grapes can emit `scale() translate()` which parks the page on the right.
+  // Force translate-then-scale so Desktop/Mobile stay centered in the stage.
+  const frames = canvasEl?.querySelector('.gjs-cv-canvas__frames') as HTMLElement | null;
+  if (frames) {
+    frames.style.transformOrigin = '0 0';
+    frames.style.transform = `translate(${Math.round(x)}px, ${gap}px) scale(${zoom})`;
+  }
+  const wrapper = canvasEl?.querySelector('.gjs-frame-wrapper') as HTMLElement | null;
+  if (wrapper) {
+    wrapper.style.left = '0px';
+    wrapper.style.top = '0px';
   }
   keepToolsInView(editor);
 }
