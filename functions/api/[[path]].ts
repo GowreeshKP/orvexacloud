@@ -4,7 +4,6 @@
  *
  * Set Pages env (Production):
  *   RENDER_API_ORIGIN=https://orvexa-api-nskw.onrender.com
- * Later, after custom domain DNS: https://api.orvexacloud.in (same host as Render)
  */
 
 type PagesContext = {
@@ -14,6 +13,14 @@ type PagesContext = {
 }
 
 const DEFAULT_ORIGIN = 'https://orvexa-api-nskw.onrender.com'
+
+function withCors(response: Response, allowOrigin: string): Response {
+  const out = new Headers(response.headers)
+  out.set('access-control-allow-origin', allowOrigin)
+  out.set('access-control-allow-credentials', 'true')
+  out.set('vary', 'Origin')
+  return new Response(response.body, { status: response.status, headers: out })
+}
 
 export const onRequest = async (context: PagesContext): Promise<Response> => {
   const origin = (context.env.RENDER_API_ORIGIN || DEFAULT_ORIGIN).replace(/\/+$/, '')
@@ -29,17 +36,6 @@ export const onRequest = async (context: PagesContext): Promise<Response> => {
   headers.set('x-forwarded-host', incoming.host)
   headers.set('x-forwarded-proto', incoming.protocol.replace(':', ''))
   headers.set('x-forwarded-for', context.request.headers.get('cf-connecting-ip') || '')
-
-  const init: RequestInit = {
-    method: context.request.method,
-    headers,
-    redirect: 'manual',
-  }
-  if (context.request.method !== 'GET' && context.request.method !== 'HEAD') {
-    init.body = context.request.body
-    // @ts-expect-error duplex required for streaming bodies in some runtimes
-    init.duplex = 'half'
-  }
 
   const reqOrigin = context.request.headers.get('Origin') || ''
   let allowOrigin = incoming.origin
@@ -72,10 +68,39 @@ export const onRequest = async (context: PagesContext): Promise<Response> => {
     })
   }
 
+  // Edge cache store bootstrap — stops admin/dashboard refresh storms from 429ing Render.
+  const isResolveGet =
+    context.request.method === 'GET' && (suffix === 'public/resolve' || suffix.startsWith('public/resolve?'))
+  if (isResolveGet) {
+    const cacheKey = new Request(target, { method: 'GET' })
+    const cached = await caches.default.match(cacheKey)
+    if (cached) return withCors(cached, allowOrigin)
+  }
+
+  const init: RequestInit = {
+    method: context.request.method,
+    headers,
+    redirect: 'manual',
+  }
+  if (context.request.method !== 'GET' && context.request.method !== 'HEAD') {
+    init.body = context.request.body
+    // @ts-expect-error duplex required for streaming bodies in some runtimes
+    init.duplex = 'half'
+  }
+
   const upstream = await fetch(target, init)
   const out = new Headers(upstream.headers)
   out.set('access-control-allow-origin', allowOrigin)
   out.set('access-control-allow-credentials', 'true')
   out.set('vary', 'Origin')
+
+  if (isResolveGet && upstream.ok) {
+    out.set('cache-control', 'public, max-age=30, stale-while-revalidate=120')
+    const cacheable = new Response(upstream.body, { status: upstream.status, headers: out })
+    const cacheKey = new Request(target, { method: 'GET' })
+    await caches.default.put(cacheKey, cacheable.clone()).catch(() => null)
+    return cacheable
+  }
+
   return new Response(upstream.body, { status: upstream.status, headers: out })
 }

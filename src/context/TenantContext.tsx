@@ -87,9 +87,45 @@ type ResolveResult =
   | { ok: true; tenant: TenantConfig }
   | { ok: false; kind: 'missing' | 'transient'; status?: number }
 
+const RESOLVE_CACHE_PREFIX = 'orvexa_resolve_v1:'
+const RESOLVE_CACHE_MS = 5 * 60 * 1000
+
+function readResolveCache(key: string): TenantConfig | null {
+  try {
+    const raw = sessionStorage.getItem(RESOLVE_CACHE_PREFIX + key)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { at: number; tenant: TenantConfig }
+    if (!parsed?.tenant?.slug || Date.now() - parsed.at > RESOLVE_CACHE_MS) return null
+    return parsed.tenant
+  } catch {
+    return null
+  }
+}
+
+function writeResolveCache(key: string, tenant: TenantConfig) {
+  try {
+    sessionStorage.setItem(RESOLVE_CACHE_PREFIX + key, JSON.stringify({ at: Date.now(), tenant }))
+  } catch {
+    // storage full / disabled
+  }
+}
+
+function sanitizeResolvedTenant(tenant: TenantConfig): TenantConfig {
+  // Older API builds still return data: logos (~0.5MB+); drop them so UI stays responsive.
+  if (typeof tenant.logo === 'string' && tenant.logo.startsWith('data:')) tenant.logo = ''
+  if (tenant.theme && typeof tenant.theme === 'object') {
+    const theme = tenant.theme as Record<string, unknown>
+    for (const key of ['logoUrl', 'heroImage', 'faviconUrl']) {
+      if (typeof theme[key] === 'string' && String(theme[key]).startsWith('data:')) theme[key] = ''
+    }
+  }
+  return tenant
+}
+
 async function fetchPublicTenant(slug: string): Promise<ResolveResult> {
   if (!slug) return { ok: false, kind: 'missing' }
   const looksLikeHost = slug.includes('.')
+  const cacheKey = looksLikeHost ? `host:${slug}` : `slug:${slug}`
   const qs = looksLikeHost ? `host=${encodeURIComponent(slug)}` : `slug=${encodeURIComponent(slug)}`
   // Resolve can be slow on cold Render + large theme payloads; do not abort early.
   const ctrl = new AbortController()
@@ -99,21 +135,22 @@ async function fetchPublicTenant(slug: string): Promise<ResolveResult> {
     if (res.status === 404) return { ok: false, kind: 'missing', status: 404 }
     if (res.status === 403) return { ok: false, kind: 'missing', status: 403 }
     if (res.status === 429 || res.status >= 500) {
+      const cached = readResolveCache(cacheKey)
+      if (cached) return { ok: true, tenant: cached }
       return { ok: false, kind: 'transient', status: res.status }
     }
-    if (!res.ok) return { ok: false, kind: 'transient', status: res.status }
-    const tenant = (await res.json()) as TenantConfig
-    if (!tenant?.slug) return { ok: false, kind: 'missing', status: res.status }
-    // Older API builds still return data: logos (~0.5MB+); drop them so UI stays responsive.
-    if (typeof tenant.logo === 'string' && tenant.logo.startsWith('data:')) tenant.logo = ''
-    if (tenant.theme && typeof tenant.theme === 'object') {
-      const theme = tenant.theme as Record<string, unknown>
-      for (const key of ['logoUrl', 'heroImage', 'faviconUrl']) {
-        if (typeof theme[key] === 'string' && String(theme[key]).startsWith('data:')) theme[key] = ''
-      }
+    if (!res.ok) {
+      const cached = readResolveCache(cacheKey)
+      if (cached) return { ok: true, tenant: cached }
+      return { ok: false, kind: 'transient', status: res.status }
     }
+    const tenant = sanitizeResolvedTenant((await res.json()) as TenantConfig)
+    if (!tenant?.slug) return { ok: false, kind: 'missing', status: res.status }
+    writeResolveCache(cacheKey, tenant)
     return { ok: true, tenant }
   } catch {
+    const cached = readResolveCache(cacheKey)
+    if (cached) return { ok: true, tenant: cached }
     return { ok: false, kind: 'transient' }
   } finally {
     clearTimeout(timer)
@@ -147,15 +184,30 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
     setLoading(true)
     try {
+      // Prefer a warm session cache immediately so 429/cold-start never blanks the dashboard.
+      const cacheKey = slug.includes('.') ? `host:${slug}` : `slug:${slug}`
+      const warm = readResolveCache(cacheKey)
+      if (warm) {
+        setTenant(hydrateTenantProfile(deepCloneTenant(warm)))
+        setError(null)
+        setLoading(false)
+      }
+
       let resolved = await fetchPublicTenant(slug)
       // Retry cold starts / rate limits a few times before showing temporary error.
-      for (let attempt = 0; !resolved.ok && resolved.kind === 'transient' && attempt < 3; attempt++) {
-        await new Promise((r) => setTimeout(r, 700 * (attempt + 1)))
+      for (let attempt = 0; !resolved.ok && resolved.kind === 'transient' && attempt < 4; attempt++) {
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
         resolved = await fetchPublicTenant(slug)
       }
 
       if (resolved.ok) {
         setTenant(hydrateTenantProfile(deepCloneTenant(resolved.tenant)))
+        setError(null)
+        return
+      }
+
+      // Keep last-known tenant if network/rate-limit failed after we already showed cache.
+      if (warm) {
         setError(null)
         return
       }

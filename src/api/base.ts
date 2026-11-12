@@ -1,8 +1,8 @@
 // Shared API origin helpers for Cloudflare Workers + local Vite.
 // Prefer VITE_API_URL (origin only). VITE_API_BASE_URL remains supported for older envs.
 //
-// Default: same-origin `/api` (Pages Function / Worker → Render). Direct browser calls to
-// Render fail CORS on *.pages.dev; only flip to Render after a same-origin 429.
+// Default: same-origin `/api` (Pages Function / Worker → Render).
+// On Cloudflare edge 429, retry via Render for orvexacloud hosts (CORS-allowed).
 
 const trimSlash = (value: string) => value.replace(/\/+$/, '')
 
@@ -14,8 +14,6 @@ const rawBase =
 export const RENDER_API_BASE = 'https://orvexa-api-nskw.onrender.com/api'
 
 function isBrowserSafeApiOrigin(origin: string): boolean {
-  // Direct browser → Render is blocked by CORS on *.pages.dev / many preview hosts.
-  // Same-origin /api (Pages Function / Worker) is the supported path; Render stays fallback-only.
   if (!origin) return false
   try {
     const host = new URL(origin).hostname.toLowerCase()
@@ -66,29 +64,40 @@ export function forceRenderApi(on = true) {
   }
 }
 
-/** Drop a stale Render-direct flag left by older builds (CORS breaks tenant bootstrap). */
+/** Drop a stale Render-direct flag left by older builds. */
 export function clearForcedRenderApi() {
   forceRenderApi(false)
 }
 
+function canUseRenderFallback(): boolean {
+  if (typeof window === 'undefined') return false
+  const host = window.location.hostname.toLowerCase()
+  return host === 'orvexacloud.in' || host === 'www.orvexacloud.in' || host.endsWith('.orvexacloud.in')
+}
+
 /**
  * fetch() relative to the API root (`/public/resolve?...`).
- * On Cloudflare edge 429 against same-origin /api, retries once via Render.
- * Public resolve always stays same-origin — never flip to Render for bootstrap.
+ * On Cloudflare edge 429 against same-origin /api, retries once via Render
+ * (only on orvexacloud hosts where Render CORS allows the browser Origin).
  */
 export async function apiFetch(apiPath: string, init?: RequestInit): Promise<Response> {
   const rel = apiPath.startsWith('/') ? apiPath : `/${apiPath}`
-  const isPublicResolve = rel.startsWith('/public/resolve')
-  const base = isPublicResolve ? '/api' : resolveApiBase()
-  const primary = `${base}${rel}`
-  const res = await fetch(primary, init)
-  if (res.status !== 429 || isPublicResolve) return res
-  if (resolveApiBase() === RENDER_API_BASE) return res
+  const primary = `${resolveApiBase()}${rel}`
+  let res: Response
+  try {
+    res = await fetch(primary, init)
+  } catch (err) {
+    // Same-origin proxy down — try Render on production hosts.
+    if (!canUseRenderFallback() || resolveApiBase() === RENDER_API_BASE) throw err
+    forceRenderApi(true)
+    return fetch(`${RENDER_API_BASE}${rel}`, init)
+  }
+  if (res.status !== 429) return res
+  if (resolveApiBase() === RENDER_API_BASE || !canUseRenderFallback()) return res
   forceRenderApi(true)
   try {
     return await fetch(`${RENDER_API_BASE}${rel}`, init)
   } catch {
-    // Render may block CORS from preview hosts — keep the original 429 for UI retry.
     forceRenderApi(false)
     return res
   }

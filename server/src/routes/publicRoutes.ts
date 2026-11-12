@@ -196,6 +196,8 @@ router.get('/resolve', async (req: Request, res: Response) => {
       res.status(403).json({ error: 'This store is not available.', status: tenant.status })
       return
     }
+    // Short browser/edge cache so dashboards do not stampede Render on every navigation.
+    res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=120')
     res.json(publicTenant(tenant))
   } catch (err: any) {
     console.error('[Resolve] Failed:', err.message)

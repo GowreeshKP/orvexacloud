@@ -126,15 +126,17 @@ export function createApp() {
   const globalLimiter = rateLimit({
     ...rateKeyOpts,
     windowMs: 15 * 60 * 1000,
-    max: Number(process.env.API_RATE_LIMIT_MAX || 8000),
+    max: Number(process.env.API_RATE_LIMIT_MAX || 20000),
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many requests. Please slow down and try again later.' },
-    // Audit ingest + health probes must not burn the shared budget.
+    // Bootstrap + health + audit must never burn (or be burned by) the shared budget.
     skip: (req) => {
       if (skip()) return true
       const path = req.originalUrl || req.path || ''
       if (path.includes('/api/health')) return true
+      if (path.includes('/api/public/resolve')) return true
+      if (path.includes('/api/public/slug-available')) return true
       return req.method === 'POST' && path.includes('/admin/audit-logs')
     },
   })
@@ -147,7 +149,7 @@ export function createApp() {
     windowMs: 15 * 60 * 1000,
     // Shared office/NAT IPs burn this fast during dashboard testing; floor high and allow env raise.
     max: process.env.NODE_ENV === 'production'
-      ? Math.max(600, Number(process.env.AUTH_RATE_LIMIT_MAX || 600) || 600)
+      ? Math.max(1200, Number(process.env.AUTH_RATE_LIMIT_MAX || 1200) || 1200)
       : 500,
     skipSuccessfulRequests: true,
     standardHeaders: true,
@@ -156,12 +158,12 @@ export function createApp() {
   })
   const credentialPaths = /\/(login|forgot-password|reset-password|change-password|bootstrap)$/
 
-  // Store bootstrap (resolve / slug-check) is read-heavy — admin + storefront share one office IP.
+  // Soft ceiling only — resolve is the store bootstrap path and must stay available in production.
   const publicReadLimiter = rateLimit({
     ...rateKeyOpts,
     skip,
     windowMs: 60 * 1000,
-    max: 600,
+    max: Number(process.env.PUBLIC_READ_RATE_LIMIT_MAX || 2000),
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many requests. Please retry shortly.' },
@@ -179,7 +181,7 @@ export function createApp() {
 
   app.use(globalLimiter)
   // Must precede express.json(): signup signatures are verified against the raw body bytes.
-  app.use('/api/public/resolve', publicReadLimiter)
+  // Resolve is exempt from the stacked read limiter — edge cache + client cache handle abuse.
   app.use('/api/public/slug-available', publicReadLimiter)
   app.use('/api/public', publicWriteLimiter, publicRoutes)
   // Studio publish webhook must see the raw body for HMAC verification.
