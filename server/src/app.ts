@@ -59,7 +59,10 @@ export function createApp() {
   // Allowed origins — extend via CORS_ORIGIN env var (comma-separated). Vercel preview
   // deployments are only trusted when CORS_ALLOW_VERCEL_PREVIEWS=true: any Vercel user can
   // create a *.vercel.app site.
-  const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173,http://localhost:8443')
+  const allowedOrigins = (
+    process.env.CORS_ORIGIN ||
+    `http://localhost:5173,http://localhost:8443,https://${PLATFORM_ROOT_DOMAIN},https://www.${PLATFORM_ROOT_DOMAIN},https://app.${PLATFORM_ROOT_DOMAIN}`
+  )
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean)

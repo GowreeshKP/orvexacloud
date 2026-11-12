@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { authService, type AdminSession } from '@/api/auth'
 import { auditLogger } from '@/api/audit-logger'
+import { clearForcedRenderApi } from '@/api/base'
 
 const MAX_ATTEMPTS = 5
 const LOCKOUT_MS = 60_000
@@ -33,6 +34,10 @@ export default function AdminLogin({ onSuccess }: { onSuccess: (session: AdminSe
 
   const secondsLocked = Math.max(0, Math.ceil((lock.lockedUntil - now) / 1000))
   const isLocked = secondsLocked > 0
+
+  useEffect(() => {
+    clearForcedRenderApi()
+  }, [])
 
   useEffect(() => {
     if (!isLocked) return

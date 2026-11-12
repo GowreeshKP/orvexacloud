@@ -554,14 +554,22 @@ router.post('/seller/change-password', async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────────────
 const PUBLISHED_BOOTSTRAP_KEYS = new Set(['orvexa_bootstrap_2026'])
 
+function bootstrapKeyMatches(provided: string | null): boolean {
+  const BOOTSTRAP_KEY = process.env.ADMIN_BOOTSTRAP_KEY
+  const usable = Boolean(BOOTSTRAP_KEY && BOOTSTRAP_KEY.length >= 16 && !PUBLISHED_BOOTSTRAP_KEYS.has(BOOTSTRAP_KEY))
+  return Boolean(
+    usable &&
+      provided &&
+      BOOTSTRAP_KEY &&
+      provided.length === BOOTSTRAP_KEY.length &&
+      crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(BOOTSTRAP_KEY)),
+  )
+}
+
 router.post('/admin/bootstrap', async (req: Request, res: Response) => {
   try {
-    const BOOTSTRAP_KEY = process.env.ADMIN_BOOTSTRAP_KEY
     const provided = credential(req.body?.bootstrapKey, 500)
-    const usable = BOOTSTRAP_KEY && BOOTSTRAP_KEY.length >= 16 && !PUBLISHED_BOOTSTRAP_KEYS.has(BOOTSTRAP_KEY)
-    const matches =
-      usable && provided && provided.length === BOOTSTRAP_KEY.length && crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(BOOTSTRAP_KEY))
-    if (!matches) {
+    if (!bootstrapKeyMatches(provided)) {
       res.status(403).json({ error: 'Invalid bootstrap key.' })
       return
     }
@@ -569,7 +577,7 @@ router.post('/admin/bootstrap', async (req: Request, res: Response) => {
     const masterDb = await connectMasterDatabase()
     const AdminUser = getAdminUserModel(masterDb)
     if ((await AdminUser.countDocuments()) > 0) {
-      res.status(409).json({ error: 'Admin already bootstrapped. Use the admin panel to manage accounts.' })
+      res.status(409).json({ error: 'Admin already bootstrapped. Use /api/auth/admin/recover to reset the password.' })
       return
     }
 
@@ -591,6 +599,43 @@ router.post('/admin/bootstrap', async (req: Request, res: Response) => {
     res.status(201).json({ success: true, message: 'Super admin account created. You can now log in.' })
   } catch (err) {
     serverError(res, 'bootstrap', err, 'Bootstrap failed')
+  }
+})
+
+// POST /api/auth/admin/recover — reset Super Admin password with ADMIN_BOOTSTRAP_KEY.
+// Body: { bootstrapKey, email, password } (password ≥ 12 chars)
+router.post('/admin/recover', async (req: Request, res: Response) => {
+  try {
+    const provided = credential(req.body?.bootstrapKey, 500)
+    if (!bootstrapKeyMatches(provided)) {
+      res.status(403).json({ error: 'Invalid bootstrap key.' })
+      return
+    }
+
+    const email = credential(req.body?.email)?.toLowerCase()
+    const password = validNewPassword(req.body?.password)
+    if (!email || !password || password.length < 12) {
+      res.status(400).json({ error: 'email and a new password of at least 12 characters are required.' })
+      return
+    }
+
+    const masterDb = await connectMasterDatabase()
+    const AdminUser = getAdminUserModel(masterDb)
+    const admin = await AdminUser.findOne({ email })
+    if (!admin) {
+      res.status(404).json({ error: 'No Super Admin exists for that email.' })
+      return
+    }
+
+    admin.passwordHash = await bcrypt.hash(password, 12)
+    await admin.save()
+
+    const RefreshToken = getRefreshTokenModel(masterDb)
+    await RefreshToken.deleteMany({ userId: admin.id, role: 'super_admin' })
+
+    res.json({ success: true, message: 'Super Admin password updated. Sign in with the new password.' })
+  } catch (err) {
+    serverError(res, 'admin recover', err, 'Password recovery failed')
   }
 })
 

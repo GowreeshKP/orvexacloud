@@ -6,7 +6,7 @@ import type { TenantConfig } from '@/types/tenant'
 import { MOCK_TENANTS } from '@/data/mock-tenants'
 import { mockStore } from '@/api/mock-store'
 import { auditLogger } from '@/api/audit-logger'
-import { API_BASE as API_BASE_FALLBACK, resolveApiBase, RENDER_API_BASE, forceRenderApi } from '@/api/base'
+import { API_BASE as API_BASE_FALLBACK, resolveApiBase, RENDER_API_BASE, forceRenderApi, apiFetch, clearForcedRenderApi } from '@/api/base'
 
 /** Live API root — flips to Render when Cloudflare same-origin /api returns 429. */
 const apiRoot = () => {
@@ -1003,7 +1003,9 @@ export const authService = {
     const cleanPass = password.trim()
 
     try {
-      const response = await fetch(`${apiRoot()}/auth/admin/login`, {
+      // Always start from same-origin /api for login — stale Render-direct flags cause 401 confusion.
+      clearForcedRenderApi()
+      const response = await apiFetch('/auth/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ loginId: cleanId, password: cleanPass }),
@@ -1027,7 +1029,10 @@ export const authService = {
           return { success: false, error: data.error }
         }
         if (response.status === 401 || response.status === 403) {
-          return { success: false, error: 'Invalid Super Admin credentials.' }
+          return {
+            success: false,
+            error: 'Invalid Super Admin credentials. Check Admin ID / email and password (not the demo password).',
+          }
         }
         return {
           success: false,
