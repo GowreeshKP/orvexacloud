@@ -14,6 +14,7 @@ import { Onboarding } from './Onboarding';
 import { GrapesEditor, type GrapesApi, type PhotoRequest } from './grapes/GrapesEditor';
 import { StockPicker } from './StockPicker';
 import { SeoPanel } from './SeoPanel';
+import { StudioPortal } from './studioPortal';
 import { initialState, reducer, type Panel } from './state';
 
 type Props = {
@@ -284,7 +285,11 @@ export function Studio({ session, initialTheme, initialRevision, catalog: storeC
           notify(mode === 'style' ? `Now using the ${template.name} style. Your pages are unchanged; the undo arrow reverses this.` : `Your homepage now uses the ${template.name} layout. The undo arrow brings your previous homepage back.`);
         }} />
       )}
-      {toast && <div className="toast" role="status">{toast}</div>}
+      {toast && (
+        <StudioPortal lockScroll={false}>
+          <div className="toast" role="status">{toast}</div>
+        </StudioPortal>
+      )}
 
       {dialog === 'publish' && (
         <PublishDialog theme={theme} seoChecks={features.seo} revision={state.revision} saved={state.saveState === 'saved'} canPublish={session.role === 'owner'} storeUrl={storeUrl}

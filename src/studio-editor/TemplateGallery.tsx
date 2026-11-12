@@ -2,6 +2,7 @@
 import { buildTheme, NICHES, sampleCatalog, TEMPLATES, type Catalog, type TemplateDefinition } from '@orvexa/theme';
 import { Storefront, storefrontHead } from '@orvexa/storefront-ui';
 import { ScaledStorefront } from './Canvas';
+import { StudioPortal } from './studioPortal';
 
 const PREVIEW_WIDTH = 1280;
 
@@ -55,6 +56,7 @@ export function TemplateGallery({ brandName, nicheId, catalog, currentId, action
         ))}
       </ul>
       {previewing && (
+        <StudioPortal>
         <div className="modal" role="dialog" aria-modal="true" aria-label={`${previewing.name} preview`}>
           <div className="modal__panel modal__panel--wide">
             <header className="modal__head">
@@ -69,6 +71,7 @@ export function TemplateGallery({ brandName, nicheId, catalog, currentId, action
             </div>
           </div>
         </div>
+        </StudioPortal>
       )}
     </div>
   );

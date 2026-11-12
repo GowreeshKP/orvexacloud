@@ -3,18 +3,21 @@ import { useEffect, useState } from 'react';
 import { publishChecks, type Catalog, type TemplateDefinition, type Theme } from '@orvexa/theme';
 import { TemplateGallery } from './TemplateGallery';
 import { api, ApiError, type VersionSummary } from './api';
+import { StudioPortal } from './studioPortal';
 
 function Modal({ title, children, onClose, wide }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
   return (
-    <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className={`modal__panel${wide ? ' modal__panel--wide' : ''}`}>
-        <header className="modal__head">
-          <h2 id="modal-title">{title}</h2>
-          <button type="button" className="btn btn--quiet" onClick={onClose}>Close</button>
-        </header>
-        <div className="modal__scroll">{children}</div>
+    <StudioPortal>
+      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+        <div className={`modal__panel${wide ? ' modal__panel--wide' : ''}`}>
+          <header className="modal__head">
+            <h2 id="modal-title">{title}</h2>
+            <button type="button" className="btn btn--quiet" onClick={onClose}>Close</button>
+          </header>
+          <div className="modal__scroll">{children}</div>
+        </div>
       </div>
-    </div>
+    </StudioPortal>
   );
 }
 

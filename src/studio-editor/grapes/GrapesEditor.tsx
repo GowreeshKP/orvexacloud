@@ -295,6 +295,14 @@ export function GrapesEditor({ theme, catalog, page, device, ctx, left, pageTabs
         if (typeof pos.top === 'number' && pos.top + th > rect.height - 8) pos.top = Math.max(8, rect.height - th - 8);
       });
       editor.on('canvas:updateTools', () => { if (editor) keepToolsInView(editor); });
+      // After Grapes rewrites zoom/coords, put the page back in the middle of the stage.
+      const recenter = () => {
+        if (!editor || cancelled) return;
+        setDevice(editor, live.current.device, stageRef.current);
+      };
+      editor.on('canvas:zoom', recenter);
+      editor.on('frame:resize', recenter);
+      editor.on('device:select', recenter);
       // Photo actions requested from the settings panel.
       (editor as unknown as { oxsPhoto: typeof requestPhoto }).oxsPhoto = requestPhoto;
     })();
@@ -437,10 +445,26 @@ function applyCanvasTheme(editor: Editor, theme: Theme) {
  * Mobile is 390px at full size, also centered. Avoid fitViewport alone — it
  * parks the frame in the left corner and can clip outside the visible stage.
  */
+function paintCenteredFrame(canvasEl: HTMLElement | null | undefined, zoom: number, x: number, y: number) {
+  const frames = canvasEl?.querySelector('.gjs-cv-canvas__frames') as HTMLElement | null;
+  if (frames) {
+    frames.style.transformOrigin = '0 0';
+    // translate THEN scale — Grapes often writes scale() translate() which shifts content right.
+    frames.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) scale(${zoom})`;
+  }
+  const wrapper = canvasEl?.querySelector('.gjs-frame-wrapper') as HTMLElement | null;
+  if (wrapper) {
+    wrapper.style.left = '0px';
+    wrapper.style.top = '0px';
+    wrapper.style.right = 'auto';
+    wrapper.style.maxWidth = 'none';
+  }
+}
+
 function setDevice(editor: Editor, device: 'desktop' | 'mobile', stage: HTMLElement | null) {
   const canvasEl = editor.Canvas.getElement();
   // Measure the Grapes canvas itself — stage padding must not inflate the zoom math.
-  const width = Math.max(canvasEl?.clientWidth || 0, 280);
+  const width = Math.max(canvasEl?.clientWidth || 0, stage?.clientWidth ? Math.min(stage.clientWidth, canvasEl?.clientWidth || stage.clientWidth) : 0, 280);
   const height = Math.max(canvasEl?.clientHeight || 0, 360);
   const model = editor.Devices.get(device);
   const gap = 12;
@@ -455,18 +479,12 @@ function setDevice(editor: Editor, device: 'desktop' | 'mobile', stage: HTMLElem
   const scaledW = deviceW * zoom;
   const x = Math.max(gap, (width - scaledW) / 2);
   editor.Canvas.setCoords(x, gap);
-  // Grapes can emit `scale() translate()` which parks the page on the right.
-  // Force translate-then-scale so Desktop/Mobile stay centered in the stage.
-  const frames = canvasEl?.querySelector('.gjs-cv-canvas__frames') as HTMLElement | null;
-  if (frames) {
-    frames.style.transformOrigin = '0 0';
-    frames.style.transform = `translate(${Math.round(x)}px, ${gap}px) scale(${zoom})`;
-  }
-  const wrapper = canvasEl?.querySelector('.gjs-frame-wrapper') as HTMLElement | null;
-  if (wrapper) {
-    wrapper.style.left = '0px';
-    wrapper.style.top = '0px';
-  }
+  paintCenteredFrame(canvasEl, zoom, x, gap);
+  // Grapes rewrites the transform on the next frames — stamp ours again.
+  requestAnimationFrame(() => {
+    paintCenteredFrame(canvasEl, zoom, x, gap);
+    requestAnimationFrame(() => paintCenteredFrame(canvasEl, zoom, x, gap));
+  });
   keepToolsInView(editor);
 }
 

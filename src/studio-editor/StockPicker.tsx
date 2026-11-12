@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
 import type { CropAspect } from '@orvexa/theme';
 import { api, type StockPhoto } from './api';
+import { StudioPortal } from './studioPortal';
 
 const ORIENTATION: Record<CropAspect, 'landscape' | 'portrait' | 'square' | undefined> = { wide: 'landscape', landscape: 'landscape', portrait: 'portrait', square: 'square', free: undefined };
 
@@ -40,6 +41,7 @@ export function StockPicker({ initialQuery, aspect, onClose, onPicked }: {
   }
 
   return (
+    <StudioPortal>
     <div className="modal" role="dialog" aria-modal="true" aria-labelledby="stock-title">
       <div className="modal__panel modal__panel--wide">
         <header className="modal__head">
@@ -72,5 +74,6 @@ export function StockPicker({ initialQuery, aspect, onClose, onPicked }: {
         </div>
       </div>
     </div>
+    </StudioPortal>
   );
 }

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlipHorizontal2, Minus, Plus, RotateCcw, RotateCw } from 'lucide-react';
 import { CROP_ASPECTS, type CropAspect } from '@orvexa/theme';
+import { StudioPortal } from './studioPortal';
 
 /**
  * In-browser photo editor. The preview and the saved file are drawn by the
@@ -199,6 +200,7 @@ export function PhotoEditor({ source, aspect: initialAspect, title, onCancel, on
   }
 
   return (
+    <StudioPortal>
     <div className="modal" role="dialog" aria-modal="true" aria-labelledby="photo-editor-title">
       <div className="modal__panel modal__panel--wide photo-editor">
         <header className="modal__head">
@@ -289,5 +291,6 @@ export function PhotoEditor({ source, aspect: initialAspect, title, onCancel, on
         </div>
       </div>
     </div>
+    </StudioPortal>
   );
 }

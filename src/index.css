@@ -1639,6 +1639,8 @@ img {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  /* perspective on .page traps position:fixed studio dialogs. */
+  perspective: none;
 }
 
 .shell .page.page--flush .portal-view {
@@ -1666,8 +1668,8 @@ img {
 .portal-view {
   animation: portal-view-flip 0.32s var(--ease-out) both;
   transform-origin: 50% 0;
-  will-change: opacity, transform;
 }
+/* Avoid will-change:transform here — it traps position:fixed studio modals inside the pane. */
 
 @keyframes portal-view-flip {
   from {
