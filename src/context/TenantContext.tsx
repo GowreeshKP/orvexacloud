@@ -13,12 +13,32 @@ import { pathPortalRedirectUrl } from '@/lib/store-urls'
 import { mockStore } from '@/api/mock-store'
 import { DEMO_MODE } from '@/api/auth'
 import { apiFetch, clearForcedRenderApi } from '@/api/base'
+import { PLAN_CATALOG, normalizePlanId, TRIAL_DAYS } from '@/data/plans'
+import type { SubscriptionInfo } from '@/types/tenant'
 
 function deepCloneTenant(config: TenantConfig): TenantConfig {
   return JSON.parse(JSON.stringify(config))
 }
 
 clearForcedRenderApi()
+
+function ensureSubscription(raw: TenantConfig): SubscriptionInfo {
+  const plan = normalizePlanId(raw.plan || raw.subscription?.plan)
+  const existing = raw.subscription
+  const pricePerMonth =
+    typeof existing?.pricePerMonth === 'number'
+      ? existing.pricePerMonth
+      : PLAN_CATALOG[plan].pricePerMonth
+  return {
+    plan,
+    pricePerMonth,
+    status: existing?.status || (raw.status === 'active' ? 'active' : 'trial'),
+    trialEndsAt: existing?.trialEndsAt,
+    nextBillingDate: existing?.nextBillingDate || new Date(Date.now() + TRIAL_DAYS * 86400000).toISOString().slice(0, 10),
+    paymentMethod: existing?.paymentMethod || 'razorpay',
+    invoices: Array.isArray(existing?.invoices) ? existing!.invoices : [],
+  }
+}
 
 /** Promote profile fields stored in theme.copy when PUT /profile is not available on the API. */
 function hydrateTenantProfile(raw: TenantConfig): TenantConfig {
@@ -33,14 +53,17 @@ function hydrateTenantProfile(raw: TenantConfig): TenantConfig {
     workingHours: raw.contact?.workingHours || copy._profileHours || '',
     shippingThresholdFormatted: raw.contact?.shippingThresholdFormatted || copy._profileShipping || '',
   }
+  const plan = normalizePlanId(raw.plan)
   return {
     ...raw,
+    plan,
     brandName,
     name: raw.name || brandName,
     logo,
     logoUrl: raw.logoUrl || logo,
     aboutStory,
     contact,
+    subscription: ensureSubscription({ ...raw, plan }),
     theme: {
       ...raw.theme,
       logoUrl: raw.theme?.logoUrl || logo,

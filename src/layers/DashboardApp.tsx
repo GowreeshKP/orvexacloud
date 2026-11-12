@@ -3266,18 +3266,18 @@ Owner: ${tenant.ownerName}
         <h3 className="text-sm font-bold tracking-wider uppercase text-black/50 mb-4">Subscription & Plan Tier</h3>
         <div className="flex items-center gap-4 mb-6">
           <div className="flex-1">
-            <p className="text-2xl font-bold">{formatPlanPrice(tenant.subscription.pricePerMonth)}</p>
+            <p className="text-2xl font-bold">{formatPlanPrice(tenant.subscription?.pricePerMonth ?? PLAN_CATALOG[normalizePlanId(tenant.plan)].pricePerMonth)}</p>
             <p className="text-xs text-black/40 uppercase tracking-wider font-bold">{PLAN_CATALOG[normalizePlanId(tenant.plan)].label} Plan</p>
-            {tenant.subscription.status === 'trial' && tenant.subscription.trialEndsAt && (
+            {tenant.subscription?.status === 'trial' && tenant.subscription.trialEndsAt && (
               <p className="text-xs text-blue-700 mt-1">Free trial ends {tenant.subscription.trialEndsAt.slice(0, 10)}. Prices exclude 18% GST.</p>
             )}
           </div>
           <span className={`text-xs font-bold uppercase tracking-wider px-3.5 py-1.5 rounded-full ${
-            tenant.subscription.status === 'active' ? 'bg-emerald-50 text-emerald-700' :
-            tenant.subscription.status === 'trial' ? 'bg-blue-50 text-blue-700' :
+            (tenant.subscription?.status || 'active') === 'active' ? 'bg-emerald-50 text-emerald-700' :
+            tenant.subscription?.status === 'trial' ? 'bg-blue-50 text-blue-700' :
             'bg-red-50 text-red-700'
           }`}>
-            {tenant.subscription.status}
+            {tenant.subscription?.status || 'active'}
           </span>
         </div>
 

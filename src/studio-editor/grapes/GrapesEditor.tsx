@@ -300,6 +300,15 @@ export function GrapesEditor({ theme, catalog, page, device, ctx, left, pageTabs
     return () => window.removeEventListener('resize', onResize);
   }, [device, loading]);
 
+  // When the settings panel opens/closes, the stage width changes — re-center the canvas.
+  useEffect(() => {
+    if (!editorRef.current || loading) return;
+    const id = window.requestAnimationFrame(() => {
+      if (editorRef.current) setDevice(editorRef.current, device, stageRef.current);
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [selected, device, loading]);
+
   const editor = editorRef.current;
   const tag = String(selected?.get('tagName') ?? '');
   const isLive = selected?.get('type') === 'oxs-live';

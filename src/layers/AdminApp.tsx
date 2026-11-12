@@ -517,7 +517,7 @@ function PlatformOverview({
                     </div>
                   </div>
                   <div className="row">
-                    <span className="money">{formatPlanPrice(t.subscription.pricePerMonth)}</span>
+                    <span className="money">{formatPlanPrice(t.subscription?.pricePerMonth ?? PLAN_CATALOG[normalizePlanId(t.plan)].pricePerMonth)}</span>
                     <a href={storefrontUrl(t.slug)} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm">
                       Open
                     </a>
@@ -1306,7 +1306,7 @@ ENABLE_CUSTOMER_REVIEWS=${t.theme.enableReviews}`
 function BillingManager() {
   const { tenants } = useAdminTenants()
   const activeTenants = tenants.filter((t) => t.status === 'active' || t.status === 'pending')
-  const totalMRR = activeTenants.reduce((sum, t) => sum + t.subscription.pricePerMonth, 0)
+  const totalMRR = activeTenants.reduce((sum, t) => sum + (t.subscription?.pricePerMonth ?? PLAN_CATALOG[normalizePlanId(t.plan)].pricePerMonth), 0)
 
   return (
     <div className="stack" style={{ maxWidth: 1080 }}>
@@ -1361,7 +1361,7 @@ function BillingManager() {
                 <tr key={tenant.id}>
                   <td className="cell-main">{tenant.brandName}</td>
                   <td><span className="pill outline">{PLAN_CATALOG[normalizePlanId(tenant.plan)].label}</span></td>
-                  <td className="num money">{formatPlanPrice(tenant.subscription.pricePerMonth)}</td>
+                  <td className="num money">{formatPlanPrice(tenant.subscription?.pricePerMonth ?? PLAN_CATALOG[normalizePlanId(tenant.plan)].pricePerMonth)}</td>
                   <td className="cell-sub mono">{tenant.subscription.nextBillingDate}</td>
                   <td>
                     <span className="pill leaf mono">{tenant.subscription.status}</span>

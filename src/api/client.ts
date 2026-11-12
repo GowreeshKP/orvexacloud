@@ -28,7 +28,7 @@ function compactPayload<T extends Record<string, unknown>>(obj: T): Partial<T> {
 }
 
 class ApiClient {
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T | null> {
+  private async request<T>(endpoint: string, options: RequestInit = {}, attempt = 0): Promise<T | null> {
     try {
       const res = await authService.storeAuthFetch(`${resolveApiBase()}${endpoint}`, {
         ...options,
@@ -37,6 +37,12 @@ class ApiClient {
           ...(options.headers || {}),
         },
       })
+
+      // Render cold starts / edge blips — retry a couple of times for GETs.
+      if ((res.status === 502 || res.status === 503 || res.status === 504) && attempt < 2 && (!options.method || options.method === 'GET')) {
+        await new Promise((r) => setTimeout(r, 700 * (attempt + 1)))
+        return this.request<T>(endpoint, options, attempt + 1)
+      }
 
       if (!res.ok) {
         let detail = res.statusText
@@ -51,6 +57,10 @@ class ApiClient {
 
       return await res.json()
     } catch (error) {
+      if (attempt < 2 && (!options.method || options.method === 'GET')) {
+        await new Promise((r) => setTimeout(r, 700 * (attempt + 1)))
+        return this.request<T>(endpoint, options, attempt + 1)
+      }
       // Backend not running or endpoint failed; return null to trigger mockStore fallback
       console.warn('[api]', endpoint, error)
       return null
