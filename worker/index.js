@@ -249,6 +249,30 @@ async function proxyApi(request, url, env) {
   const target = `${origin}${url.pathname}${url.search}`
   const allowOrigin = corsAllowOrigin(request, url.origin)
 
+  // Answer health at the edge — probes must never 429 or wake Render.
+  if (
+    (request.method === 'GET' || request.method === 'HEAD') &&
+    (url.pathname === '/api/health' || url.pathname === '/api/health/')
+  ) {
+    const body = JSON.stringify({
+      status: 'healthy',
+      platform: 'Orvexa Tech Multi-Tenant Engine',
+      timestamp: new Date().toISOString(),
+      runtime: 'cloudflare-worker',
+      edge: true,
+    })
+    return withCors(
+      new Response(request.method === 'HEAD' ? null : body, {
+        status: 200,
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+          'cache-control': 'public, max-age=15, stale-while-revalidate=60',
+        },
+      }),
+      allowOrigin,
+    )
+  }
+
   // Short edge cache for store bootstrap — stops admin/storefront refresh storms from 429ing Render.
   const isResolveGet = request.method === 'GET' && url.pathname === '/api/public/resolve'
   if (isResolveGet) {

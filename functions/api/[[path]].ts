@@ -68,6 +68,30 @@ export const onRequest = async (context: PagesContext): Promise<Response> => {
     })
   }
 
+  // Answer health at the edge — never proxy or rate-limit probes to Render.
+  if (
+    (context.request.method === 'GET' || context.request.method === 'HEAD') &&
+    (suffix === 'health' || suffix === 'health/')
+  ) {
+    const body = JSON.stringify({
+      status: 'healthy',
+      platform: 'Orvexa Tech Multi-Tenant Engine',
+      timestamp: new Date().toISOString(),
+      runtime: 'cloudflare-pages',
+      edge: true,
+    })
+    return withCors(
+      new Response(context.request.method === 'HEAD' ? null : body, {
+        status: 200,
+        headers: {
+          'content-type': 'application/json; charset=utf-8',
+          'cache-control': 'public, max-age=15, stale-while-revalidate=60',
+        },
+      }),
+      allowOrigin,
+    )
+  }
+
   // Edge cache store bootstrap — stops admin/dashboard refresh storms from 429ing Render.
   const isResolveGet =
     context.request.method === 'GET' && (suffix === 'public/resolve' || suffix.startsWith('public/resolve?'))

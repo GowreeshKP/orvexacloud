@@ -8,10 +8,10 @@ import {
 } from 'lucide-react'
 import { useTenant } from '@/context/TenantContext'
 import { useDashboardStats, useDashboardProducts, useTenantOrders } from '@/api/hooks'
-import { authService, type SellerSession } from '@/api/auth'
+import { authService, DEMO_MODE, type SellerSession } from '@/api/auth'
 import { mockStore } from '@/api/mock-store'
 import { auditLogger } from '@/api/audit-logger'
-import { API_BASE } from '@/api/base'
+import { API_BASE, apiFetch } from '@/api/base'
 import { PLAN_CATALOG, formatPlanPrice, normalizePlanId, storeAddress } from '@/data/plans'
 import { sellerPortalUrl, storefrontUrl, tenantPortalPath } from '@/lib/store-urls'
 import { fetchStoreAnalytics, fetchDomainConfig, saveCustomDomain } from '@/api/storefront-analytics'
@@ -160,7 +160,7 @@ export default function DashboardApp() {
     setSession(null)
   }
 
-  // Store APIs (products, analytics, storefront studio) need a JWT. Tokenless demo sessions only work offline.
+  // Store APIs need a JWT. Tokenless demo sessions only work offline / in DEMO_MODE.
   useEffect(() => {
     if (!session) return
     let cancelled = false
@@ -174,12 +174,15 @@ export default function DashboardApp() {
     void (async () => {
       const token = await authService.getStoreAccessToken()
       if (cancelled || token) return
+      // No access token: force re-login in production. Do not probe /health —
+      // that endpoint was burning Cloudflare rate limits (429) on every mount.
+      if (!DEMO_MODE) {
+        dropSession()
+        return
+      }
       try {
-        const health = await fetch(`${API_BASE}/health`)
-        if (!cancelled && health.ok) {
-          // Access + refresh are dead — force a clean re-login instead of 401 refresh loops.
-          dropSession()
-        }
+        const health = await apiFetch('/health')
+        if (!cancelled && health.ok) dropSession()
       } catch {
         // API offline — keep local demo session.
       }

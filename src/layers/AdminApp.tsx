@@ -4,9 +4,9 @@ import {
   LogOut, Bell, Search, CheckCircle, AlertTriangle, Mail, MessageCircle,
 } from 'lucide-react'
 import { useAdminTenants, useAdminApplications, usePlatformStats } from '@/api/hooks'
-import { authService, type AdminSession } from '@/api/auth'
+import { authService, DEMO_MODE, type AdminSession } from '@/api/auth'
 import { auditLogger } from '@/api/audit-logger'
-import { API_BASE } from '@/api/base'
+import { API_BASE, apiFetch } from '@/api/base'
 import AdminLogin from '@/components/auth/AdminLogin'
 import ResetPasswordModal from '@/components/auth/ResetPasswordModal'
 import StoreCredentialsModal from '@/components/auth/StoreCredentialsModal'
@@ -127,8 +127,14 @@ export default function AdminApp() {
     void (async () => {
       const token = await authService.getValidAdminToken()
       if (cancelled || token) return
+      // No admin JWT: re-login in production. Skip /health probes (they were 429ing at the edge).
+      if (!DEMO_MODE) {
+        authService.logoutAdmin()
+        setSession(null)
+        return
+      }
       try {
-        const health = await fetch(`${API_BASE}/health`)
+        const health = await apiFetch('/health')
         if (!cancelled && health.ok) {
           authService.logoutAdmin()
           setSession(null)
