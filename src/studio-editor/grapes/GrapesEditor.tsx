@@ -273,8 +273,11 @@ export function GrapesEditor({ theme, catalog, page, device, ctx, left, pageTabs
         else if (type !== 'oxs-live') c2.setTraits([]);
         setSelected(c2);
         requestAnimationFrame(() => {
-          try { editor?.refresh(); } catch { /* ignore */ }
-          if (editor) keepToolsInView(editor);
+          if (!editor) return;
+          setDevice(editor, live.current.device, stageRef.current);
+          try { editor.refresh(); } catch { /* ignore */ }
+          keepToolsInView(editor);
+          centerSelectedInView(editor, c2);
         });
       });
       editor.on('component:deselected', () => setSelected(editor?.getSelected() ?? null));
@@ -317,17 +320,33 @@ export function GrapesEditor({ theme, catalog, page, device, ctx, left, pageTabs
     return () => window.removeEventListener('resize', onResize);
   }, [device, loading]);
 
-  // When the settings panel opens/closes, re-center the canvas and clamp selection tools.
+  // Keep the page frame centered in the stage when selection / inspector / size changes.
   useEffect(() => {
     if (!editorRef.current || loading) return;
-    const id = window.requestAnimationFrame(() => {
-      const ed = editorRef.current;
-      if (!ed) return;
-      setDevice(ed, device, stageRef.current);
+    const ed = editorRef.current;
+    const stage = stageRef.current;
+    const layout = () => {
+      setDevice(ed, device, stage);
       try { ed.refresh(); } catch { /* ignore */ }
       keepToolsInView(ed);
+    };
+    const id = window.requestAnimationFrame(() => {
+      layout();
+      if (selected) centerSelectedInView(ed, selected);
     });
-    return () => window.cancelAnimationFrame(id);
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    const ro = typeof ResizeObserver !== 'undefined' && stage
+      ? new ResizeObserver(() => {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(layout, 60);
+        })
+      : null;
+    if (stage) ro?.observe(stage);
+    return () => {
+      window.cancelAnimationFrame(id);
+      clearTimeout(resizeTimer);
+      ro?.disconnect();
+    };
   }, [selected, device, loading]);
 
   const editor = editorRef.current;
@@ -340,7 +359,7 @@ export function GrapesEditor({ theme, catalog, page, device, ctx, left, pageTabs
   const clearSelection = () => editor?.select(undefined as never);
 
   return (
-    <div className="gx">
+    <div className={`gx${selected ? ' gx--inspecting' : ''}`}>
       <aside className="gx-left" aria-label="Blocks and layers">
         {left}
         <div className="panel" hidden={Boolean(left)}>
@@ -361,9 +380,6 @@ export function GrapesEditor({ theme, catalog, page, device, ctx, left, pageTabs
         </div>
       </main>
 
-      {selected && (
-        <button type="button" className="gx-inspector-scrim" aria-label="Close settings" onClick={clearSelection} />
-      )}
       <aside className="inspector gx-right" aria-label="Selected item settings" hidden={!selected}>
         {selected && (
           <header className="inspector__head">
@@ -421,10 +437,11 @@ function applyCanvasTheme(editor: Editor, theme: Theme) {
  * Mobile is 390px at full size, also centered. Avoid fitViewport alone — it
  * parks the frame in the left corner and can clip outside the visible stage.
  */
-function setDevice(editor: Editor, device: 'desktop' | 'mobile', _stage: HTMLElement | null) {
+function setDevice(editor: Editor, device: 'desktop' | 'mobile', stage: HTMLElement | null) {
   const canvasEl = editor.Canvas.getElement();
-  const width = canvasEl?.clientWidth || DESKTOP_WIDTH;
-  const height = canvasEl?.clientHeight || 800;
+  // Prefer the visible stage width so the page stays centered after the inspector opens.
+  const width = Math.max(stage?.clientWidth || 0, canvasEl?.clientWidth || 0, 320);
+  const height = Math.max(stage?.clientHeight ? stage.clientHeight - 48 : 0, canvasEl?.clientHeight || 0, 480);
   const model = editor.Devices.get(device);
   const gap = 16;
   if (device === 'desktop') {
@@ -444,6 +461,25 @@ function setDevice(editor: Editor, device: 'desktop' | 'mobile', _stage: HTMLEle
     editor.Canvas.setCoords(x, gap);
   }
   keepToolsInView(editor);
+}
+
+/** Scroll the selected card/section into the middle of the editor viewport. */
+function centerSelectedInView(editor: Editor, component: Component) {
+  try {
+    const el = component.getEl() as HTMLElement | undefined;
+    if (!el?.isConnected) return;
+    const reduce = typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+    const frameEl = (editor.Canvas as unknown as { getFrameEl?: () => HTMLIFrameElement | undefined }).getFrameEl?.()
+      || (editor.Canvas.getElement()?.querySelector('iframe') as HTMLIFrameElement | null);
+    const win = frameEl?.contentWindow;
+    if (!win) return;
+    const rect = el.getBoundingClientRect();
+    const targetTop = win.scrollY + rect.top - win.innerHeight / 2 + rect.height / 2;
+    win.scrollTo({ top: Math.max(0, targetTop), behavior: reduce ? 'auto' : 'smooth' });
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Keep Grapes selection/RTE toolbars inside the visible canvas so they never spill off-screen. */
