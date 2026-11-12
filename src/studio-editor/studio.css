@@ -332,15 +332,31 @@
 .embedded-studio .template-card__body p{ margin: 0; font-size: 0.88rem; color: var(--ink-3); overflow-wrap: anywhere; }
 .embedded-studio .template-card__body small{ font-weight: 500; color: var(--ink-3); }
 .embedded-studio .modal{
+  /* Beat global portals-demo `.modal` (left/top 50% + translate(-50%) + fixed width). */
   position: fixed;
   inset: 0;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: auto;
+  max-width: none;
+  max-height: none;
+  height: auto;
+  transform: none;
+  animation: none;
   z-index: 80;
   display: grid;
   place-items: center;
+  align-content: center;
+  justify-items: center;
   padding: clamp(0.5rem, 1.5vw, 1rem);
   background: rgb(18 22 58 / 0.45);
   overflow: auto;
   overscroll-behavior: contain;
+  border-radius: 0;
+  box-shadow: none;
+  flex-direction: unset;
 }
 .embedded-studio .modal__panel{
   width: min(100%, 34rem);
