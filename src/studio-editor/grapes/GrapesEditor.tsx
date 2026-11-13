@@ -367,8 +367,8 @@ export function GrapesEditor({ theme, catalog, page, device, ctx, left, pageTabs
   const clearSelection = () => editor?.select(undefined as never);
 
   return (
-    <div className={`gx${selected ? ' gx--inspecting' : ''}`}>
-      <aside className="gx-left" aria-label="Blocks and layers">
+    <div className={`gx${selected ? ' gx--inspecting' : ''}${left ? ' gx--settings' : ''}`}>
+      <aside className="gx-left" aria-label={left ? 'Design settings' : 'Blocks and layers'}>
         {left}
         <div className="panel" hidden={Boolean(left)}>
           {pageTabs}

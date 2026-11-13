@@ -674,6 +674,23 @@ router.post('/orders', checkoutLimiter, async (req: Request, res: Response) => {
       path: '/checkout',
       sessionId: optString(body.sessionId, 'sessionId', 80) || '',
     }).catch(() => undefined)
+    // Keep a Customer row so the seller Customers page stays accurate.
+    const phone = normalizePhone(shippingAddress.phone)
+    const emailKey = (customerEmail || `${phone}@orders.local`).toLowerCase()
+    if (phone) {
+      req.tenantDb!.Customer.findOneAndUpdate(
+        { email: emailKey },
+        {
+          $set: {
+            name: shippingAddress.name,
+            email: emailKey,
+            phone,
+          },
+          $inc: { orderCount: 1, totalSpent: order.total },
+        },
+        { upsert: true },
+      ).catch(() => undefined)
+    }
   } catch (err) {
     await releaseStock(req, reserved)
     sendError(res, err, 'Failed to place order', 'place order')
@@ -1186,6 +1203,142 @@ router.delete('/staff/:staffId', ...ownerOfTenant, async (req: Request, res: Res
     res.json({ success: true, message: 'Staff member removed.' })
   } catch (err) {
     sendError(res, err, 'Failed to remove staff member', 'remove staff')
+  }
+})
+
+/** Public contact form from the live storefront → seller Messages inbox. */
+router.post('/messages', checkoutLimiter, async (req: Request, res: Response) => {
+  try {
+    if (req.tenant!.status === 'read_only') {
+      res.status(403).json({ error: 'This store is not accepting messages right now.' })
+      return
+    }
+    const body = isPlainObject(req.body) ? req.body : {}
+    const name = reqString(body.name, 'name', 120)
+    const email = reqString(body.email, 'email', 254).toLowerCase()
+    if (!EMAIL_PATTERN.test(email)) throw new ValidationError('Enter a valid email address.')
+    const message = reqString(body.message, 'message', 4000)
+    const phone = optString(body.phone, 'phone', 40) || ''
+    const subject = optString(body.subject, 'subject', 200) || 'Storefront message'
+    const id = `msg_${Date.now().toString(36)}_${crypto.randomBytes(3).toString('hex')}`
+    const doc = await req.tenantDb!.StoreMessage.create({
+      id, name, email, phone, subject, message, read: false,
+    })
+    res.status(201).json({
+      id: doc.id,
+      name: doc.name,
+      email: doc.email,
+      phone: doc.phone,
+      subject: doc.subject,
+      message: doc.message,
+      createdAt: doc.createdAt.toISOString(),
+      read: doc.read,
+    })
+  } catch (err) {
+    sendError(res, err, 'Could not send your message.', 'store message')
+  }
+})
+
+router.get('/messages', ...staffOfTenant, async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 200)
+    const rows = await req.tenantDb!.StoreMessage.find().sort({ createdAt: -1 }).limit(limit).lean()
+    res.json(rows.map((m) => ({
+      id: m.id,
+      name: m.name,
+      email: m.email,
+      phone: m.phone || '',
+      subject: m.subject || '',
+      message: m.message,
+      createdAt: new Date(m.createdAt).toISOString(),
+      read: Boolean(m.read),
+    })))
+  } catch (err) {
+    sendError(res, err, 'Failed to load messages', 'list messages')
+  }
+})
+
+router.put('/messages/:id', ...staffOfTenant, async (req: Request, res: Response) => {
+  try {
+    const body = isPlainObject(req.body) ? req.body : {}
+    const $set: Record<string, unknown> = {}
+    if (typeof body.read === 'boolean') $set.read = body.read
+    if (Object.keys($set).length === 0) throw new ValidationError('Nothing to update.')
+    const updated = await req.tenantDb!.StoreMessage.findOneAndUpdate(
+      { id: String(req.params.id) },
+      { $set },
+      { new: true },
+    )
+    if (!updated) {
+      res.status(404).json({ error: 'Message not found.' })
+      return
+    }
+    res.json({
+      id: updated.id,
+      name: updated.name,
+      email: updated.email,
+      phone: updated.phone || '',
+      subject: updated.subject || '',
+      message: updated.message,
+      createdAt: updated.createdAt.toISOString(),
+      read: updated.read,
+    })
+  } catch (err) {
+    sendError(res, err, 'Failed to update message', 'update message')
+  }
+})
+
+router.delete('/messages/:id', ...staffOfTenant, async (req: Request, res: Response) => {
+  try {
+    const deleted = await req.tenantDb!.StoreMessage.findOneAndDelete({ id: String(req.params.id) })
+    if (!deleted) {
+      res.status(404).json({ error: 'Message not found.' })
+      return
+    }
+    res.json({ success: true })
+  } catch (err) {
+    sendError(res, err, 'Failed to delete message', 'delete message')
+  }
+})
+
+/** Public newsletter signup from the live storefront. */
+router.post('/newsletter', checkoutLimiter, async (req: Request, res: Response) => {
+  try {
+    const body = isPlainObject(req.body) ? req.body : {}
+    const email = reqString(body.email, 'email', 254).toLowerCase()
+    if (!EMAIL_PATTERN.test(email)) throw new ValidationError('Enter a valid email address.')
+    const existing = await req.tenantDb!.NewsletterSubscriber.findOne({ email })
+    if (existing) {
+      res.json({ ok: true, alreadySubscribed: true })
+      return
+    }
+    await req.tenantDb!.NewsletterSubscriber.create({ email, subscribedAt: new Date() })
+    res.status(201).json({ ok: true, alreadySubscribed: false })
+  } catch (err) {
+    sendError(res, err, 'Could not subscribe.', 'newsletter')
+  }
+})
+
+router.get('/newsletter', ...staffOfTenant, async (req: Request, res: Response) => {
+  try {
+    const rows = await req.tenantDb!.NewsletterSubscriber.find().sort({ subscribedAt: -1 }).limit(500).lean()
+    res.json(rows.map((s) => ({
+      email: s.email,
+      subscribedAt: new Date(s.subscribedAt).toISOString(),
+    })))
+  } catch (err) {
+    sendError(res, err, 'Failed to load subscribers', 'list newsletter')
+  }
+})
+
+router.delete('/newsletter/:email', ...staffOfTenant, async (req: Request, res: Response) => {
+  try {
+    const email = decodeURIComponent(String(req.params.email || '')).trim().toLowerCase()
+    if (!email) throw new ValidationError('Email is required.')
+    await req.tenantDb!.NewsletterSubscriber.deleteOne({ email })
+    res.json({ success: true })
+  } catch (err) {
+    sendError(res, err, 'Failed to remove subscriber', 'remove newsletter')
   }
 })
 

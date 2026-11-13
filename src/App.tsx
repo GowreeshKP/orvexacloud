@@ -4160,19 +4160,31 @@ function ContactModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    storeInbox.addMessage(tenant?.id || 'tenant_lunar', {
+    const payload = {
       name: name.trim(),
       email: email.trim(),
       phone: phone.trim(),
       subject,
       message: message.trim(),
-    })
-    setSubmitted(true)
-    onSuccessMessage(`Thank you! Your message has been sent to ${brandName} Customer Care.`)
-    setTimeout(() => {
-      setSubmitted(false)
-      onClose()
-    }, 1800)
+    }
+    const tenantId = tenant?.id || 'tenant_lunar'
+    const done = () => {
+      setSubmitted(true)
+      onSuccessMessage(`Thank you! Your message has been sent to ${brandName} Customer Care.`)
+      setTimeout(() => {
+        setSubmitted(false)
+        onClose()
+      }, 1800)
+    }
+    if (tenant?.slug) {
+      void storeInbox.submitMessage(tenant.slug, tenantId, payload).then(done).catch(() => {
+        storeInbox.addMessage(tenantId, payload)
+        done()
+      })
+      return
+    }
+    storeInbox.addMessage(tenantId, payload)
+    done()
   }
 
   return (
@@ -4662,7 +4674,7 @@ function Footer({
   onOpenAbout: () => void
   onOpenContact: (subject?: string) => void
   onBrowseCatalog: (linkLabel: string) => void
-  onSubscribe: (email: string) => boolean
+  onSubscribe: (email: string) => boolean | Promise<boolean>
 }) {
   const [newsletterEmail, setNewsletterEmail] = useState('')
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'joined' | 'already'>('idle')
@@ -4789,9 +4801,10 @@ function Footer({
           <form
             onSubmit={(e) => {
               e.preventDefault()
-              const added = onSubscribe(newsletterEmail.trim())
-              setNewsletterStatus(added ? 'joined' : 'already')
-              if (added) setNewsletterEmail('')
+              void Promise.resolve(onSubscribe(newsletterEmail.trim())).then((added) => {
+                setNewsletterStatus(added ? 'joined' : 'already')
+                if (added) setNewsletterEmail('')
+              })
             }}
             className="flex gap-0 border border-white/20"
           >
@@ -5376,7 +5389,10 @@ function TenantStorefront({ tenant }: { tenant: TenantConfig }) {
           )
           handleNavigate('catalog', match?.slug || 'all')
         },
-        onSubscribe: (email) => storeInbox.subscribe(activeTenant.id, email),
+        onSubscribe: (email) =>
+          storeInbox.subscribeRemote(activeTenant.slug, activeTenant.id, email).catch(() =>
+            storeInbox.subscribe(activeTenant.id, email),
+          ),
       })}
 
       <StoreInfoModal

@@ -4,6 +4,7 @@ import { fromOrvexaProducts, type Theme } from '@orvexa/theme'
 import '@orvexa/storefront-ui/storefront.css'
 import { apiClient } from '@/api/client'
 import type { TenantConfig } from '@/types/tenant'
+import StudioLiveCommerce from '@/components/store/StudioLiveCommerce'
 
 type PageId = 'home' | 'product' | 'collection' | 'about' | 'contact'
 
@@ -120,15 +121,17 @@ export default function StudioLiveStorefront({
   const catalog = fromOrvexaProducts(tenant.slug, products, { zeroStockMeans: 'sold-out' })
 
   return (
-    <Storefront
-      theme={theme}
-      catalog={catalog}
-      page={route.page}
-      basePath={route.basePath}
-      productHandle={route.productHandle}
-      collectionHandle={route.collectionHandle}
-      mode="live"
-    />
+    <StudioLiveCommerce slug={tenant.slug} tenantId={tenant.id} products={catalog.products}>
+      <Storefront
+        theme={theme}
+        catalog={catalog}
+        page={route.page}
+        basePath={route.basePath}
+        productHandle={route.productHandle}
+        collectionHandle={route.collectionHandle}
+        mode="live"
+      />
+    </StudioLiveCommerce>
   )
 }
 

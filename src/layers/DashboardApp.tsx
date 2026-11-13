@@ -1743,6 +1743,7 @@ function StorefrontCustomizer({ onToast }: { onToast: (msg: string) => void }) {
 function InboxManager({ onToast }: { onToast: (msg: string) => void }) {
   const { tenant } = useTenant()
   const tenantId = tenant?.id || ''
+  const slug = tenant?.slug || ''
   const [tab, setTab] = useState<'messages' | 'subscribers'>('messages')
   const [messages, setMessages] = useState<StoreMessage[]>(() => storeInbox.getMessages(tenantId))
   const [subscribers, setSubscribers] = useState<NewsletterSubscriber[]>(() => storeInbox.getSubscribers(tenantId))
@@ -1755,20 +1756,25 @@ function InboxManager({ onToast }: { onToast: (msg: string) => void }) {
       setSubscribers(storeInbox.getSubscribers(tenantId))
     }
     refresh()
+    if (slug && tenantId) {
+      void storeInbox.fetchMessages(slug, tenantId).then(setMessages)
+      void storeInbox.fetchSubscribers(slug, tenantId).then(setSubscribers)
+    }
     window.addEventListener(STORE_INBOX_EVENT, refresh)
     window.addEventListener('storage', refresh)
     return () => {
       window.removeEventListener(STORE_INBOX_EVENT, refresh)
       window.removeEventListener('storage', refresh)
     }
-  }, [tenantId])
+  }, [tenantId, slug])
 
   const unreadCount = messages.filter((m) => !m.read).length
   const visibleMessages = filter === 'unread' ? messages.filter((m) => !m.read) : messages
 
   const toggleOpen = (m: StoreMessage) => {
     setOpenId((prev) => (prev === m.id ? null : m.id))
-    if (!m.read) storeInbox.setRead(tenantId, m.id, true)
+    if (!m.read && slug) void storeInbox.setReadRemote(slug, tenantId, m.id, true)
+    else if (!m.read) storeInbox.setRead(tenantId, m.id, true)
   }
 
   const exportSubscribers = () => {
@@ -1838,7 +1844,7 @@ function InboxManager({ onToast }: { onToast: (msg: string) => void }) {
                 type="button"
                 className="btn btn-ghost btn-sm"
                 style={{ marginLeft: 'auto' }}
-                onClick={() => messages.filter((m) => !m.read).forEach((m) => storeInbox.setRead(tenantId, m.id, true))}
+                onClick={() => messages.filter((m) => !m.read).forEach((m) => { if (slug) void storeInbox.setReadRemote(slug, tenantId, m.id, true); else storeInbox.setRead(tenantId, m.id, true) })}
               >
                 Mark all as read
               </button>
@@ -1876,8 +1882,8 @@ function InboxManager({ onToast }: { onToast: (msg: string) => void }) {
                           {m.phone && (
                             <a href={`https://wa.me/${m.phone.replace(/[^0-9]/g, '').replace(/^(\d{10})$/, '91$1')}`} target="_blank" rel="noreferrer" className="btn btn-sm" style={{ background: '#25d366', color: '#fff', border: 0 }}>WhatsApp</a>
                           )}
-                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => storeInbox.setRead(tenantId, m.id, false)}>Mark unread</button>
-                          <button type="button" className="btn btn-danger btn-sm" onClick={() => { if (!window.confirm(`Delete the message from ${m.name}?`)) return; storeInbox.deleteMessage(tenantId, m.id); setOpenId(null); onToast('Message deleted.') }}>Delete</button>
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { if (slug) void storeInbox.setReadRemote(slug, tenantId, m.id, false); else storeInbox.setRead(tenantId, m.id, false) }}>Mark unread</button>
+                          <button type="button" className="btn btn-danger btn-sm" onClick={() => { if (!window.confirm(`Delete the message from ${m.name}?`)) return; if (slug) void storeInbox.deleteMessageRemote(slug, tenantId, m.id); else storeInbox.deleteMessage(tenantId, m.id); setOpenId(null); onToast('Message deleted.') }}>Delete</button>
                         </div>
                       </div>
                     )}
@@ -1903,7 +1909,7 @@ function InboxManager({ onToast }: { onToast: (msg: string) => void }) {
                     <p style={{ fontWeight: 600 }}>{s.email}</p>
                     <p className="small muted">Joined {formatDate(s.subscribedAt)}</p>
                   </div>
-                  <button type="button" className="btn btn-danger btn-sm" onClick={() => { storeInbox.unsubscribe(tenantId, s.email); onToast(`${s.email} removed from the list.`) }}>Remove</button>
+                  <button type="button" className="btn btn-danger btn-sm" onClick={() => { if (slug) void storeInbox.unsubscribeRemote(slug, tenantId, s.email); else storeInbox.unsubscribe(tenantId, s.email); onToast(`${s.email} removed from the list.`) }}>Remove</button>
                 </li>
               ))}
             </ul>

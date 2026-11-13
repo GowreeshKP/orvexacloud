@@ -1,5 +1,4 @@
-﻿
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { contrastChecks, FONT_IDS, FONTS, fontStylesheetHref, TEMPLATES, type EditOp, type Theme, type Tokens } from '@orvexa/theme';
 import { FieldControl, ImageField, type FieldContext } from './Fields';
 
@@ -36,31 +35,42 @@ function ColorInput({ label, value, onCommit }: { label: string; value: string; 
   );
 }
 
+function DesignGroup({ title, defaultOpen = false, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
+  return (
+    <details className="design-group" open={defaultOpen}>
+      <summary className="design-group__summary">{title}</summary>
+      <div className="design-group__body">{children}</div>
+    </details>
+  );
+}
+
 export function DesignPanel({ theme, apply, ctx, onOpenTemplates }: { theme: Theme; apply: (op: EditOp) => boolean; ctx: FieldContext; onOpenTemplates: () => void }) {
   const t = theme.tokens;
   const problems = contrastChecks(theme).filter((c) => c.level !== 'ok');
   const setToken = (changes: Record<string, unknown>) => apply({ op: 'set_tokens', changes });
 
   return (
-    <div className="panel">
+    <div className="panel panel--design">
       <link rel="stylesheet" href={fontStylesheetHref([...FONT_IDS])} />
-      <section className="group">
-        <h3>Template</h3>
+      <header className="panel__intro">
+        <h2>Design</h2>
+        <p className="field__help">Brand, colours, header and footer. Page blocks are edited on the canvas.</p>
+      </header>
+
+      <DesignGroup title="Template" defaultOpen>
         <div className="template-current">
-          <span>{TEMPLATES.find((t) => t.id === theme.templateId)?.name ?? 'Your own design'}</span>
+          <span>{TEMPLATES.find((tpl) => tpl.id === theme.templateId)?.name ?? 'Your own design'}</span>
           <button type="button" className="btn btn--small" onClick={onOpenTemplates}>Change</button>
         </div>
         <p className="field__help">Take a template’s style only, or replace your homepage with its layout.</p>
-      </section>
+      </DesignGroup>
 
-      <section className="group">
-        <h3>Brand</h3>
+      <DesignGroup title="Brand" defaultOpen>
         <FieldControl field={{ key: 'name', label: 'Store name', kind: 'text', max: 80, noAi: true }} value={theme.brand.name} ctx={ctx} onChange={(v) => apply({ op: 'update_brand', name: String(v) })} />
         <ImageField label="Logo" value={theme.brand.logo} aspect="free" ctx={ctx} help="A wide logo on a transparent background works best." onChange={(logo) => apply({ op: 'update_brand', logo: logo ?? null })} />
-      </section>
+      </DesignGroup>
 
-      <section className="group">
-        <h3>Colours</h3>
+      <DesignGroup title="Colours" defaultOpen>
         {(Object.keys(COLOR_LABELS) as Array<keyof Tokens['colors']>).map((key) => (
           <ColorInput key={key} label={COLOR_LABELS[key]} value={t.colors[key]} onCommit={(hex) => setToken({ colors: { [key]: hex } })} />
         ))}
@@ -69,10 +79,9 @@ export function DesignPanel({ theme, apply, ctx, onOpenTemplates }: { theme: The
             {problems.map((p) => <li key={p.id} className={`check check--${p.level}`}><strong>{p.title}</strong> {p.detail}</li>)}
           </ul>
         )}
-      </section>
+      </DesignGroup>
 
-      <section className="group">
-        <h3>Fonts</h3>
+      <DesignGroup title="Fonts">
         {(['display', 'body'] as const).map((role) => (
           <div className="field" key={role}>
             <label htmlFor={`font-${role}`}>{role === 'display' ? 'Headings' : 'Body text'}</label>
@@ -81,10 +90,9 @@ export function DesignPanel({ theme, apply, ctx, onOpenTemplates }: { theme: The
             </select>
           </div>
         ))}
-      </section>
+      </DesignGroup>
 
-      <section className="group">
-        <h3>Style</h3>
+      <DesignGroup title="Style">
         {STYLE_CHOICES.map((choice) => (
           <div className="field" key={choice.key}>
             <span className="field__label" id={`style-${choice.key}`}>{choice.label}</span>
@@ -95,10 +103,9 @@ export function DesignPanel({ theme, apply, ctx, onOpenTemplates }: { theme: The
             </div>
           </div>
         ))}
-      </section>
+      </DesignGroup>
 
-      <section className="group">
-        <h3>Top bar</h3>
+      <DesignGroup title="Top bar">
         <FieldControl field={{ key: 'enabled', label: 'Show an announcement bar', kind: 'toggle' }} value={theme.header.announcement.enabled} ctx={ctx}
           onChange={(v) => apply({ op: 'update_header', changes: { announcement: { enabled: v, ...(v && !theme.header.announcement.messages.length ? { messages: [`Welcome to ${theme.brand.name}`] } : {}) } } })} />
         {theme.header.announcement.enabled && <>
@@ -111,20 +118,21 @@ export function DesignPanel({ theme, apply, ctx, onOpenTemplates }: { theme: The
           <FieldControl field={{ key: 'href', label: 'Link (optional)', kind: 'href' }} value={theme.header.announcement.href} ctx={ctx}
             onChange={(v) => apply({ op: 'update_header', changes: { announcement: { href: v } } })} />
         </>}
-      </section>
+      </DesignGroup>
 
-      <section className="group">
-        <h3>Header</h3>
+      <DesignGroup title="Header & icons">
         <FieldControl field={{ key: 'layout', label: 'Logo position', kind: 'select', options: [['logo-left', 'Left'], ['logo-center', 'Centre']] }} value={theme.header.layout} ctx={ctx}
           onChange={(v) => apply({ op: 'update_header', changes: { layout: v } })} />
         <FieldControl field={{ key: 'background', label: 'Header colour', kind: 'select', options: [['page', 'Page background'], ['surface', 'Card colour'], ['primary', 'Main colour']] }} value={theme.header.background} ctx={ctx}
           onChange={(v) => apply({ op: 'update_header', changes: { background: v } })} />
-        <fieldset className="field">
+        <fieldset className="field field--icons">
           <legend>Icons</legend>
-          {(['search', 'account', 'wishlist'] as const).map((key) => (
-            <FieldControl key={key} field={{ key, label: { search: 'Search', account: 'Account sign-in', wishlist: 'Wishlist' }[key], kind: 'toggle' }} value={theme.header.icons[key]} ctx={ctx}
-              onChange={(v) => apply({ op: 'update_header', changes: { icons: { [key]: v } } })} />
-          ))}
+          <div className="icon-toggles">
+            {(['search', 'account', 'wishlist'] as const).map((key) => (
+              <FieldControl key={key} field={{ key, label: { search: 'Search', account: 'Account sign-in', wishlist: 'Wishlist' }[key], kind: 'toggle' }} value={theme.header.icons[key]} ctx={ctx}
+                onChange={(v) => apply({ op: 'update_header', changes: { icons: { [key]: v } } })} />
+            ))}
+          </div>
           <p className="field__help">The bag icon is always shown.</p>
         </fieldset>
         <FieldControl field={{ key: 'categoryMenu', label: 'Show categories under “Shop”', kind: 'toggle', help: 'The menu link to /collections/all opens a list of your categories.' }} value={theme.header.categoryMenu} ctx={ctx}
@@ -132,10 +140,9 @@ export function DesignPanel({ theme, apply, ctx, onOpenTemplates }: { theme: The
         <FieldControl field={{ key: 'sticky', label: 'Keep the header visible while scrolling', kind: 'toggle' }} value={theme.header.sticky} ctx={ctx}
           onChange={(v) => apply({ op: 'update_header', changes: { sticky: v } })} />
         <MenuEditor theme={theme} apply={apply} />
-      </section>
+      </DesignGroup>
 
-      <section className="group">
-        <h3>Footer</h3>
+      <DesignGroup title="Footer">
         <FieldControl field={{ key: 'tagline', label: 'Footer line', kind: 'text', max: 160 }} value={theme.footer.tagline} ctx={ctx} onChange={(v) => apply({ op: 'update_footer', changes: { tagline: v } })} />
         <FieldControl field={{ key: 'showPolicyLinks', label: 'Show shipping, returns, privacy and terms links', kind: 'toggle' }} value={theme.footer.showPolicyLinks} ctx={ctx} onChange={(v) => apply({ op: 'update_footer', changes: { showPolicyLinks: v } })} />
         {(['phone', 'email', 'address'] as const).map((key) => (
@@ -146,7 +153,7 @@ export function DesignPanel({ theme, apply, ctx, onOpenTemplates }: { theme: The
           <FieldControl key={key} field={{ key, label: `${key === 'whatsapp' ? 'WhatsApp' : key[0].toUpperCase() + key.slice(1)} link`, kind: 'href' }}
             value={theme.footer.social[key]} ctx={ctx} onChange={(v) => apply({ op: 'update_footer', changes: { social: { [key]: v } } })} />
         ))}
-      </section>
+      </DesignGroup>
     </div>
   );
 }
