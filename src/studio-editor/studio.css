@@ -516,10 +516,10 @@
 }
 /* Design / Categories / SEO need a wider sidebar so Top bar, icons and Footer fields align. */
 .embedded-studio .gx.gx--settings{
-  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
 }
 .embedded-studio .gx.gx--settings.gx--inspecting{
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr) minmax(280px, 340px);
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr) minmax(280px, 340px);
 }
 .embedded-studio .gx-left{ background: var(--surface); border-right: 1px solid var(--line-soft); overflow-x: hidden; overflow-y: auto; min-height: 0; min-width: 0; overscroll-behavior: contain; }
 .embedded-studio .panel--design{

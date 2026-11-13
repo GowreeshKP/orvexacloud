@@ -37,7 +37,7 @@ function ColorInput({ label, value, onCommit }: { label: string; value: string; 
 
 function DesignGroup({ title, defaultOpen = false, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
   return (
-    <details className="design-group" open={defaultOpen}>
+    <details className="design-group" defaultOpen={defaultOpen}>
       <summary className="design-group__summary">{title}</summary>
       <div className="design-group__body">{children}</div>
     </details>
