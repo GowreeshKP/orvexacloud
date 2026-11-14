@@ -114,21 +114,23 @@ function TextField({ field, value, onChange, ctx, multiline, aiContext }: { fiel
   );
 }
 
-function HrefField({ label, value, onChange, catalog }: { label: string; value: string; onChange: (v: string) => void; catalog: Catalog }) {
+function HrefField({ label, value, onChange, catalog, help = 'A page in your store (starts with /) or a full https:// address.' }: {
+  label: string; value: string; onChange: (v: string) => void; catalog: Catalog; help?: string | false;
+}) {
   const id = useId();
   const listId = useId();
   const { text, change, flush } = useCommittedText(value, onChange);
   return (
-    <div className="field">
+    <div className="field field--href">
       <label htmlFor={id}>{label}</label>
-      <input id={id} value={text} list={listId} placeholder="/collections/all" onChange={(e) => change(e.target.value)} onBlur={(e) => flush(e.target.value)} />
+      <input id={id} value={text} list={listId} placeholder="https://…" onChange={(e) => change(e.target.value)} onBlur={(e) => flush(e.target.value)} />
       <datalist id={listId}>
         <option value="/collections/all">All products</option>
         {catalog.collections.map((c) => <option key={c.id} value={`/collections/${c.handle}`}>{c.title}</option>)}
         <option value="/pages/about">About page</option>
         <option value="/pages/contact">Contact page</option>
       </datalist>
-      <p className="field__help">A page in your store (starts with /) or a full https:// address.</p>
+      {help !== false && <p className="field__help">{help}</p>}
     </div>
   );
 }
@@ -290,7 +292,7 @@ export function FieldControl({ field, value, onChange, ctx, aiContext }: { field
     case 'textarea':
       return <TextField field={field} value={String(value ?? '')} onChange={onChange} ctx={ctx} multiline={field.kind === 'textarea'} aiContext={aiContext} />;
     case 'href':
-      return <HrefField label={field.label} value={String(value ?? '')} onChange={onChange} catalog={ctx.catalog} />;
+      return <HrefField label={field.label} value={String(value ?? '')} onChange={onChange} catalog={ctx.catalog} help={field.help === undefined ? undefined : (field.help || false)} />;
     case 'select':
       if (field.options.length > 3) {
         return (
@@ -299,25 +301,80 @@ export function FieldControl({ field, value, onChange, ctx, aiContext }: { field
             <select id={id} value={String(value)} onChange={(e) => onChange(e.target.value)}>
               {field.options.map(([option, label]) => <option key={option} value={option}>{label}</option>)}
             </select>
+            {field.help && <p className="field__help">{field.help}</p>}
           </div>
         );
       }
       return (
         <div className="field">
           <span className="field__label" id={id}>{field.label}</span>
-          <div className="segmented" role="radiogroup" aria-labelledby={id}>
+          <div className="segmented segmented--full segmented--wrap" role="radiogroup" aria-labelledby={id}>
             {field.options.map(([option, label]) => (
               <button key={option} type="button" role="radio" aria-checked={value === option} className={value === option ? 'is-on' : ''} onClick={() => onChange(option)}>{label}</button>
             ))}
           </div>
+          {field.help && <p className="field__help">{field.help}</p>}
         </div>
       );
     case 'toggle':
       return (
-        <label className="toggle">
-          <input type="checkbox" checked={Boolean(value)} onChange={(e) => onChange(e.target.checked)} />
-          <span>{field.label}</span>
-        </label>
+        <div className="oxs-switch" style={{ margin: '0 0 0.65rem', width: '100%', minWidth: 0 }}>
+          <label
+            className="oxs-switch__row"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1fr) auto',
+              alignItems: 'center',
+              gap: '0.75rem',
+              width: '100%',
+              minHeight: 40,
+              margin: 0,
+              padding: '0.35rem 0',
+              background: 'transparent',
+              position: 'relative',
+              cursor: 'pointer',
+            }}
+          >
+            <span className="oxs-switch__text" style={{ minWidth: 0, lineHeight: 1.35, fontWeight: 500, fontSize: '0.9rem', whiteSpace: 'normal', overflowWrap: 'anywhere' }}>
+              {field.label}
+            </span>
+            <span
+              className={`oxs-switch__track${value ? ' is-on' : ''}`}
+              aria-hidden="true"
+              style={{
+                position: 'relative',
+                width: 42,
+                height: 24,
+                flex: 'none',
+                borderRadius: 99,
+                background: value ? 'var(--ink, #12163a)' : 'var(--line, #d9dcec)',
+              }}
+            >
+              <span
+                className="oxs-switch__thumb"
+                style={{
+                  position: 'absolute',
+                  top: 3,
+                  left: 3,
+                  width: 18,
+                  height: 18,
+                  borderRadius: '50%',
+                  background: '#fff',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
+                  transform: value ? 'translateX(18px)' : 'none',
+                }}
+              />
+            </span>
+            <input
+              className="oxs-switch__input"
+              type="checkbox"
+              checked={Boolean(value)}
+              onChange={(e) => onChange(e.target.checked)}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', margin: 0, opacity: 0, cursor: 'pointer' }}
+            />
+          </label>
+          {field.help && <p className="field__help" style={{ margin: '0.1rem 0 0', paddingRight: '3.2rem' }}>{field.help}</p>}
+        </div>
       );
     case 'number':
       return (
@@ -357,10 +414,15 @@ export function FieldControl({ field, value, onChange, ctx, aiContext }: { field
           {ctx.catalog.collections.length === 0 && <p className="field__help">You have no collections yet.</p>}
           <div className="checks">
             {ctx.catalog.collections.map((c) => (
-              <label key={c.id} className="toggle">
-                <input type="checkbox" checked={selected.includes(c.id)} disabled={!selected.includes(c.id) && selected.length >= field.maxItems}
-                  onChange={(e) => onChange(e.target.checked ? [...selected, c.id] : selected.filter((x) => x !== c.id))} />
-                <span>{c.title}</span>
+              <label key={c.id} className="oxs-switch__row oxs-switch__row--check">
+                <span className="oxs-switch__text">{c.title}</span>
+                <input
+                  className="oxs-switch__native"
+                  type="checkbox"
+                  checked={selected.includes(c.id)}
+                  disabled={!selected.includes(c.id) && selected.length >= field.maxItems}
+                  onChange={(e) => onChange(e.target.checked ? [...selected, c.id] : selected.filter((x) => x !== c.id))}
+                />
               </label>
             ))}
           </div>

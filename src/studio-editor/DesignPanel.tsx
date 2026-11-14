@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
 import { contrastChecks, FONT_IDS, FONTS, fontStylesheetHref, TEMPLATES, type EditOp, type Theme, type Tokens } from '@orvexa/theme';
 import { FieldControl, ImageField, type FieldContext } from './Fields';
 
@@ -35,16 +35,54 @@ function ColorInput({ label, value, onCommit }: { label: string; value: string; 
   );
 }
 
-function DesignGroup({ title, defaultOpen = false, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
+function DesignGroup({
+  title,
+  open,
+  defaultOpen = false,
+  onOpenChange,
+  children,
+}: {
+  title: string;
+  open?: boolean;
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  const controlled = open !== undefined;
   return (
-    <details className="design-group" defaultOpen={defaultOpen}>
+    <details
+      className="design-group"
+      {...(controlled
+        ? {
+            open,
+            onToggle: (e: SyntheticEvent<HTMLDetailsElement>) => {
+              onOpenChange?.(e.currentTarget.open);
+            },
+          }
+        : { defaultOpen })}
+    >
       <summary className="design-group__summary">{title}</summary>
       <div className="design-group__body">{children}</div>
     </details>
   );
 }
 
-export function DesignPanel({ theme, apply, ctx, onOpenTemplates }: { theme: Theme; apply: (op: EditOp) => boolean; ctx: FieldContext; onOpenTemplates: () => void }) {
+export function DesignPanel({
+  theme,
+  apply,
+  ctx,
+  onOpenTemplates,
+  templateOpen = true,
+  onTemplateOpenChange,
+}: {
+  theme: Theme;
+  apply: (op: EditOp) => boolean;
+  ctx: FieldContext;
+  onOpenTemplates: () => void;
+  /** When false after a template is chosen, the Template group stays collapsed across canvas remounts. */
+  templateOpen?: boolean;
+  onTemplateOpenChange?: (open: boolean) => void;
+}) {
   const t = theme.tokens;
   const problems = contrastChecks(theme).filter((c) => c.level !== 'ok');
   const setToken = (changes: Record<string, unknown>) => apply({ op: 'set_tokens', changes });
@@ -57,7 +95,7 @@ export function DesignPanel({ theme, apply, ctx, onOpenTemplates }: { theme: The
         <p className="field__help">Brand, colours, header and footer. Page blocks are edited on the canvas.</p>
       </header>
 
-      <DesignGroup title="Template" defaultOpen>
+      <DesignGroup title="Template" open={templateOpen} onOpenChange={onTemplateOpenChange}>
         <div className="template-current">
           <span>{TEMPLATES.find((tpl) => tpl.id === theme.templateId)?.name ?? 'Your own design'}</span>
           <button type="button" className="btn btn--small" onClick={onOpenTemplates}>Change</button>
@@ -105,7 +143,7 @@ export function DesignPanel({ theme, apply, ctx, onOpenTemplates }: { theme: The
         ))}
       </DesignGroup>
 
-      <DesignGroup title="Top bar">
+      <DesignGroup title="Top bar" defaultOpen>
         <FieldControl field={{ key: 'enabled', label: 'Show an announcement bar', kind: 'toggle' }} value={theme.header.announcement.enabled} ctx={ctx}
           onChange={(v) => apply({ op: 'update_header', changes: { announcement: { enabled: v, ...(v && !theme.header.announcement.messages.length ? { messages: [`Welcome to ${theme.brand.name}`] } : {}) } } })} />
         {theme.header.announcement.enabled && <>
@@ -120,20 +158,20 @@ export function DesignPanel({ theme, apply, ctx, onOpenTemplates }: { theme: The
         </>}
       </DesignGroup>
 
-      <DesignGroup title="Header & icons">
+      <DesignGroup title="Header & icons" defaultOpen>
         <FieldControl field={{ key: 'layout', label: 'Logo position', kind: 'select', options: [['logo-left', 'Left'], ['logo-center', 'Centre']] }} value={theme.header.layout} ctx={ctx}
           onChange={(v) => apply({ op: 'update_header', changes: { layout: v } })} />
         <FieldControl field={{ key: 'background', label: 'Header colour', kind: 'select', options: [['page', 'Page background'], ['surface', 'Card colour'], ['primary', 'Main colour']] }} value={theme.header.background} ctx={ctx}
           onChange={(v) => apply({ op: 'update_header', changes: { background: v } })} />
-        <fieldset className="field field--icons">
-          <legend>Icons</legend>
-          <div className="icon-toggles">
+        <fieldset className="field field--icons" style={{ marginBottom: '0.85rem', minWidth: 0, width: '100%' }}>
+          <legend style={{ display: 'block', width: '100%', margin: '0 0 0.45rem', padding: 0, float: 'none' }}>Icons</legend>
+          <div className="icon-toggles" style={{ display: 'grid', gap: '0.15rem', width: '100%' }}>
             {(['search', 'account', 'wishlist'] as const).map((key) => (
               <FieldControl key={key} field={{ key, label: { search: 'Search', account: 'Account sign-in', wishlist: 'Wishlist' }[key], kind: 'toggle' }} value={theme.header.icons[key]} ctx={ctx}
                 onChange={(v) => apply({ op: 'update_header', changes: { icons: { [key]: v } } })} />
             ))}
           </div>
-          <p className="field__help">The bag icon is always shown.</p>
+          <p className="field__help" style={{ margin: '0.35rem 0 0' }}>The bag icon is always shown.</p>
         </fieldset>
         <FieldControl field={{ key: 'categoryMenu', label: 'Show categories under “Shop”', kind: 'toggle', help: 'The menu link to /collections/all opens a list of your categories.' }} value={theme.header.categoryMenu} ctx={ctx}
           onChange={(v) => apply({ op: 'update_header', changes: { categoryMenu: v } })} />
@@ -142,17 +180,21 @@ export function DesignPanel({ theme, apply, ctx, onOpenTemplates }: { theme: The
         <MenuEditor theme={theme} apply={apply} />
       </DesignGroup>
 
-      <DesignGroup title="Footer">
+      <DesignGroup title="Footer" defaultOpen>
         <FieldControl field={{ key: 'tagline', label: 'Footer line', kind: 'text', max: 160 }} value={theme.footer.tagline} ctx={ctx} onChange={(v) => apply({ op: 'update_footer', changes: { tagline: v } })} />
         <FieldControl field={{ key: 'showPolicyLinks', label: 'Show shipping, returns, privacy and terms links', kind: 'toggle' }} value={theme.footer.showPolicyLinks} ctx={ctx} onChange={(v) => apply({ op: 'update_footer', changes: { showPolicyLinks: v } })} />
         {(['phone', 'email', 'address'] as const).map((key) => (
-          <FieldControl key={key} field={{ key, label: { phone: 'Support phone', email: 'Support email', address: 'Address' }[key], kind: 'text', max: key === 'address' ? 200 : key === 'email' ? 120 : 20, noAi: true }}
+          <FieldControl key={key} field={{ key, label: { phone: 'Support phone', email: 'Support email', address: 'Address' }[key], kind: 'text', max: key === 'address' ? 200 : key === 'email' ? 120 : 40, noAi: true }}
             value={theme.footer.contact[key]} ctx={ctx} onChange={(v) => apply({ op: 'update_footer', changes: { contact: { [key]: v } } })} />
         ))}
-        {(['instagram', 'facebook', 'youtube', 'pinterest', 'whatsapp'] as const).map((key) => (
-          <FieldControl key={key} field={{ key, label: `${key === 'whatsapp' ? 'WhatsApp' : key[0].toUpperCase() + key.slice(1)} link`, kind: 'href' }}
-            value={theme.footer.social[key]} ctx={ctx} onChange={(v) => apply({ op: 'update_footer', changes: { social: { [key]: v } } })} />
-        ))}
+        <div className="field field--social">
+          <span className="field__label">Social links</span>
+          <p className="field__help">Leave blank to hide an icon. Use a full https:// URL.</p>
+          {(['instagram', 'facebook', 'youtube', 'pinterest', 'whatsapp'] as const).map((key) => (
+            <FieldControl key={key} field={{ key, label: `${key === 'whatsapp' ? 'WhatsApp' : key[0].toUpperCase() + key.slice(1)}`, kind: 'href', help: '' }}
+              value={theme.footer.social[key]} ctx={ctx} onChange={(v) => apply({ op: 'update_footer', changes: { social: { [key]: v } } })} />
+          ))}
+        </div>
       </DesignGroup>
     </div>
   );
@@ -162,16 +204,18 @@ function MenuEditor({ theme, apply }: { theme: Theme; apply: (op: EditOp) => boo
   const menu = theme.header.menu;
   const set = (next: typeof menu) => apply({ op: 'update_header', changes: { menu: next } });
   return (
-    <fieldset className="field list-editor">
-      <legend>Menu links</legend>
-      {menu.map((item, i) => (
-        <div className="menu-row" key={`${i}-${item.label}-${item.href}`}>
-          <input aria-label={`Menu item ${i + 1} label`} defaultValue={item.label} maxLength={30} onBlur={(e) => e.target.value !== item.label && set(menu.map((m, j) => (j === i ? { ...m, label: e.target.value } : m)))} />
-          <input aria-label={`Menu item ${i + 1} link`} className="mono" defaultValue={item.href} maxLength={300} onBlur={(e) => e.target.value !== item.href && set(menu.map((m, j) => (j === i ? { ...m, href: e.target.value } : m)))} />
-          <button type="button" className="icon-button" aria-label={`Remove menu item ${i + 1}`} onClick={() => set(menu.filter((_, j) => j !== i))}>×</button>
-        </div>
-      ))}
-      {menu.length < 7 && <button type="button" className="btn btn--small" onClick={() => set([...menu, { label: 'New link', href: '/collections/all' }])}>Add link</button>}
+    <fieldset className="field list-editor" style={{ width: '100%', minWidth: 0 }}>
+      <legend style={{ display: 'block', width: '100%', margin: '0 0 0.45rem', padding: 0, float: 'none' }}>Menu links</legend>
+      <div className="menu-list" style={{ display: 'grid', gap: '0.4rem', width: '100%', minWidth: 0 }}>
+        {menu.map((item, i) => (
+          <div className="menu-row" key={`${i}-${item.label}-${item.href}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.15fr) 32px', gap: '0.35rem', alignItems: 'center', width: '100%' }}>
+            <input aria-label={`Menu item ${i + 1} label`} defaultValue={item.label} maxLength={30} placeholder="Label" style={{ minWidth: 0, width: '100%' }} onBlur={(e) => e.target.value !== item.label && set(menu.map((m, j) => (j === i ? { ...m, label: e.target.value } : m)))} />
+            <input aria-label={`Menu item ${i + 1} link`} className="mono" defaultValue={item.href} maxLength={300} placeholder="/page" style={{ minWidth: 0, width: '100%' }} onBlur={(e) => e.target.value !== item.href && set(menu.map((m, j) => (j === i ? { ...m, href: e.target.value } : m)))} />
+            <button type="button" className="icon-button" aria-label={`Remove menu item ${i + 1}`} onClick={() => set(menu.filter((_, j) => j !== i))}>×</button>
+          </div>
+        ))}
+      </div>
+      {menu.length < 7 && <button type="button" className="btn btn--small" style={{ marginTop: '0.45rem' }} onClick={() => set([...menu, { label: 'New link', href: '/collections/all' }])}>Add link</button>}
     </fieldset>
   );
 }

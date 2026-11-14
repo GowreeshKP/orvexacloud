@@ -39,6 +39,9 @@ export interface Product {
   compression: string
   price: number
   priceFormatted: string
+  originalPrice?: number
+  /** Units available. 0 = sold out on the storefront. */
+  stockCount?: number
   rating: number
   reviewsCount: number
   badge?: string

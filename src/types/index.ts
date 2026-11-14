@@ -10,7 +10,11 @@ export interface Product {
   compression: string
   price: number
   originalPrice?: number
+  /** Server field; same meaning as originalPrice / compare-at. */
+  mrp?: number
   priceFormatted: string
+  /** Units available. 0 = sold out on the storefront. */
+  stockCount?: number
   rating: number
   reviewsCount: number
   badge?: string

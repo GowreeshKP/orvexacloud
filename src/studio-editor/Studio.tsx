@@ -50,6 +50,8 @@ export function Studio({ session, initialTheme, initialRevision, catalog: storeC
   const lastEdit = useRef<'theme' | 'page'>('page');
   /** Bumped when the whole design is replaced (restore), so the visual editor reloads. */
   const [epoch, setEpoch] = useState(0);
+  /** Template accordion — collapses after a template is chosen (survives canvas remount). */
+  const [templateOpen, setTemplateOpen] = useState(true);
   const photoInput = useRef<HTMLInputElement>(null);
   const catalog = useSample || storeCatalog.sample ? sampleCatalog(session.storeId, state.theme?.nicheId ?? 'general') : storeCatalog;
   const storeUrl = `https://orvexacloud.in/${session.storeId}${published != null ? `?v=${published}` : ''}`;
@@ -237,7 +239,16 @@ export function Studio({ session, initialTheme, initialRevision, catalog: storeC
             pageTabs={<PageTabs page={state.page} onPage={(page) => dispatch({ type: 'page', page })} />}
             left={state.panel === 'sections' ? undefined : (
               <>
-                {state.panel === 'design' && <DesignPanel theme={theme} apply={apply} ctx={ctx} onOpenTemplates={() => setDialog('templates')} />}
+                {state.panel === 'design' && (
+                  <DesignPanel
+                    theme={theme}
+                    apply={apply}
+                    ctx={ctx}
+                    onOpenTemplates={() => setDialog('templates')}
+                    templateOpen={templateOpen}
+                    onTemplateOpenChange={setTemplateOpen}
+                  />
+                )}
                 {state.panel === 'categories' && <CategoriesPanel theme={theme} catalog={catalog} apply={apply} ctx={ctx} />}
                 {state.panel === 'seo' && features.seo && <SeoPanel theme={theme} apply={apply} storeUrl={storeUrl} ctx={ctx} />}
               </>
@@ -279,6 +290,7 @@ export function Studio({ session, initialTheme, initialRevision, catalog: storeC
           const ok = apply(mode === 'style' ? { op: 'apply_template_style', templateId: template.id } : { op: 'apply_template', templateId: template.id });
           if (!ok) return;
           setDialog(null);
+          setTemplateOpen(false);
           // Always remount the visual editor so template colours/layout show immediately.
           dispatch({ type: 'page', page: mode === 'replace' ? 'home' : state.page });
           setEpoch((n) => n + 1);

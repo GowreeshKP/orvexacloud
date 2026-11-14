@@ -804,6 +804,7 @@ function ProductManager({ onToast }: { onToast: (msg: string) => void }) {
                   <th>Product</th>
                   <th>Category</th>
                   <th>Price</th>
+                  <th>Stock</th>
                   <th>Fabric & Tech</th>
                   <th>Colours & Sizes</th>
                   <th>Rating</th>
@@ -836,6 +837,21 @@ function ProductManager({ onToast }: { onToast: (msg: string) => void }) {
                     <td>
                       <p className="cell-main money">{product.priceFormatted}</p>
                       {product.originalPrice && <p className="cell-sub" style={{ textDecoration: 'line-through' }}>₹{product.originalPrice}</p>}
+                    </td>
+
+                    {/* Stock */}
+                    <td>
+                      {(product.stockCount ?? 0) > 0 ? (
+                        <>
+                          <p className="cell-main">{product.stockCount}</p>
+                          <p className="cell-sub">{(product.stockCount ?? 0) <= 5 ? 'Low stock' : 'In stock'}</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="cell-main" style={{ color: 'var(--coral)' }}>0</p>
+                          <p className="cell-sub">Sold out</p>
+                        </>
+                      )}
                     </td>
 
                     {/* Fabric Tech */}
@@ -945,7 +961,12 @@ function ProductFormModal({
   const [newCategoryName, setNewCategoryName] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [price, setPrice] = useState(product?.price?.toString() || (isTemplate ? '' : '1199'))
-  const [originalPrice, setOriginalPrice] = useState(product?.originalPrice?.toString() || (isTemplate ? '' : '1499'))
+  const [originalPrice, setOriginalPrice] = useState(
+    (product?.originalPrice ?? (product as Product & { mrp?: number })?.mrp)?.toString() || (isTemplate ? '' : '1499')
+  )
+  const [stockCount, setStockCount] = useState(
+    product?.stockCount != null ? String(product.stockCount) : isEditing ? '0' : '25'
+  )
   const [badge, setBadge] = useState(product?.badge ?? (isTemplate ? '' : 'BESTSELLER'))
   const [sculptLevel, setSculptLevel] = useState(product?.sculptLevel || (isTemplate ? '' : 'A-LINE FLARE'))
   const [fabricTech, setFabricTech] = useState(product?.fabricTech || (isTemplate ? '' : '100% Pure Breathable Cotton'))
@@ -1060,6 +1081,12 @@ function ProductFormModal({
       setActiveTab('info')
       return
     }
+    const stockNum = Math.max(0, Math.floor(Number(stockCount)))
+    if (!Number.isFinite(stockNum)) {
+      setFormError('Enter a valid stock quantity (0 or more).')
+      setActiveTab('info')
+      return
+    }
     if (!imgMain && images.length === 0) {
       setFormError('Add at least one product photo.')
       setActiveTab('images')
@@ -1077,6 +1104,8 @@ function ProductFormModal({
       price: priceNum,
       priceFormatted: `₹${priceNum.toLocaleString()}`,
       originalPrice: origPriceNum,
+      mrp: origPriceNum,
+      stockCount: stockNum,
       sculptLevel,
       badge: badge || undefined,
       fabricTech,
@@ -1147,414 +1176,393 @@ function ProductFormModal({
           )}
           {/* TAB 1: BASIC INFO */}
           {activeTab === 'info' && (
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-black/60 mb-1 block">
-                  Product Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder={isTemplate ? 'e.g. Product name' : 'e.g. Sunset Chanderi Silk Maxi Dress'}
-                  className="w-full border border-black/20 px-4 py-2.5 text-sm rounded-lg focus:border-black outline-none font-medium"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-black/60 mb-1 block">
-                    Category *
-                  </label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full border border-black/20 px-3 py-2.5 text-xs font-bold uppercase rounded-lg focus:border-black outline-none bg-white cursor-pointer"
-                  >
-                    {categoryOptions.length === 0 && <option value="">No categories yet</option>}
-                    {categoryOptions.map((c) => (
-                      <option key={c.slug} value={c.slug}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  {isTemplate && (
-                    <div className="flex gap-1.5 mt-1.5">
-                      <input
-                        type="text"
-                        value={newCategoryName}
-                        onChange={(e) => setNewCategoryName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            handleCreateCategory()
-                          }
-                        }}
-                        placeholder="New category"
-                        className="flex-1 min-w-0 border border-black/15 px-2 py-1 text-[11px] rounded focus:border-black outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleCreateCategory}
-                        className="text-[10px] font-bold uppercase px-2 py-1 border border-black/20 rounded hover:bg-stone-100 cursor-pointer"
-                      >
-                        + Add
-                      </button>
-                    </div>
-                  )}
+            <div className="stack">
+              <section className="card card-pad">
+                <p className="section-title">Product</p>
+                <div className="stack" style={{ gap: 14 }}>
+                  <div className="field">
+                    <label className="label" htmlFor="product-name">Product name *</label>
+                    <input
+                      id="product-name"
+                      className="input"
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={isTemplate ? 'e.g. Product name' : 'e.g. Sunset Chanderi Silk Maxi Dress'}
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="label" htmlFor="product-desc">Description</label>
+                    <textarea
+                      id="product-desc"
+                      className="textarea"
+                      rows={3}
+                      value={desc}
+                      onChange={(e) => setDesc(e.target.value)}
+                      placeholder={isTemplate ? 'Describe your product and what makes it great...' : 'Describe your product styling, silhouette and appeal...'}
+                    />
+                  </div>
                 </div>
+              </section>
 
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-black/60 mb-1 block">
-                    Selling Price (₹) *
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    value={price}
-                    onChange={(e) => setPrice(e.target.value)}
-                    placeholder="e.g. 499"
-                    className="w-full border border-black/20 px-4 py-2.5 text-sm font-bold rounded-lg focus:border-black outline-none"
-                  />
+              <section className="card card-pad">
+                <p className="section-title">Pricing & category</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14 }}>
+                  <div className="field">
+                    <label className="label" htmlFor="product-category">Category *</label>
+                    <select
+                      id="product-category"
+                      className="select"
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                    >
+                      {categoryOptions.length === 0 && <option value="">No categories yet</option>}
+                      {categoryOptions.map((c) => (
+                        <option key={c.slug} value={c.slug}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    {isTemplate && (
+                      <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                        <input
+                          type="text"
+                          className="input"
+                          value={newCategoryName}
+                          onChange={(e) => setNewCategoryName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              handleCreateCategory()
+                            }
+                          }}
+                          placeholder="New category"
+                          style={{ height: 36, flex: 1, minWidth: 0 }}
+                        />
+                        <button type="button" className="btn btn-outline btn-sm" onClick={handleCreateCategory}>
+                          + Add
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="field">
+                    <label className="label" htmlFor="product-price">Selling price (₹) *</label>
+                    <input
+                      id="product-price"
+                      className="input"
+                      type="number"
+                      required
+                      min={0}
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      placeholder="e.g. 499"
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="label" htmlFor="product-mrp">Compare at / MRP (₹)</label>
+                    <input
+                      id="product-mrp"
+                      className="input"
+                      type="number"
+                      min={0}
+                      value={originalPrice}
+                      onChange={(e) => setOriginalPrice(e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </div>
                 </div>
+              </section>
 
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-black/60 mb-1 block">
-                    Original MRP / Compare (₹)
-                  </label>
-                  <input
-                    type="number"
-                    value={originalPrice}
-                    onChange={(e) => setOriginalPrice(e.target.value)}
-                    placeholder="Optional"
-                    className="w-full border border-black/20 px-4 py-2.5 text-sm rounded-lg focus:border-black outline-none text-black/60"
-                  />
+              <section className="card card-pad">
+                <p className="section-title">Inventory</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, alignItems: 'end' }}>
+                  <div className="field">
+                    <label className="label" htmlFor="product-stock">Quantity in stock *</label>
+                    <input
+                      id="product-stock"
+                      className="input"
+                      type="number"
+                      required
+                      min={0}
+                      step={1}
+                      value={stockCount}
+                      onChange={(e) => setStockCount(e.target.value)}
+                      placeholder="e.g. 25"
+                    />
+                  </div>
+                  <div className="callout" style={{ margin: 0 }}>
+                    <span>
+                      {Number(stockCount) > 0
+                        ? `${Number(stockCount)} available — customers can buy this product.`
+                        : '0 stock shows as Sold out on your storefront.'}
+                    </span>
+                  </div>
                 </div>
-              </div>
+              </section>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-black/60 mb-1 block">
-                    Badge Tag
-                  </label>
-                  <select
-                    value={badge}
-                    onChange={(e) => setBadge(e.target.value)}
-                    className="w-full border border-black/20 px-3 py-2.5 text-xs font-bold uppercase rounded-lg focus:border-black outline-none bg-white cursor-pointer"
-                  >
-                    <option value="BESTSELLER">BESTSELLER</option>
-                    <option value="NEW LAUNCH">NEW LAUNCH</option>
-                    <option value="HERITAGE EDIT">HERITAGE EDIT</option>
-                    <option value="HANDCRAFTED">HANDCRAFTED</option>
-                    <option value="LIMITED EDITION">LIMITED EDITION</option>
-                    <option value="">NO BADGE</option>
-                  </select>
+              <section className="card card-pad">
+                <p className="section-title">Merchandising</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+                  <div className="field">
+                    <label className="label" htmlFor="product-badge">Badge</label>
+                    <select id="product-badge" className="select" value={badge} onChange={(e) => setBadge(e.target.value)}>
+                      <option value="BESTSELLER">BESTSELLER</option>
+                      <option value="NEW LAUNCH">NEW LAUNCH</option>
+                      <option value="HERITAGE EDIT">HERITAGE EDIT</option>
+                      <option value="HANDCRAFTED">HANDCRAFTED</option>
+                      <option value="LIMITED EDITION">LIMITED EDITION</option>
+                      <option value="">NO BADGE</option>
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label className="label" htmlFor="product-tag">{labels.tag}</label>
+                    <input
+                      id="product-tag"
+                      className="input"
+                      type="text"
+                      value={sculptLevel}
+                      onChange={(e) => setSculptLevel(e.target.value)}
+                      placeholder={isTemplate ? `e.g. ${niche.tagLabel}` : 'e.g. A-LINE FLARE'}
+                    />
+                  </div>
                 </div>
-
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-black/60 mb-1 block">
-                    {labels.tag}
-                  </label>
-                  <input
-                    type="text"
-                    value={sculptLevel}
-                    onChange={(e) => setSculptLevel(e.target.value)}
-                    placeholder={isTemplate ? `e.g. ${niche.tagLabel}` : 'e.g. A-LINE FLARE'}
-                    className="w-full border border-black/20 px-4 py-2.5 text-xs font-bold uppercase rounded-lg focus:border-black outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-black/60 mb-1 block">
-                  Product Description
-                </label>
-                <textarea
-                  rows={3}
-                  value={desc}
-                  onChange={(e) => setDesc(e.target.value)}
-                  placeholder={isTemplate ? 'Describe your product and what makes it great...' : 'Describe your product styling, silhouette and appeal...'}
-                  className="w-full border border-black/20 px-4 py-2.5 text-xs rounded-lg focus:border-black outline-none"
-                />
-              </div>
+              </section>
             </div>
           )}
 
           {/* TAB 2: PHOTOS & GALLERY UPLOADER */}
           {activeTab === 'images' && (
-            <div className="space-y-6">
-              {/* Primary Image Display & Controls */}
-              <div className="border border-black/10 rounded-xl p-5 bg-stone-50/70 flex flex-col md:flex-row items-center gap-6">
-                <div className="relative w-36 h-48 rounded-lg overflow-hidden bg-stone-200 border-2 border-black flex-shrink-0 shadow-md">
-                  {imgMain ? (
-                    <img src={imgMain} alt="Primary preview" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-black/40 text-[11px] font-semibold gap-1">
-                      <span className="text-2xl">📷</span>
-                      No photo yet
+            <div className="stack">
+              <section className="card card-pad">
+                <p className="section-title">Main photo</p>
+                <div className="row wrap" style={{ alignItems: 'flex-start', gap: 20 }}>
+                  <div style={{ position: 'relative', width: 120, height: 160, borderRadius: 12, overflow: 'hidden', background: 'var(--line-soft)', border: '1.5px solid var(--line)', flexShrink: 0 }}>
+                    {imgMain ? (
+                      <img src={imgMain} alt="Primary preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div className="empty" style={{ padding: 12, height: '100%' }}>
+                        <p className="small muted">No photo</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="stack grow" style={{ gap: 12 }}>
+                    <p className="card-sub">
+                      {isTemplate
+                        ? 'Upload a file or paste an image URL.'
+                        : 'Upload a file, paste a URL, or pick a studio preset below.'}
+                    </p>
+                    <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="sr-only" />
+                    <div className="row wrap">
+                      <button type="button" className="btn btn-primary btn-sm" onClick={() => fileInputRef.current?.click()}>
+                        Upload from device
+                      </button>
                     </div>
-                  )}
-                  <span className="absolute bottom-1 right-1 bg-black text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase">
-                    MAIN PHOTO
-                  </span>
-                </div>
-
-                <div className="flex-1 space-y-3 w-full">
-                  <h4 className="text-sm font-bold text-black uppercase tracking-wider">Primary Display Picture</h4>
-                  <p className="text-xs text-black/60">
-                    {isTemplate
-                      ? 'Upload an image file directly from your computer or paste an image URL.'
-                      : 'Upload an image file directly from your computer, type an image URL, or pick from our curated fashion gallery below.'}
-                  </p>
-
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileUpload}
-                      accept="image/*"
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="bg-black text-white font-bold text-xs uppercase tracking-wider px-4 py-2 rounded-lg hover:bg-stone-800 transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
-                    >
-                      <span>📁</span>
-                      <span>Upload from Device</span>
-                    </button>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold uppercase text-black/40 block mb-1">Or Paste Image URL</label>
-                    <input
-                      type="url"
-                      value={imgMain}
-                      onChange={(e) => setImgMain(e.target.value)}
-                      onBlur={(e) => {
-                        const url = e.target.value.trim()
-                        if (url && !images.includes(url)) setImages([url, ...images])
-                      }}
-                      placeholder="https://..."
-                      className="w-full border border-black/20 px-3 py-1.5 text-xs rounded font-mono outline-none focus:border-black bg-white"
-                    />
+                    <div className="field">
+                      <label className="label" htmlFor="product-img-url">Image URL</label>
+                      <input
+                        id="product-img-url"
+                        className="input mono"
+                        type="url"
+                        value={imgMain}
+                        onChange={(e) => setImgMain(e.target.value)}
+                        onBlur={(e) => {
+                          const url = e.target.value.trim()
+                          if (url && !images.includes(url)) setImages([url, ...images])
+                        }}
+                        placeholder="https://..."
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              </section>
 
-              {/* Gallery Multi-images */}
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-black mb-2">
-                  Gallery Photos ({images.length})
-                </h4>
-                <div className="flex flex-wrap gap-3 items-center">
+              <section className="card card-pad">
+                <p className="section-title">Gallery ({images.length})</p>
+                <div className="row wrap" style={{ gap: 10 }}>
                   {images.map((img, idx) => (
                     <div
                       key={idx}
-                      className={`relative w-20 h-24 rounded-lg overflow-hidden border-2 bg-stone-100 group shadow-xs ${
-                        img === imgMain ? 'border-black' : 'border-black/20'
-                      }`}
+                      style={{
+                        position: 'relative',
+                        width: 72,
+                        height: 88,
+                        borderRadius: 10,
+                        overflow: 'hidden',
+                        border: `1.5px solid ${img === imgMain ? 'var(--ink)' : 'var(--line)'}`,
+                        background: 'var(--line-soft)',
+                      }}
                     >
-                      <img src={img} alt={`Gallery ${idx}`} className="w-full h-full object-cover" />
+                      <img src={img} alt={`Gallery ${idx}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       <button
                         type="button"
+                        className="btn btn-ghost btn-icon"
                         onClick={() => handleRemoveGalleryImage(idx)}
-                        className="absolute top-1 right-1 bg-black/80 hover:bg-red-600 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                        title="Remove photo"
+                        aria-label="Remove photo"
+                        style={{ position: 'absolute', top: 2, right: 2, width: 22, height: 22, minHeight: 22, padding: 0, background: 'rgba(18,22,58,.75)', color: '#fff' }}
                       >
                         ✕
                       </button>
                       <button
                         type="button"
+                        className="btn btn-sm"
                         onClick={() => setImgMain(img)}
-                        className="absolute bottom-1 inset-x-1 bg-white/90 text-black text-[8px] font-bold py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity text-center cursor-pointer"
+                        style={{ position: 'absolute', bottom: 2, left: 2, right: 2, minHeight: 22, padding: '0 4px', fontSize: 10 }}
                       >
-                        Set Main
+                        Main
                       </button>
                     </div>
                   ))}
+                  {images.length === 0 && <p className="muted small">No gallery photos yet.</p>}
                 </div>
-              </div>
+              </section>
 
-              {/* Curated 1-Click Fashion Photo Presets (Lunar demo stores only) */}
               {!isTemplate && (
-              <div className="border-t border-black/10 pt-4">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-black mb-1">
-                  Or Pick From Curated Studio Presets
-                </h4>
-                <p className="text-[11px] text-black/50 mb-3">
-                  Click any studio photoshoot angle to instantly attach to your product:
-                </p>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {PRODUCT_PHOTO_PRESETS.map((preset, i) => (
-                    <div
-                      key={i}
-                      onClick={() => {
-                        setImgMain(preset.url)
-                        if (!images.includes(preset.url)) setImages([preset.url, ...images])
-                      }}
-                      className="border border-black/10 hover:border-black rounded-lg p-2 bg-stone-50 hover:bg-white transition-all cursor-pointer group text-left"
-                    >
-                      <img
-                        src={preset.url}
-                        alt={preset.name}
-                        className="w-full h-24 object-cover rounded mb-2 group-hover:scale-102 transition-transform"
-                      />
-                      <p className="text-[10px] font-bold text-black truncate">{preset.name}</p>
-                      <p className="text-[9px] text-black/40 uppercase">{preset.category}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                <section className="card card-pad">
+                  <p className="section-title">Studio presets</p>
+                  <p className="card-sub" style={{ marginBottom: 12 }}>Click a photo to attach it to this product.</p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
+                    {PRODUCT_PHOTO_PRESETS.map((preset, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className="card card-pad"
+                        onClick={() => {
+                          setImgMain(preset.url)
+                          if (!images.includes(preset.url)) setImages([preset.url, ...images])
+                        }}
+                        style={{ textAlign: 'left', cursor: 'pointer', padding: 8 }}
+                      >
+                        <img src={preset.url} alt={preset.name} style={{ width: '100%', height: 88, objectFit: 'cover', borderRadius: 8, marginBottom: 6 }} />
+                        <p className="cell-main" style={{ fontSize: 11 }}>{preset.name}</p>
+                        <p className="cell-sub">{preset.category}</p>
+                      </button>
+                    ))}
+                  </div>
+                </section>
               )}
             </div>
           )}
 
           {/* TAB 3: COLORS & SIZES */}
           {activeTab === 'variants' && (
-            <div className="space-y-6">
-              {/* Color Swatches */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <label className="text-xs font-bold uppercase tracking-wider text-black">Color Swatches</label>
-                  <button
-                    type="button"
-                    onClick={handleAddColor}
-                    className="text-xs font-bold text-black border border-black/20 px-3 py-1 rounded hover:bg-stone-100 cursor-pointer"
-                  >
-                    + Add Color
-                  </button>
+            <div className="stack">
+              <section className="card card-pad">
+                <div className="row between" style={{ marginBottom: 12 }}>
+                  <p className="section-title" style={{ margin: 0 }}>Colour swatches</p>
+                  <button type="button" className="btn btn-outline btn-sm" onClick={handleAddColor}>+ Add colour</button>
                 </div>
-
-                <div className="space-y-2.5">
+                <div className="stack" style={{ gap: 8 }}>
                   {colors.map((c, i) => (
-                    <div key={i} className="flex items-center gap-3 p-2 bg-stone-50 rounded-lg border border-black/10">
+                    <div key={i} className="row" style={{ gap: 10, padding: '8px 10px', background: 'var(--paper)', borderRadius: 12, border: '1px solid var(--line)' }}>
                       <input
                         type="color"
                         value={c.hex}
-                        onChange={(e) => {
-                          setColors(colors.map((col, idx) => (idx === i ? { ...col, hex: e.target.value } : col)))
-                        }}
-                        className="w-8 h-8 rounded border border-black/20 cursor-pointer"
+                        onChange={(e) => setColors(colors.map((col, idx) => (idx === i ? { ...col, hex: e.target.value } : col)))}
+                        aria-label={`Colour ${i + 1}`}
+                        style={{ width: 36, height: 36, border: '1px solid var(--line)', borderRadius: 8, padding: 0, cursor: 'pointer' }}
                       />
                       <input
+                        className="input"
                         type="text"
                         value={c.name}
-                        onChange={(e) => {
-                          setColors(colors.map((col, idx) => (idx === i ? { ...col, name: e.target.value } : col)))
-                        }}
-                        placeholder="Color Name (e.g. Royal Indigo)"
-                        className="flex-1 border border-black/20 px-3 py-1.5 text-xs rounded bg-white outline-none"
+                        onChange={(e) => setColors(colors.map((col, idx) => (idx === i ? { ...col, name: e.target.value } : col)))}
+                        placeholder="Colour name"
+                        style={{ flex: 1, height: 36 }}
                       />
-                      <code className="text-xs font-mono text-black/50">{c.hex}</code>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveColor(i)}
-                        className="text-red-500 hover:text-red-700 text-xs px-2 cursor-pointer"
-                      >
-                        ✕
-                      </button>
+                      <code className="mono muted small">{c.hex}</code>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => handleRemoveColor(i)} aria-label="Remove colour">✕</button>
                     </div>
                   ))}
+                  {colors.length === 0 && <p className="muted small">No colours yet — optional for single-option products.</p>}
                 </div>
-              </div>
+              </section>
 
-              {/* Sizes */}
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-black mb-2 block">
-                  {labels.sizes}
-                </label>
-                {isTemplate && (
-                  <p className="text-[11px] text-black/50 mb-2">Optional — leave all unselected if this product has a single option.</p>
-                )}
-                <div className="flex flex-wrap gap-2">
+              <section className="card card-pad">
+                <p className="section-title">{labels.sizes}</p>
+                {isTemplate && <p className="card-sub" style={{ marginBottom: 10 }}>Optional — leave empty for a single option.</p>}
+                <div className="row wrap" style={{ gap: 8 }}>
                   {sizeOptions.map((sz) => (
                     <button
                       key={sz}
                       type="button"
+                      className={`btn btn-sm ${sizes.includes(sz) ? 'btn-primary' : 'btn-outline'}`}
                       onClick={() => handleToggleSize(sz)}
-                      className={`px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg border transition-all cursor-pointer ${
-                        sizes.includes(sz)
-                          ? 'bg-black text-white border-black shadow-sm'
-                          : 'bg-stone-50 text-black/50 border-black/20 hover:border-black'
-                      }`}
                     >
                       {sz}
                     </button>
                   ))}
                 </div>
-              </div>
+              </section>
 
-              {/* Fit Info */}
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-black/60 mb-1 block">
-                  {labels.fitNote}
-                </label>
-                <input
-                  type="text"
-                  value={fitInfo}
-                  onChange={(e) => setFitInfo(e.target.value)}
-                  placeholder={isTemplate ? 'e.g. Recommended for ages 3+' : 'e.g. True to size with adjustable waist tie-ups.'}
-                  className="w-full border border-black/20 px-4 py-2.5 text-xs rounded-lg focus:border-black outline-none"
-                />
-              </div>
+              <section className="card card-pad">
+                <div className="field">
+                  <label className="label" htmlFor="product-fit">{labels.fitNote}</label>
+                  <input
+                    id="product-fit"
+                    className="input"
+                    type="text"
+                    value={fitInfo}
+                    onChange={(e) => setFitInfo(e.target.value)}
+                    placeholder={isTemplate ? 'e.g. Recommended for ages 3+' : 'e.g. True to size with adjustable waist tie-ups.'}
+                  />
+                </div>
+              </section>
             </div>
           )}
 
           {/* TAB 4: FABRIC & DETAILS */}
           {activeTab === 'craft' && (
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-black/60 mb-1 block">
-                  {labels.material}{isTemplate ? '' : ' *'}
-                </label>
-                <input
-                  type="text"
-                  required={!isTemplate}
-                  value={fabricTech}
-                  onChange={(e) => setFabricTech(e.target.value)}
-                  placeholder={isTemplate ? `e.g. ${niche.materialLabel}` : 'e.g. 100% Pure Mul Chanderi Silk'}
-                  className="w-full border border-black/20 px-4 py-2.5 text-sm rounded-lg focus:border-black outline-none font-semibold"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-black/60 mb-1 block">
-                  {labels.materialDesc}
-                </label>
-                <textarea
-                  rows={3}
-                  value={fabricDesc}
-                  onChange={(e) => setFabricDesc(e.target.value)}
-                  placeholder={isTemplate ? 'Describe the quality, feel or what makes it special.' : 'e.g. Breathable organic cotton pre-washed for zero shrinkages.'}
-                  className="w-full border border-black/20 px-4 py-2.5 text-xs rounded-lg focus:border-black outline-none"
-                />
-              </div>
+            <div className="stack">
+              <section className="card card-pad">
+                <div className="stack" style={{ gap: 14 }}>
+                  <div className="field">
+                    <label className="label" htmlFor="product-material">
+                      {labels.material}{isTemplate ? '' : ' *'}
+                    </label>
+                    <input
+                      id="product-material"
+                      className="input"
+                      type="text"
+                      required={!isTemplate}
+                      value={fabricTech}
+                      onChange={(e) => setFabricTech(e.target.value)}
+                      placeholder={isTemplate ? `e.g. ${niche.materialLabel}` : 'e.g. 100% Pure Mul Chanderi Silk'}
+                    />
+                  </div>
+                  <div className="field">
+                    <label className="label" htmlFor="product-material-desc">{labels.materialDesc}</label>
+                    <textarea
+                      id="product-material-desc"
+                      className="textarea"
+                      rows={3}
+                      value={fabricDesc}
+                      onChange={(e) => setFabricDesc(e.target.value)}
+                      placeholder={isTemplate ? 'Describe the quality, feel or what makes it special.' : 'e.g. Breathable organic cotton pre-washed for zero shrinkages.'}
+                    />
+                  </div>
+                </div>
+              </section>
 
               {isTemplate ? (
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-black/60 mb-1 block">
-                    Highlights (one per line)
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={highlights}
-                    onChange={(e) => setHighlights(e.target.value)}
-                    placeholder={'e.g. Gift-ready packaging\nMade with safe materials'}
-                    className="w-full border border-black/20 px-4 py-2.5 text-xs rounded-lg focus:border-black outline-none"
-                  />
-                </div>
+                <section className="card card-pad">
+                  <div className="field">
+                    <label className="label" htmlFor="product-highlights">Highlights (one per line)</label>
+                    <textarea
+                      id="product-highlights"
+                      className="textarea"
+                      rows={4}
+                      value={highlights}
+                      onChange={(e) => setHighlights(e.target.value)}
+                      placeholder={'e.g. Gift-ready packaging\nMade with safe materials'}
+                    />
+                  </div>
+                </section>
               ) : (
-                <div className="bg-stone-50 border border-black/10 p-4 rounded-lg">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-black mb-1">
-                    Automatic Add-on Options Active on PDP
-                  </h4>
-                  <p className="text-[11px] text-black/60 leading-relaxed">
-                    ✓ Custom Lining (+₹100) &nbsp;•&nbsp; ✓ Maternity Double Feeding Zip (+₹120) &nbsp;•&nbsp; ✓ Custom Lengths (44"–50")
-                  </p>
-                </div>
+                <section className="card card-pad">
+                  <p className="section-title">Add-ons on product page</p>
+                  <p className="card-sub">Custom lining (+₹100) · Maternity feeding zip (+₹120) · Custom lengths (44"–50")</p>
+                </section>
               )}
             </div>
           )}

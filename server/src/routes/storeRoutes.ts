@@ -133,7 +133,7 @@ function productFields(body: unknown, partial: boolean): Record<string, unknown>
     ? optNumber(body.price, 'price', { min: 0.01, max: 10_000_000 })
     : reqNumber(body.price, 'price', { min: 0.01, max: 10_000_000 })
   set('price', price)
-  set('mrp', optNumber(body.mrp, 'mrp', { min: 0, max: 10_000_000 }))
+  set('mrp', optNumber(body.mrp ?? body.originalPrice, 'mrp', { min: 0, max: 10_000_000 }))
   set('stockCount', optNumber(body.stockCount, 'stockCount', { min: 0, max: 1_000_000, integer: true }))
   set('imgMain', partial ? optImageUrl(body.imgMain, 'imgMain') : optImageUrl(body.imgMain, 'imgMain') ?? '')
   if (body.images !== undefined) {

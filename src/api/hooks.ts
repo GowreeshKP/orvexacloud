@@ -168,8 +168,13 @@ export function useDashboardProducts(): {
       const dbProducts = mockStore.getProducts(tenant.id)
       const byId = new Map(dbProducts.map((p) => [p.id, p]))
       for (const p of list) {
-        if (byId.has(p.id)) mockStore.updateProduct(tenant.id, p.id, p)
-        else mockStore.addProduct(tenant.id, p)
+        const normalized = {
+          ...p,
+          originalPrice: p.originalPrice ?? p.mrp,
+          stockCount: p.stockCount ?? 0,
+        }
+        if (byId.has(p.id)) mockStore.updateProduct(tenant.id, p.id, normalized)
+        else mockStore.addProduct(tenant.id, normalized)
       }
       setProducts([...mockStore.getProducts(tenant.id)])
     })

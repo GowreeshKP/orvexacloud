@@ -4,13 +4,16 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/copy-storefront-css.mjs",
+    "prebuild": "node scripts/copy-storefront-css.mjs",
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
     "format": "oxfmt",
     "store:create": "node scripts/create-store.mjs",
     "server:dev": "cd server && npm run dev",
-    "server:install": "cd server && npm install"
+    "server:install": "cd server && npm install",
+    "copy:storefront-css": "node scripts/copy-storefront-css.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
