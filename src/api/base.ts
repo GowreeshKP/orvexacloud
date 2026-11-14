@@ -75,25 +75,35 @@ function canUseRenderFallback(): boolean {
   return host === 'orvexacloud.in' || host === 'www.orvexacloud.in' || host.endsWith('.orvexacloud.in')
 }
 
+function isCredentialAuthPath(apiPath: string): boolean {
+  return /\/auth\/[^/]+\/(login|forgot-password|reset-password|change-password|bootstrap)(\?|$)/.test(
+    apiPath.startsWith('/') ? apiPath : `/${apiPath}`,
+  )
+}
+
 /**
  * fetch() relative to the API root (`/public/resolve?...`).
  * On Cloudflare edge 429 against same-origin /api, retries once via Render
  * (only on orvexacloud hosts where Render CORS allows the browser Origin).
+ * Credential login never falls across origins — a Render 429/CORS miss must not break sign-in.
  */
 export async function apiFetch(apiPath: string, init?: RequestInit): Promise<Response> {
   const rel = apiPath.startsWith('/') ? apiPath : `/${apiPath}`
-  const primary = `${resolveApiBase()}${rel}`
+  const credential = isCredentialAuthPath(rel)
+  // Always prefer same-origin for password posts; clear a stale Render-direct flag first.
+  if (credential) clearForcedRenderApi()
+  const primary = `${credential ? '/api' : resolveApiBase()}${rel}`
   let res: Response
   try {
     res = await fetch(primary, init)
   } catch (err) {
-    // Same-origin proxy down — try Render on production hosts.
-    if (!canUseRenderFallback() || resolveApiBase() === RENDER_API_BASE) throw err
+    // Same-origin proxy down — try Render on production hosts (never for login/password).
+    if (credential || !canUseRenderFallback() || resolveApiBase() === RENDER_API_BASE) throw err
     forceRenderApi(true)
     return fetch(`${RENDER_API_BASE}${rel}`, init)
   }
   if (res.status !== 429) return res
-  if (resolveApiBase() === RENDER_API_BASE || !canUseRenderFallback()) return res
+  if (credential || resolveApiBase() === RENDER_API_BASE || !canUseRenderFallback()) return res
   forceRenderApi(true)
   try {
     return await fetch(`${RENDER_API_BASE}${rel}`, init)

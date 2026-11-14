@@ -35,7 +35,16 @@ export const onRequest = async (context: PagesContext): Promise<Response> => {
   headers.delete('origin')
   headers.set('x-forwarded-host', incoming.host)
   headers.set('x-forwarded-proto', incoming.protocol.replace(':', ''))
-  headers.set('x-forwarded-for', context.request.headers.get('cf-connecting-ip') || '')
+  const clientIp =
+    context.request.headers.get('cf-connecting-ip') ||
+    context.request.headers.get('x-real-ip') ||
+    (context.request.headers.get('x-forwarded-for') || '').split(',')[0].trim() ||
+    ''
+  if (clientIp) {
+    headers.set('cf-connecting-ip', clientIp)
+    headers.set('x-real-ip', clientIp)
+    headers.set('x-forwarded-for', clientIp)
+  }
 
   const reqOrigin = context.request.headers.get('Origin') || ''
   let allowOrigin = incoming.origin

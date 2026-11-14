@@ -305,7 +305,17 @@ async function proxyApi(request, url, env) {
   headers.delete('origin')
   headers.set('x-forwarded-host', url.host)
   headers.set('x-forwarded-proto', url.protocol.replace(':', ''))
-  headers.set('x-forwarded-for', request.headers.get('cf-connecting-ip') || '')
+  // Always forward the browser IP — empty XFF made Render rate-limit every login on one bucket.
+  const clientIp =
+    request.headers.get('cf-connecting-ip') ||
+    request.headers.get('x-real-ip') ||
+    (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() ||
+    ''
+  if (clientIp) {
+    headers.set('cf-connecting-ip', clientIp)
+    headers.set('x-real-ip', clientIp)
+    headers.set('x-forwarded-for', clientIp)
+  }
 
   const isProfilePut =
     request.method === 'PUT' && /^\/api\/stores\/[^/]+\/profile$/.test(url.pathname)

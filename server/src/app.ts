@@ -29,7 +29,7 @@ export function createApp() {
 
   /** Prefer real browser IP from CF / XFF; never key all visitors on one Worker egress address. */
   const clientIpKey = (req: Request): string => {
-    const cf = String(req.get('cf-connecting-ip') || '').trim()
+    const cf = String(req.get('cf-connecting-ip') || req.get('x-real-ip') || '').trim()
     if (cf) return cf
     const xff = String(req.get('x-forwarded-for') || '')
       .split(',')
@@ -43,6 +43,16 @@ export function createApp() {
     // Custom keyGenerator reads XFF itself; disable the built-in XFF validator warning.
     validate: { xForwardedForHeader: false },
   } as const
+  /** Auth buckets are per IP + login id so one office NAT / shared proxy cannot lock every account. */
+  const authRateKey = (req: Request): string => {
+    const id = String(
+      (req.body && (req.body.loginId || req.body.email || req.body.username)) || '',
+    )
+      .trim()
+      .toLowerCase()
+      .slice(0, 80)
+    return `${clientIpKey(req)}:${id || req.path || 'auth'}`
+  }
 
   app.use((_req: Request, res: Response, next: NextFunction) => {
     res.setHeader('X-Content-Type-Options', 'nosniff')
@@ -124,36 +134,52 @@ export function createApp() {
 
   // Automated test suites only; ignored in production.
   const skip = () => process.env.DISABLE_RATE_LIMITS === 'true' && process.env.NODE_ENV !== 'production'
+  const isPreflight = (req: Request) => req.method === 'OPTIONS'
+  const isCredentialAuthPath = (path: string) =>
+    path.includes('/api/auth/') &&
+    /\/(login|forgot-password|reset-password|change-password|bootstrap)(\?|$)/.test(path)
 
   // Global rate limit — storefront + admin + probes often share one office/NAT IP.
+  // AUTH_RATE_LIMIT_MAX / API_RATE_LIMIT_MAX = 0 disables that limiter (production login must stay usable).
+  const parseLimit = (raw: string | undefined, fallback: number) => {
+    if (raw === undefined || raw === '') return fallback
+    const n = Number(raw)
+    if (!Number.isFinite(n)) return fallback
+    return Math.floor(n)
+  }
+  const globalMax = parseLimit(process.env.API_RATE_LIMIT_MAX, 100000)
+  // Production default: auth login is never rate-limited (Worker egress + office NAT kept locking everyone out).
+  const authMax = parseLimit(
+    process.env.AUTH_RATE_LIMIT_MAX,
+    process.env.NODE_ENV === 'production' ? 0 : 500,
+  )
+
   const globalLimiter = rateLimit({
     ...rateKeyOpts,
     windowMs: 15 * 60 * 1000,
-    max: Number(process.env.API_RATE_LIMIT_MAX || 20000),
+    max: globalMax <= 0 ? 10_000_000 : globalMax,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many requests. Please slow down and try again later.' },
-    // Bootstrap + health + audit must never burn (or be burned by) the shared budget.
+    // Bootstrap + health + audit + login must never burn (or be burned by) the shared budget.
     skip: (req) => {
-      if (skip()) return true
+      if (skip() || globalMax <= 0 || isPreflight(req)) return true
       const path = req.originalUrl || req.path || ''
       if (path.includes('/api/health')) return true
       if (path.includes('/api/public/resolve')) return true
       if (path.includes('/api/public/slug-available')) return true
+      if (isCredentialAuthPath(path)) return true
       return req.method === 'POST' && path.includes('/admin/audit-logs')
     },
   })
 
-  // Credential endpoints — keyed per real client IP (see clientIpKey / TRUST_PROXY).
-  // Successful logins do not burn the budget; only failures / probes count.
+  // Credential endpoints — off by default in production. When enabled, key per IP + login id.
   const authLimiter = rateLimit({
     ...rateKeyOpts,
-    skip,
+    keyGenerator: authRateKey,
+    skip: (req) => skip() || authMax <= 0 || isPreflight(req),
     windowMs: 15 * 60 * 1000,
-    // Shared office/NAT IPs burn this fast during dashboard testing; floor high and allow env raise.
-    max: process.env.NODE_ENV === 'production'
-      ? Math.max(1200, Number(process.env.AUTH_RATE_LIMIT_MAX || 1200) || 1200)
-      : 500,
+    max: authMax <= 0 ? 10_000_000 : authMax,
     skipSuccessfulRequests: true,
     standardHeaders: true,
     legacyHeaders: false,
@@ -164,7 +190,7 @@ export function createApp() {
   // Soft ceiling only — resolve is the store bootstrap path and must stay available in production.
   const publicReadLimiter = rateLimit({
     ...rateKeyOpts,
-    skip,
+    skip: (req) => skip() || isPreflight(req),
     windowMs: 60 * 1000,
     max: Number(process.env.PUBLIC_READ_RATE_LIMIT_MAX || 2000),
     standardHeaders: true,
@@ -174,12 +200,29 @@ export function createApp() {
   // Signup connector writes only — do not stack this onto GET resolve/slug-available.
   const publicWriteLimiter = rateLimit({
     ...rateKeyOpts,
-    skip: (req) => skip() || req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
+    skip: (req) => skip() || req.method === 'GET' || req.method === 'HEAD' || isPreflight(req),
     windowMs: 60 * 1000,
     max: 60,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'Too many requests. Please retry shortly.' },
+  })
+
+  // Ensure browser CORS still works when a limiter (or upstream) returns 429.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const origin = String(req.get('origin') || '')
+    if (!origin) {
+      next()
+      return
+    }
+    void originAllowed(origin).then((ok) => {
+      if (ok) {
+        res.setHeader('Access-Control-Allow-Origin', origin)
+        res.setHeader('Access-Control-Allow-Credentials', 'true')
+        res.setHeader('Vary', 'Origin')
+      }
+      next()
+    }).catch(() => next())
   })
 
   app.use(globalLimiter)

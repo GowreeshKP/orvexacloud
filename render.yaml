@@ -17,6 +17,11 @@ services:
         value: production
       - key: TRUST_PROXY
         value: "2"
+      # 0 = unlimited login/auth attempts (stops multi-device / office-NAT 429s on /api/auth/*/login)
+      - key: AUTH_RATE_LIMIT_MAX
+        value: "0"
+      - key: API_RATE_LIMIT_MAX
+        value: "100000"
       - key: PLATFORM_ROOT_DOMAIN
         value: orvexacloud.in
       - key: PUBLIC_APP_URL

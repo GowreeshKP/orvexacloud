@@ -63,7 +63,9 @@ if (missing.length) {
 
 const envVars = [
   { key: 'NODE_ENV', value: 'production' },
-  { key: 'TRUST_PROXY', value: '1' },
+  { key: 'TRUST_PROXY', value: '2' },
+  { key: 'AUTH_RATE_LIMIT_MAX', value: '0' },
+  { key: 'API_RATE_LIMIT_MAX', value: '100000' },
   { key: 'PLATFORM_ROOT_DOMAIN', value: 'orvexacloud.in' },
   { key: 'PUBLIC_APP_URL', value: 'https://app.orvexacloud.in' },
   {
