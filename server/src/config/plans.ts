@@ -4,7 +4,7 @@
 
 export type PlanId = 'starter' | 'pro' | 'enterprise'
 
-export const TRIAL_DAYS = 30
+export const TRIAL_DAYS = 7
 
 // maxProducts: null = unlimited.
 export const PLAN_CATALOG: Record<PlanId, { label: string; pricePerMonth: number; maxProducts: number | null }> = {

@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useMemo, useEffect, lazy, Suspense, type CSSProperties } from 'react'
+﻿import { useState, useRef, useMemo, useEffect, lazy, Suspense } from 'react'
 import {
   LayoutDashboard, Package, Tag, Users, MessageSquare,
   Store, Settings, Shield, LogOut, Bell, Search,
@@ -15,6 +15,7 @@ import { API_BASE, apiFetch } from '@/api/base'
 import { PLAN_CATALOG, formatPlanPrice, normalizePlanId, planAllowsStorefrontStudio, storeAddress } from '@/data/plans'
 import { sellerPortalUrl, storefrontUrl, tenantPortalPath } from '@/lib/store-urls'
 import { fetchStoreAnalytics, fetchDomainConfig, saveCustomDomain } from '@/api/storefront-analytics'
+import { fetchTenantBilling, payTenantSubscription, type TenantBillingSummary } from '@/api/tenant-billing'
 import { storeInbox, STORE_INBOX_EVENT, type NewsletterSubscriber, type StoreMessage } from '@/api/store-messages'
 import SellerLogin, { StoreDashboardGate } from '@/components/auth/SellerLogin'
 import PortalView from '@/components/platform/PortalView'
@@ -1146,44 +1147,17 @@ function ProductFormModal({
     onSave(finalProduct)
   }
 
-  const fieldGrid: CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    gap: 16,
-  }
-  const fieldGrid3: CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-    gap: 16,
-  }
-  const sectionStyle: CSSProperties = {
-    background: 'var(--paper)',
-    border: '1.5px solid var(--line)',
-    borderRadius: 14,
-    padding: 18,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 14,
-    minWidth: 0,
-  }
-
   return (
     <>
       <div className="overlay" onClick={onClose} aria-hidden />
       <div
         className="modal product-form-modal"
-        style={{
-          width: 'min(760px, calc(100vw - 24px))',
-          maxHeight: 'calc(100vh - 32px)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
+        style={{ display: 'flex', flexDirection: 'column' }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="product-form-title"
       >
-        <div className="drawer-head" style={{ flexShrink: 0 }}>
+        <div className="drawer-head" style={{ flexShrink: 0, background: '#fff' }}>
           <div className="min-w-0">
             <p className="eyebrow">{isEditing ? 'Edit product' : 'New product'}</p>
             <h2 id="product-form-title" className="card-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1195,7 +1169,7 @@ function ProductFormModal({
           </button>
         </div>
 
-        <div style={{ padding: '0 24px', flexShrink: 0 }}>
+        <div style={{ padding: '0 20px', flexShrink: 0, background: '#fff' }}>
           <div className="tabs" role="tablist">
             {[
               { id: 'info' as const, label: 'Basics' },
@@ -1222,7 +1196,7 @@ function ProductFormModal({
           onSubmit={handleSubmit}
           style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}
         >
-          <div className="drawer-body" style={{ flex: 1, overflowY: 'auto', gap: 16 }}>
+          <div className="drawer-body" style={{ flex: 1, overflowY: 'auto' }}>
           {formError && (
             <div className="callout bad">
               <span>{formError}</span>
@@ -1230,9 +1204,9 @@ function ProductFormModal({
           )}
           {/* TAB 1: BASIC INFO */}
           {activeTab === 'info' && (
-            <div className="stack" style={{ gap: 16 }}>
-              <section style={sectionStyle}>
-                <p className="section-title" style={{ margin: 0 }}>Product</p>
+            <div className="stack" style={{ gap: 14 }}>
+              <section className="product-form-section">
+                <p className="section-title">Product</p>
                 <div className="field">
                   <label className="label" htmlFor="product-name">Product name *</label>
                   <input
@@ -1258,10 +1232,10 @@ function ProductFormModal({
                 </div>
               </section>
 
-              <section style={sectionStyle}>
-                <p className="section-title" style={{ margin: 0 }}>Pricing & category</p>
-                <div className="product-form-grid-3" style={fieldGrid3}>
-                  <div className="field" style={{ minWidth: 0 }}>
+              <section className="product-form-section">
+                <p className="section-title">Pricing & category</p>
+                <div className="product-form-grid-3">
+                  <div className="field">
                     <label className="label" htmlFor="product-category">Category *</label>
                     <select
                       id="product-category"
@@ -1298,7 +1272,7 @@ function ProductFormModal({
                       </div>
                     )}
                   </div>
-                  <div className="field" style={{ minWidth: 0 }}>
+                  <div className="field">
                     <label className="label" htmlFor="product-price">Selling price (₹) *</label>
                     <input
                       id="product-price"
@@ -1311,7 +1285,7 @@ function ProductFormModal({
                       placeholder="e.g. 499"
                     />
                   </div>
-                  <div className="field" style={{ minWidth: 0 }}>
+                  <div className="field">
                     <label className="label" htmlFor="product-mrp">Compare at / MRP (₹)</label>
                     <input
                       id="product-mrp"
@@ -1326,10 +1300,10 @@ function ProductFormModal({
                 </div>
               </section>
 
-              <section style={sectionStyle}>
-                <p className="section-title" style={{ margin: 0 }}>Inventory</p>
-                <div className="product-form-grid-2" style={{ ...fieldGrid, alignItems: 'start' }}>
-                  <div className="field" style={{ minWidth: 0 }}>
+              <section className="product-form-section">
+                <p className="section-title">Inventory</p>
+                <div className="product-form-grid-2">
+                  <div className="field">
                     <label className="label" htmlFor="product-stock">Quantity in stock *</label>
                     <input
                       id="product-stock"
@@ -1343,7 +1317,7 @@ function ProductFormModal({
                       placeholder="e.g. 25"
                     />
                   </div>
-                  <div className="callout" style={{ margin: 0, alignSelf: 'stretch' }}>
+                  <div className={`callout product-form-hint ${Number(stockCount) > 0 ? 'ok' : 'bad'}`}>
                     <span>
                       {Number(stockCount) > 0
                         ? `${Number(stockCount)} available — customers can buy this product.`
@@ -1353,10 +1327,10 @@ function ProductFormModal({
                 </div>
               </section>
 
-              <section style={sectionStyle}>
-                <p className="section-title" style={{ margin: 0 }}>Merchandising</p>
-                <div className="product-form-grid-2" style={fieldGrid}>
-                  <div className="field" style={{ minWidth: 0 }}>
+              <section className="product-form-section">
+                <p className="section-title">Merchandising</p>
+                <div className="product-form-grid-2">
+                  <div className="field">
                     <label className="label" htmlFor="product-badge">Badge</label>
                     <select id="product-badge" className="select" value={badge} onChange={(e) => setBadge(e.target.value)}>
                       <option value="BESTSELLER">BESTSELLER</option>
@@ -1367,7 +1341,7 @@ function ProductFormModal({
                       <option value="">NO BADGE</option>
                     </select>
                   </div>
-                  <div className="field" style={{ minWidth: 0 }}>
+                  <div className="field">
                     <label className="label" htmlFor="product-tag">{labels.tag}</label>
                     <input
                       id="product-tag"
@@ -1385,9 +1359,9 @@ function ProductFormModal({
 
           {/* TAB 2: PHOTOS & GALLERY UPLOADER */}
           {activeTab === 'images' && (
-            <div className="stack" style={{ gap: 16 }}>
-              <section style={sectionStyle}>
-                <p className="section-title" style={{ margin: 0 }}>Main photo</p>
+            <div className="stack" style={{ gap: 14 }}>
+              <section className="product-form-section">
+                <p className="section-title">Main photo</p>
                 <div className="row wrap" style={{ alignItems: 'flex-start', gap: 20 }}>
                   <div style={{ position: 'relative', width: 120, height: 160, borderRadius: 12, overflow: 'hidden', background: 'var(--line-soft)', border: '1.5px solid var(--line)', flexShrink: 0 }}>
                     {imgMain ? (
@@ -1429,8 +1403,8 @@ function ProductFormModal({
                 </div>
               </section>
 
-              <section style={sectionStyle}>
-                <p className="section-title" style={{ margin: 0 }}>Gallery ({images.length})</p>
+              <section className="product-form-section">
+                <p className="section-title">Gallery ({images.length})</p>
                 <div className="row wrap" style={{ gap: 10 }}>
                   {images.map((img, idx) => (
                     <div
@@ -1470,9 +1444,9 @@ function ProductFormModal({
               </section>
 
               {!isTemplate && (
-                <section style={sectionStyle}>
-                  <p className="section-title" style={{ margin: 0 }}>Studio presets</p>
-                  <p className="card-sub" style={{ margin: 0 }}>Click a photo to attach it to this product.</p>
+                <section className="product-form-section">
+                  <p className="section-title">Studio presets</p>
+                  <p className="card-sub">Click a photo to attach it to this product.</p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
                     {PRODUCT_PHOTO_PRESETS.map((preset, i) => (
                       <button
@@ -1497,21 +1471,21 @@ function ProductFormModal({
 
           {/* TAB 3: COLORS & SIZES */}
           {activeTab === 'variants' && (
-            <div className="stack" style={{ gap: 16 }}>
-              <section style={sectionStyle}>
-                <div className="row between">
-                  <p className="section-title" style={{ margin: 0 }}>Colour swatches</p>
+            <div className="stack" style={{ gap: 14 }}>
+              <section className="product-form-section">
+                <div className="row between" style={{ paddingBottom: 10, borderBottom: '1px solid var(--line-soft)' }}>
+                  <p className="section-title" style={{ margin: 0, paddingBottom: 0, borderBottom: 0 }}>Colour swatches</p>
                   <button type="button" className="btn btn-outline btn-sm" onClick={handleAddColor}>+ Add colour</button>
                 </div>
                 <div className="stack" style={{ gap: 8 }}>
                   {colors.map((c, i) => (
-                    <div key={i} className="row" style={{ gap: 10, padding: '8px 10px', background: 'var(--paper)', borderRadius: 12, border: '1px solid var(--line)' }}>
+                    <div key={i} className="product-form-swatch">
                       <input
                         type="color"
                         value={c.hex}
                         onChange={(e) => setColors(colors.map((col, idx) => (idx === i ? { ...col, hex: e.target.value } : col)))}
                         aria-label={`Colour ${i + 1}`}
-                        style={{ width: 36, height: 36, border: '1px solid var(--line)', borderRadius: 8, padding: 0, cursor: 'pointer' }}
+                        style={{ width: 36, height: 36, border: '1.5px solid var(--line)', borderRadius: 8, padding: 0, cursor: 'pointer', flexShrink: 0 }}
                       />
                       <input
                         className="input"
@@ -1519,9 +1493,8 @@ function ProductFormModal({
                         value={c.name}
                         onChange={(e) => setColors(colors.map((col, idx) => (idx === i ? { ...col, name: e.target.value } : col)))}
                         placeholder="Colour name"
-                        style={{ flex: 1, height: 36 }}
                       />
-                      <code className="mono muted small">{c.hex}</code>
+                      <code className="mono muted small" style={{ flexShrink: 0 }}>{c.hex}</code>
                       <button type="button" className="btn btn-ghost btn-sm" onClick={() => handleRemoveColor(i)} aria-label="Remove colour">✕</button>
                     </div>
                   ))}
@@ -1529,9 +1502,9 @@ function ProductFormModal({
                 </div>
               </section>
 
-              <section style={sectionStyle}>
-                <p className="section-title" style={{ margin: 0 }}>{labels.sizes}</p>
-                {isTemplate && <p className="card-sub" style={{ margin: 0 }}>Optional — leave empty for a single option.</p>}
+              <section className="product-form-section">
+                <p className="section-title">{labels.sizes}</p>
+                {isTemplate && <p className="card-sub">Optional — leave empty for a single option.</p>}
                 <div className="row wrap" style={{ gap: 8 }}>
                   {sizeOptions.map((sz) => (
                     <button
@@ -1546,7 +1519,7 @@ function ProductFormModal({
                 </div>
               </section>
 
-              <section style={sectionStyle}>
+              <section className="product-form-section">
                 <div className="field">
                   <label className="label" htmlFor="product-fit">{labels.fitNote}</label>
                   <input
@@ -1564,8 +1537,9 @@ function ProductFormModal({
 
           {/* TAB 4: FABRIC & DETAILS */}
           {activeTab === 'craft' && (
-            <div className="stack" style={{ gap: 16 }}>
-              <section style={sectionStyle}>
+            <div className="stack" style={{ gap: 14 }}>
+              <section className="product-form-section">
+                <p className="section-title">Material</p>
                 <div className="field">
                   <label className="label" htmlFor="product-material">
                     {labels.material}{isTemplate ? '' : ' *'}
@@ -1594,7 +1568,8 @@ function ProductFormModal({
               </section>
 
               {isTemplate ? (
-                <section style={sectionStyle}>
+                <section className="product-form-section">
+                  <p className="section-title">Highlights</p>
                   <div className="field">
                     <label className="label" htmlFor="product-highlights">Highlights (one per line)</label>
                     <textarea
@@ -1608,9 +1583,9 @@ function ProductFormModal({
                   </div>
                 </section>
               ) : (
-                <section style={sectionStyle}>
-                  <p className="section-title" style={{ margin: 0 }}>Add-ons on product page</p>
-                  <p className="card-sub" style={{ margin: 0 }}>Custom lining (+₹100) · Maternity feeding zip (+₹120) · Custom lengths (44"–50")</p>
+                <section className="product-form-section">
+                  <p className="section-title">Add-ons on product page</p>
+                  <p className="card-sub">Custom lining (+₹100) · Maternity feeding zip (+₹120) · Custom lengths (44"–50")</p>
                 </section>
               )}
             </div>
@@ -2309,6 +2284,153 @@ function OrderManager({ onToast }: { onToast: (msg: string) => void }) {
 // =====================================================
 // 5. Store Settings & Subscription Plan
 // =====================================================
+function TenantSubscriptionBilling({
+  tenant,
+  onToast,
+  onPaid,
+}: {
+  tenant: TenantConfig
+  onToast: (msg: string) => void
+  onPaid: () => void
+}) {
+  const [billing, setBilling] = useState<TenantBillingSummary | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchTenantBilling(tenant.slug)
+      .then((data) => {
+        if (!cancelled) setBilling(data)
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load billing.')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [tenant.slug])
+
+  const status = billing?.status || tenant.subscription?.status || 'trial'
+  const paymentState = billing?.paymentState || (status === 'active' ? 'paid' : status === 'past_due' ? 'past_due' : 'trial')
+  const needsPayment = billing?.needsPayment ?? (status === 'trial' || status === 'past_due')
+  const total = billing?.total
+  const tax = billing?.tax
+  const amountExTax = billing?.amountExTax
+
+  const handlePay = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const next = await payTenantSubscription({
+        slug: tenant.slug,
+        cycle: billing?.cycle || tenant.subscription?.cycle || 'monthly',
+        prefill: {
+          name: tenant.ownerName || '',
+          email: tenant.ownerEmail || '',
+          contact: tenant.ownerPhone || '',
+        },
+      })
+      setBilling(next)
+      onToast('Subscription payment received. Your plan is active.')
+      onPaid()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Payment failed.'
+      if (msg !== 'Payment cancelled.') setError(msg)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-6 border border-black/8 shadow-sm">
+      <h3 className="text-sm font-bold tracking-wider uppercase text-black/50 mb-4">Subscription & Plan Tier</h3>
+      <div className="flex items-start gap-4 mb-4 flex-wrap">
+        <div className="flex-1 min-w-[200px]">
+          <p className="text-2xl font-bold">
+            {formatPlanPrice(tenant.subscription?.pricePerMonth ?? PLAN_CATALOG[normalizePlanId(tenant.plan)].pricePerMonth)}
+          </p>
+          <p className="text-xs text-black/40 uppercase tracking-wider font-bold">
+            {PLAN_CATALOG[normalizePlanId(tenant.plan)].label} Plan
+            {billing?.cycle ? ` · ${billing.cycle}` : ''}
+          </p>
+          {status === 'trial' && (billing?.trialEndsAt || tenant.subscription?.trialEndsAt) && (
+            <p className="text-xs text-blue-700 mt-1">
+              Free trial ends {(billing?.trialEndsAt || tenant.subscription?.trialEndsAt || '').slice(0, 10)}. No auto-pay — pay from this page when ready.
+            </p>
+          )}
+          {paymentState === 'past_due' && (
+            <p className="text-xs text-red-700 mt-1">
+              Plan payment is overdue. Pay now to keep your store subscription current.
+            </p>
+          )}
+          {paymentState === 'paid' && billing?.nextBillingDate && (
+            <p className="text-xs text-emerald-700 mt-1">
+              Paid through {billing.nextBillingDate.slice(0, 10)}. Next renewal is manual from this dashboard.
+            </p>
+          )}
+          {typeof total === 'number' && total > 0 && needsPayment && (
+            <p className="text-xs text-black/55 mt-2">
+              Due now: ₹{total.toLocaleString('en-IN')} (₹{(amountExTax || 0).toLocaleString('en-IN')} + ₹{(tax || 0).toLocaleString('en-IN')} GST)
+            </p>
+          )}
+        </div>
+        <span
+          className={`text-xs font-bold uppercase tracking-wider px-3.5 py-1.5 rounded-full ${
+            paymentState === 'paid'
+              ? 'bg-emerald-50 text-emerald-700'
+              : paymentState === 'trial'
+                ? 'bg-blue-50 text-blue-700'
+                : 'bg-red-50 text-red-700'
+          }`}
+        >
+          {paymentState === 'paid' ? 'paid' : paymentState}
+        </span>
+      </div>
+
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
+      )}
+
+      {needsPayment && paymentState !== 'custom' && (
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={busy}
+            onClick={() => void handlePay()}
+          >
+            {busy ? 'Opening Razorpay…' : `Pay subscription${typeof total === 'number' && total > 0 ? ` · ₹${total.toLocaleString('en-IN')}` : ''}`}
+          </button>
+          <p className="text-xs text-black/45">
+            Razorpay checkout for approved tenants. Super Admin sees paid / unpaid status in Billing.
+          </p>
+        </div>
+      )}
+
+      {((billing?.invoices && billing.invoices.length > 0) || (tenant.subscription?.invoices && tenant.subscription.invoices.length > 0)) && (
+        <div>
+          <p className="text-xs font-bold tracking-wider uppercase text-black/40 mb-3">Billing Invoices</p>
+          <div className="space-y-2">
+            {(billing?.invoices || tenant.subscription?.invoices || []).map((inv) => (
+              <div key={inv.id} className="flex items-center justify-between py-2 border-b border-black/5 text-xs">
+                <div>
+                  <p className="font-mono font-bold">{inv.id}</p>
+                  <p className="text-black/50 text-[11px]">{inv.description}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold">₹{inv.amount.toLocaleString()}</p>
+                  <span className="text-[10px] text-emerald-600 font-bold uppercase">{inv.status}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CustomDomainPanel({
   slug,
   current,
@@ -3332,46 +3454,7 @@ Owner: ${tenant.ownerName}
         <CustomDomainPanel slug={tenant.slug} current={tenant.customDomain || ''} verified={Boolean(tenant.customDomainVerified)} onSaved={() => refreshTenant()} onToast={onToast} />
       </div>
 
-      <div className="bg-white rounded-xl p-6 border border-black/8 shadow-sm">
-        <h3 className="text-sm font-bold tracking-wider uppercase text-black/50 mb-4">Subscription & Plan Tier</h3>
-        <div className="flex items-center gap-4 mb-6">
-          <div className="flex-1">
-            <p className="text-2xl font-bold">{formatPlanPrice(tenant.subscription?.pricePerMonth ?? PLAN_CATALOG[normalizePlanId(tenant.plan)].pricePerMonth)}</p>
-            <p className="text-xs text-black/40 uppercase tracking-wider font-bold">{PLAN_CATALOG[normalizePlanId(tenant.plan)].label} Plan</p>
-            {tenant.subscription?.status === 'trial' && tenant.subscription.trialEndsAt && (
-              <p className="text-xs text-blue-700 mt-1">Free trial ends {tenant.subscription.trialEndsAt.slice(0, 10)}. Prices exclude 18% GST.</p>
-            )}
-          </div>
-          <span className={`text-xs font-bold uppercase tracking-wider px-3.5 py-1.5 rounded-full ${
-            (tenant.subscription?.status || 'active') === 'active' ? 'bg-emerald-50 text-emerald-700' :
-            tenant.subscription?.status === 'trial' ? 'bg-blue-50 text-blue-700' :
-            'bg-red-50 text-red-700'
-          }`}>
-            {tenant.subscription?.status || 'active'}
-          </span>
-        </div>
-
-        {/* Invoices */}
-        {tenant.subscription?.invoices && tenant.subscription.invoices.length > 0 && (
-          <div>
-            <p className="text-xs font-bold tracking-wider uppercase text-black/40 mb-3">Billing Invoices</p>
-            <div className="space-y-2">
-              {tenant.subscription.invoices.map((inv: any) => (
-                <div key={inv.id} className="flex items-center justify-between py-2 border-b border-black/5 text-xs">
-                  <div>
-                    <p className="font-mono font-bold">{inv.id}</p>
-                    <p className="text-black/50 text-[11px]">{inv.description}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold">₹{inv.amount.toLocaleString()}</p>
-                    <span className="text-[10px] text-emerald-600 font-bold uppercase">{inv.status}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      <TenantSubscriptionBilling tenant={tenant} onToast={onToast} onPaid={() => refreshTenant()} />
 
     </div>
   )

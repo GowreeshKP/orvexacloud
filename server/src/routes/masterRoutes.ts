@@ -24,6 +24,11 @@ import {
   maskSecret,
   savePlatformPaymentConfig,
 } from '../services/platformPayments.js'
+import {
+  paymentStateForTenant,
+  sendSubscriptionReminders,
+  syncSubscriptionStatuses,
+} from '../services/tenantSubscriptions.js'
 import { sendEmail } from '../services/mailer.js'
 import { RESERVED_SLUGS } from './publicRoutes.js'
 import { issueOwnerPasswordLink, publicAppUrl } from '../services/ownerPasswordLink.js'
@@ -148,10 +153,21 @@ router.get('/overview', async (req: Request, res: Response) => {
 // GET all tenants
 router.get('/tenants', async (req: Request, res: Response) => {
   try {
+    await syncSubscriptionStatuses()
+    // Fire-and-forget expiry / upcoming payment emails (idempotent per day).
+    void sendSubscriptionReminders().catch((err) => console.error('[Billing] reminders:', err))
     const masterDb = await connectMasterDatabase()
     const Tenant = getTenantModel(masterDb)
     const tenants = await Tenant.find().sort({ createdAt: -1 })
-    res.json(tenants)
+    res.json(
+      tenants.map((t) => {
+        const json = t.toJSON() as Record<string, unknown>
+        return {
+          ...json,
+          billingPaymentState: paymentStateForTenant(t),
+        }
+      }),
+    )
   } catch (err) {
     serverError(res, 'list tenants', err, 'Failed to fetch stores')
   }
@@ -535,7 +551,7 @@ router.post('/waitlist/notify', requireAdmin, async (req: Request, res: Response
           '',
           `You joined the Orvexa Cloud early-access list for ${entry.brandName}. Good news: we are now open in your country.`,
           '',
-          'To open your store, complete a new sign-up on our website. Your 30-day free trial starts when your store is approved, and nothing is charged before it ends.',
+          'To open your store, complete a new sign-up on our website. Your 7-day free trial starts when your store is approved, and nothing is charged before it ends.',
           '',
           `Your early-access reference: ${entry.id}`,
           '',
@@ -604,7 +620,8 @@ async function sendApplicationDecision(
     }
     lines.push(
       '',
-      `Your ${TRIAL_DAYS}-day free trial of ${plan.label} starts today. Nothing is charged before it ends, and you can cancel any time before then.`,
+      `Your ${TRIAL_DAYS}-day free trial of ${plan.label} starts today. Nothing is charged during the trial.`,
+      'There is no auto-pay at signup. When the trial ends (or you are ready sooner), open your tenant dashboard → Settings → Subscription and pay with Razorpay.',
       '',
       `Reference: ${app.id}`,
       '',

@@ -92,6 +92,7 @@ export interface SubscriptionInfo {
   plan: 'starter' | 'pro' | 'enterprise'
   pricePerMonth: number
   status: 'active' | 'past_due' | 'cancelled' | 'trial'
+  cycle?: 'monthly' | 'yearly'
   trialEndsAt?: string
   nextBillingDate: string
   paymentMethod: 'razorpay' | 'stripe' | 'manual'

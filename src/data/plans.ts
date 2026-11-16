@@ -5,7 +5,7 @@
 
 export type PlanId = 'starter' | 'pro' | 'enterprise'
 
-export const TRIAL_DAYS = 30
+export const TRIAL_DAYS = 7
 
 export const PLATFORM_ROOT_DOMAIN = 'orvexacloud.in'
 

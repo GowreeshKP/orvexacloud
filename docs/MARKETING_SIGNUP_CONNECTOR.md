@@ -88,7 +88,7 @@ Slug check uses the same signature over an **empty** body string with:
     "tax": 180,
     "total": 1179,
     "totalMinor": 117900,
-    "trialDays": 30
+    "trialDays": 7
   },
   "launch": { "status": "live", "country": "IN" },
   "migration": null,

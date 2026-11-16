@@ -1311,8 +1311,13 @@ ENABLE_CUSTOMER_REVIEWS=${t.theme.enableReviews}`
 // =====================================================
 function BillingManager() {
   const { tenants } = useAdminTenants()
-  const activeTenants = tenants.filter((t) => t.status === 'active' || t.status === 'pending')
-  const totalMRR = activeTenants.reduce((sum, t) => sum + (t.subscription?.pricePerMonth ?? PLAN_CATALOG[normalizePlanId(t.plan)].pricePerMonth), 0)
+  const activeTenants = tenants.filter((t) => t.status === 'active' || t.status === 'pending' || t.status === 'read_only')
+  const paidTenants = activeTenants.filter((t) => (t as { billingPaymentState?: string }).billingPaymentState === 'paid' || t.subscription?.status === 'active')
+  const unpaidTenants = activeTenants.filter((t) => {
+    const state = (t as { billingPaymentState?: string }).billingPaymentState
+    return state === 'past_due' || state === 'due' || state === 'trial' || t.subscription?.status === 'trial' || t.subscription?.status === 'past_due'
+  })
+  const totalMRR = paidTenants.reduce((sum, t) => sum + (t.subscription?.pricePerMonth ?? PLAN_CATALOG[normalizePlanId(t.plan)].pricePerMonth), 0)
   const [payKeyId, setPayKeyId] = useState('')
   const [paySecret, setPaySecret] = useState('')
   const [payUpi, setPayUpi] = useState('')
@@ -1373,7 +1378,7 @@ function BillingManager() {
         mode: data.mode,
         hasSecret: data.hasSecret,
       })
-      setPayMsg('Platform Razorpay settings saved. Applicant plan checkout will use these keys.')
+      setPayMsg('Platform Razorpay settings saved. Tenant dashboard subscription checkout will use these keys.')
     } catch (err) {
       setPayMsg(err instanceof Error ? err.message : 'Could not save payment settings.')
     } finally {
@@ -1386,14 +1391,14 @@ function BillingManager() {
       <div className="page-head">
         <div>
           <h1>Billing</h1>
-          <p className="sub">Platform Razorpay keys for applicant subscriptions, plus tenant billing status</p>
+          <p className="sub">Platform Razorpay keys for tenant dashboard plan payments, plus paid / unpaid status</p>
         </div>
       </div>
 
       <div className="card card-pad">
-        <p className="section-title">Platform Razorpay (applicant plans)</p>
+        <p className="section-title">Platform Razorpay (tenant subscriptions)</p>
         <p className="card-sub" style={{ marginBottom: 14 }}>
-          Used when store applicants pay for Starter / Growth Pro on the marketing form. Tenant subscriptions are managed from these platform keys.
+          Applicants register free. After you approve a store, the tenant pays Starter / Growth Pro from their dashboard with these keys. No signup auto-pay.
           {payMeta.mode ? ` Mode: ${payMeta.mode}.` : ''}
           {payMeta.source ? ` Source: ${payMeta.source}.` : ''}
         </p>
@@ -1437,14 +1442,14 @@ function BillingManager() {
           </div>
         </div>
         <div className="card kpi">
-          <div className="kpi-label">Active subscriptions</div>
-          <div className="kpi-value">{activeTenants.length}</div>
-          <div className="kpi-foot"><span className="muted small">Billed stores</span></div>
+          <div className="kpi-label">Paid subscriptions</div>
+          <div className="kpi-value">{paidTenants.length}</div>
+          <div className="kpi-foot"><span className="muted small">{unpaidTenants.length} unpaid / trial</span></div>
         </div>
         <div className="card kpi">
           <div className="kpi-label">Annual run rate</div>
           <div className="kpi-value">₹{(totalMRR * 12).toLocaleString()}</div>
-          <div className="kpi-foot"><span className="muted small">ARR projection</span></div>
+          <div className="kpi-foot"><span className="muted small">From paid stores</span></div>
         </div>
       </div>
 
@@ -1452,7 +1457,7 @@ function BillingManager() {
         <div className="card-head">
           <div>
             <h3 className="card-title">Store subscriptions</h3>
-            <p className="card-sub">Active billing for all tenant stores</p>
+            <p className="card-sub">Tenants pay from their dashboard after approval — you see paid vs unpaid here</p>
           </div>
         </div>
         <div className="table-wrap">
@@ -1463,21 +1468,40 @@ function BillingManager() {
                 <th>Plan</th>
                 <th>Monthly</th>
                 <th>Next billing</th>
+                <th>Payment</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {activeTenants.map((tenant) => (
-                <tr key={tenant.id}>
-                  <td className="cell-main">{tenant.brandName}</td>
-                  <td><span className="pill outline">{PLAN_CATALOG[normalizePlanId(tenant.plan)].label}</span></td>
-                  <td className="num money">{formatPlanPrice(tenant.subscription?.pricePerMonth ?? PLAN_CATALOG[normalizePlanId(tenant.plan)].pricePerMonth)}</td>
-                  <td className="cell-sub mono">{tenant.subscription.nextBillingDate}</td>
-                  <td>
-                    <span className="pill leaf mono">{tenant.subscription.status}</span>
-                  </td>
-                </tr>
-              ))}
+              {activeTenants.map((tenant) => {
+                const payState =
+                  (tenant as { billingPaymentState?: string }).billingPaymentState ||
+                  (tenant.subscription?.status === 'active'
+                    ? 'paid'
+                    : tenant.subscription?.status === 'past_due'
+                      ? 'past_due'
+                      : tenant.subscription?.status || 'trial')
+                const payPill =
+                  payState === 'paid'
+                    ? 'pill leaf mono'
+                    : payState === 'trial'
+                      ? 'pill indigo mono'
+                      : 'pill coral mono'
+                return (
+                  <tr key={tenant.id}>
+                    <td className="cell-main">{tenant.brandName}</td>
+                    <td><span className="pill outline">{PLAN_CATALOG[normalizePlanId(tenant.plan)].label}</span></td>
+                    <td className="num money">{formatPlanPrice(tenant.subscription?.pricePerMonth ?? PLAN_CATALOG[normalizePlanId(tenant.plan)].pricePerMonth)}</td>
+                    <td className="cell-sub mono">{tenant.subscription?.nextBillingDate || '—'}</td>
+                    <td>
+                      <span className={payPill}>{payState === 'paid' ? 'paid' : payState === 'trial' ? 'unpaid · trial' : payState === 'past_due' ? 'unpaid · overdue' : payState}</span>
+                    </td>
+                    <td>
+                      <span className="pill outline mono">{tenant.subscription?.status || '—'}</span>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

@@ -7,6 +7,18 @@ import { getTenantModel } from '../models/master/Tenant.js'
 import { getRefreshTokenModel } from '../models/master/RefreshToken.js'
 import type { IOrderItem } from '../models/tenant/Order.js'
 import { PLAN_CATALOG, PLATFORM_ROOT_DOMAIN, normalizePlanId, planAllowsStorefrontStudio } from '../config/plans.js'
+import {
+  createRazorpayOrder,
+  getPlatformPaymentConfig,
+  verifyRazorpaySignature,
+} from '../services/platformPayments.js'
+import {
+  applyTenantSubscriptionPayment,
+  billingSummary,
+  pricedSubscriptionForTenant,
+  subscriptionNeedsPayment,
+  syncSubscriptionStatuses,
+} from '../services/tenantSubscriptions.js'
 import { STORE_EVENT_TYPES } from '../models/tenant/StoreEvent.js'
 import { domainPointsAtPlatform, hostLookupKeys, isValidPublicHostname, normalizeHostname, platformCnameTarget } from '../lib/hosts.js'
 import {
@@ -1402,6 +1414,142 @@ router.delete('/newsletter/:email', ...staffOfTenant, async (req: Request, res: 
     res.json({ success: true })
   } catch (err) {
     sendError(res, err, 'Failed to remove subscriber', 'remove newsletter')
+  }
+})
+
+// ====================================================================
+// TENANT SUBSCRIPTION BILLING (Razorpay — pay from dashboard after approval)
+// No auto-pay at signup. Free apply → Super Admin approve → trial → pay here.
+// ====================================================================
+
+router.get('/billing', ...ownerOfTenant, async (req: Request, res: Response) => {
+  try {
+    await syncSubscriptionStatuses()
+    const masterDb = await connectMasterDatabase()
+    const Tenant = getTenantModel(masterDb)
+    const tenant = await Tenant.findOne({ slug: req.tenant!.slug })
+    if (!tenant) {
+      res.status(404).json({ error: 'Store not found.' })
+      return
+    }
+    const cfg = await getPlatformPaymentConfig()
+    res.json({
+      ...billingSummary(tenant),
+      razorpayKeyId: cfg.razorpayKeyId,
+      upiVpa: cfg.upiVpa,
+      mode: cfg.razorpayKeyId.startsWith('rzp_live') ? 'live' : 'test',
+    })
+  } catch (err) {
+    sendError(res, err, 'Could not load billing.', 'billing get')
+  }
+})
+
+router.post('/billing/subscribe-order', ...ownerOfTenant, async (req: Request, res: Response) => {
+  try {
+    const masterDb = await connectMasterDatabase()
+    const Tenant = getTenantModel(masterDb)
+    const slug = req.tenant!.slug
+    const tenant = await Tenant.findOne({ slug })
+    if (!tenant) {
+      res.status(404).json({ error: 'Store not found.' })
+      return
+    }
+
+    const cycle =
+      optString(req.body?.cycle, 'cycle', 20) === 'yearly'
+        ? 'yearly'
+        : tenant.subscription?.cycle === 'yearly'
+          ? 'yearly'
+          : 'monthly'
+    if (tenant.subscription) tenant.subscription.cycle = cycle
+
+    const priced = pricedSubscriptionForTenant(tenant)
+    if (priced.amountPaise <= 0) {
+      res.json({
+        free: true,
+        plan: priced.plan,
+        label: priced.label,
+        cycle,
+        message: 'Enterprise Plus is billed by contract — contact Orvexa sales.',
+      })
+      return
+    }
+
+    const receipt = `t_${String(slug).slice(0, 12)}_${Date.now()}`.slice(0, 40)
+    const order = await createRazorpayOrder({
+      amountPaise: priced.amountPaise,
+      receipt,
+      notes: {
+        product: 'orvexa_tenant_subscription',
+        slug: String(slug),
+        plan: priced.plan,
+        cycle,
+      },
+    })
+    const cfg = await getPlatformPaymentConfig()
+    res.status(201).json({
+      free: false,
+      keyId: cfg.razorpayKeyId,
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      plan: priced.plan,
+      label: priced.label,
+      cycle,
+      amountExTax: priced.amountExTax,
+      tax: priced.tax,
+      total: priced.total,
+      needsPayment: subscriptionNeedsPayment(tenant),
+    })
+  } catch (err) {
+    sendError(res, err, 'Could not start subscription payment.', 'billing order')
+  }
+})
+
+router.post('/billing/verify', ...ownerOfTenant, async (req: Request, res: Response) => {
+  try {
+    if (!isPlainObject(req.body)) throw new ValidationError('Request body must be a JSON object.')
+    const orderId = optString(req.body.razorpay_order_id ?? req.body.orderId, 'razorpay_order_id', 80)
+    const paymentId = optString(req.body.razorpay_payment_id ?? req.body.paymentId, 'razorpay_payment_id', 80)
+    const signature = optString(req.body.razorpay_signature ?? req.body.signature, 'razorpay_signature', 200)
+    if (!orderId || !paymentId || !signature) {
+      throw new ValidationError('Razorpay order id, payment id and signature are required.')
+    }
+
+    const ok = await verifyRazorpaySignature({ orderId, paymentId, signature })
+    if (!ok) {
+      res.status(400).json({ error: 'Payment signature could not be verified.' })
+      return
+    }
+
+    const masterDb = await connectMasterDatabase()
+    const Tenant = getTenantModel(masterDb)
+    const slug = req.tenant!.slug
+    const tenant = await Tenant.findOne({ slug })
+    if (!tenant) {
+      res.status(404).json({ error: 'Store not found.' })
+      return
+    }
+
+    const cycle = tenant.subscription?.cycle === 'yearly' ? 'yearly' : 'monthly'
+    const priced = pricedSubscriptionForTenant(tenant)
+    const updated = await applyTenantSubscriptionPayment({
+      slug,
+      orderId,
+      paymentId,
+      plan: priced.plan,
+      cycle,
+      totalInr: priced.total,
+    })
+
+    res.json({
+      ok: true,
+      orderId,
+      paymentId,
+      billing: updated ? billingSummary(updated) : null,
+    })
+  } catch (err) {
+    sendError(res, err, 'Could not verify subscription payment.', 'billing verify')
   }
 })
 
