@@ -3,6 +3,7 @@ import { fromOrvexaProducts, fromLegacyTheme, type Theme } from '@orvexa/theme'
 import { useTenant } from '@/context/TenantContext'
 import { apiClient } from '@/api/client'
 import { authService } from '@/api/auth'
+import { planAllowsStorefrontStudio } from '@/data/plans'
 import { Studio } from '@/studio-editor/Studio'
 import { bindStudioApi } from '@/studio-editor/api'
 import '@/studio-editor/studio.css'
@@ -97,6 +98,15 @@ export default function EmbeddedStorefrontStudio({ onToast }: { onToast: (msg: s
   )
 
   if (!slug) return null
+  if (tenant && !planAllowsStorefrontStudio(tenant.plan)) {
+    return (
+      <div className="callout" style={{ margin: 24 }}>
+        <span>
+          Storefront customise is included on <strong>Enterprise Plus</strong>. Upgrade your plan to open Studio.
+        </span>
+      </div>
+    )
+  }
   if (error) {
     return (
       <div className="callout" style={{ margin: 24 }}>

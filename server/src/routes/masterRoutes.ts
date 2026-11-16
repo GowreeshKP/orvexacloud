@@ -19,6 +19,11 @@ import {
   reqString,
 } from '../lib/validate.js'
 import { PLAN_CATALOG, PLATFORM_ROOT_DOMAIN, TRIAL_DAYS, normalizePlanId, planPricePerMonth } from '../config/plans.js'
+import {
+  getPlatformPaymentConfig,
+  maskSecret,
+  savePlatformPaymentConfig,
+} from '../services/platformPayments.js'
 import { sendEmail } from '../services/mailer.js'
 import { RESERVED_SLUGS } from './publicRoutes.js'
 import { issueOwnerPasswordLink, publicAppUrl } from '../services/ownerPasswordLink.js'
@@ -1118,6 +1123,56 @@ router.post('/audit-logs', async (req: Request, res: Response) => {
     res.status(201).json({ success: true, id: newLog.id })
   } catch (err) {
     serverError(res, 'record audit log', err, 'Failed to record audit log')
+  }
+})
+
+// ─────────────────────────────────────────────────────────
+// Platform Razorpay keys (applicant / tenant subscription billing)
+// ─────────────────────────────────────────────────────────
+router.get('/platform-payments', requireAdmin, async (_req: Request, res: Response) => {
+  try {
+    const cfg = await getPlatformPaymentConfig()
+    res.json({
+      razorpayKeyId: cfg.razorpayKeyId,
+      razorpayKeySecretMasked: maskSecret(cfg.razorpayKeySecret),
+      hasSecret: Boolean(cfg.razorpayKeySecret),
+      upiVpa: cfg.upiVpa,
+      source: cfg.source,
+      mode: cfg.razorpayKeyId.startsWith('rzp_live') ? 'live' : 'test',
+    })
+  } catch (err) {
+    serverError(res, 'get platform payments', err, 'Failed to load payment settings')
+  }
+})
+
+router.put('/platform-payments', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const keyId = fieldOpt(req.body, 'razorpayKeyId', 80)
+    const secret = fieldOpt(req.body, 'razorpayKeySecret', 120)
+    const upiVpa = fieldOpt(req.body, 'upiVpa', 120)
+    if (keyId !== undefined && keyId && !keyId.startsWith('rzp_')) {
+      throw new ValidationError('Razorpay key id must start with rzp_test_ or rzp_live_.')
+    }
+    const cfg = await savePlatformPaymentConfig(
+      {
+        ...(keyId !== undefined ? { razorpayKeyId: keyId } : {}),
+        // Empty secret string means “keep existing”.
+        ...(secret ? { razorpayKeySecret: secret } : {}),
+        ...(upiVpa !== undefined ? { upiVpa } : {}),
+      },
+      req.authUser?.email || req.authUser?.userId || 'admin',
+    )
+    res.json({
+      success: true,
+      razorpayKeyId: cfg.razorpayKeyId,
+      razorpayKeySecretMasked: maskSecret(cfg.razorpayKeySecret),
+      hasSecret: Boolean(cfg.razorpayKeySecret),
+      upiVpa: cfg.upiVpa,
+      source: cfg.source,
+      mode: cfg.razorpayKeyId.startsWith('rzp_live') ? 'live' : 'test',
+    })
+  } catch (err) {
+    serverError(res, 'save platform payments', err, 'Failed to save payment settings')
   }
 })
 

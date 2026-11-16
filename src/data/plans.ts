@@ -24,6 +24,11 @@ export function normalizePlanId(id: unknown): PlanId {
   return 'starter'
 }
 
+/** Storefront Studio (customise / publish themes) is Enterprise Plus only. */
+export function planAllowsStorefrontStudio(plan: unknown): boolean {
+  return normalizePlanId(plan) === 'enterprise'
+}
+
 export function formatPlanPrice(pricePerMonth: number): string {
   return pricePerMonth > 0 ? `₹${pricePerMonth.toLocaleString('en-IN')}/mo` : 'Custom'
 }

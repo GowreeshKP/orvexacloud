@@ -6,7 +6,7 @@ import {
 import { useAdminTenants, useAdminApplications, usePlatformStats } from '@/api/hooks'
 import { authService, DEMO_MODE, type AdminSession } from '@/api/auth'
 import { auditLogger } from '@/api/audit-logger'
-import { API_BASE, apiFetch } from '@/api/base'
+import { API_BASE, apiFetch, resolveApiBase } from '@/api/base'
 import AdminLogin from '@/components/auth/AdminLogin'
 import ResetPasswordModal from '@/components/auth/ResetPasswordModal'
 import StoreCredentialsModal from '@/components/auth/StoreCredentialsModal'
@@ -1313,13 +1313,117 @@ function BillingManager() {
   const { tenants } = useAdminTenants()
   const activeTenants = tenants.filter((t) => t.status === 'active' || t.status === 'pending')
   const totalMRR = activeTenants.reduce((sum, t) => sum + (t.subscription?.pricePerMonth ?? PLAN_CATALOG[normalizePlanId(t.plan)].pricePerMonth), 0)
+  const [payKeyId, setPayKeyId] = useState('')
+  const [paySecret, setPaySecret] = useState('')
+  const [payUpi, setPayUpi] = useState('')
+  const [payMeta, setPayMeta] = useState<{ masked?: string; source?: string; mode?: string; hasSecret?: boolean }>({})
+  const [payBusy, setPayBusy] = useState(false)
+  const [payMsg, setPayMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const token = await authService.getValidAdminToken()
+        if (!token) return
+        const res = await fetch(`${resolveApiBase()}/admin/platform-payments`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        if (cancelled) return
+        setPayKeyId(data.razorpayKeyId || '')
+        setPayUpi(data.upiVpa || '')
+        setPayMeta({
+          masked: data.razorpayKeySecretMasked,
+          source: data.source,
+          mode: data.mode,
+          hasSecret: data.hasSecret,
+        })
+      } catch {
+        /* ignore */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const savePlatformPayments = async () => {
+    setPayBusy(true)
+    setPayMsg(null)
+    try {
+      const token = await authService.getValidAdminToken()
+      if (!token) throw new Error('Sign in again to save payment settings.')
+      const res = await fetch(`${resolveApiBase()}/admin/platform-payments`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          razorpayKeyId: payKeyId.trim(),
+          razorpayKeySecret: paySecret.trim() || undefined,
+          upiVpa: payUpi.trim(),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not save payment settings.')
+      setPaySecret('')
+      setPayMeta({
+        masked: data.razorpayKeySecretMasked,
+        source: data.source,
+        mode: data.mode,
+        hasSecret: data.hasSecret,
+      })
+      setPayMsg('Platform Razorpay settings saved. Applicant plan checkout will use these keys.')
+    } catch (err) {
+      setPayMsg(err instanceof Error ? err.message : 'Could not save payment settings.')
+    } finally {
+      setPayBusy(false)
+    }
+  }
 
   return (
     <div className="stack" style={{ maxWidth: 1080 }}>
       <div className="page-head">
         <div>
           <h1>Billing</h1>
-          <p className="sub">Platform subscription revenue and tenant billing status</p>
+          <p className="sub">Platform Razorpay keys for applicant subscriptions, plus tenant billing status</p>
+        </div>
+      </div>
+
+      <div className="card card-pad">
+        <p className="section-title">Platform Razorpay (applicant plans)</p>
+        <p className="card-sub" style={{ marginBottom: 14 }}>
+          Used when store applicants pay for Starter / Growth Pro on the marketing form. Tenant subscriptions are managed from these platform keys.
+          {payMeta.mode ? ` Mode: ${payMeta.mode}.` : ''}
+          {payMeta.source ? ` Source: ${payMeta.source}.` : ''}
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+          <div className="field">
+            <label className="label" htmlFor="rzp-key">Key ID</label>
+            <input id="rzp-key" className="input mono" value={payKeyId} onChange={(e) => setPayKeyId(e.target.value)} placeholder="rzp_test_…" />
+          </div>
+          <div className="field">
+            <label className="label" htmlFor="rzp-secret">Key secret</label>
+            <input
+              id="rzp-secret"
+              className="input mono"
+              type="password"
+              value={paySecret}
+              onChange={(e) => setPaySecret(e.target.value)}
+              placeholder={payMeta.hasSecret ? `Saved: ${payMeta.masked || '••••'}` : 'Enter secret'}
+              autoComplete="new-password"
+            />
+          </div>
+          <div className="field">
+            <label className="label" htmlFor="rzp-upi">UPI VPA</label>
+            <input id="rzp-upi" className="input mono" value={payUpi} onChange={(e) => setPayUpi(e.target.value)} placeholder="name@oksbi" />
+          </div>
+        </div>
+        <div className="row" style={{ marginTop: 14, gap: 10 }}>
+          <button type="button" className="btn btn-primary btn-sm" disabled={payBusy} onClick={() => void savePlatformPayments()}>
+            {payBusy ? 'Saving…' : 'Save Razorpay keys'}
+          </button>
+          {payMsg && <span className="small muted">{payMsg}</span>}
         </div>
       </div>
 

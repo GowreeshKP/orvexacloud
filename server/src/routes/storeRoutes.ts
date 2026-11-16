@@ -6,7 +6,7 @@ import { closeTenantConnection, getTenantConnection, connectMasterDatabase } fro
 import { getTenantModel } from '../models/master/Tenant.js'
 import { getRefreshTokenModel } from '../models/master/RefreshToken.js'
 import type { IOrderItem } from '../models/tenant/Order.js'
-import { PLAN_CATALOG, PLATFORM_ROOT_DOMAIN, normalizePlanId } from '../config/plans.js'
+import { PLAN_CATALOG, PLATFORM_ROOT_DOMAIN, normalizePlanId, planAllowsStorefrontStudio } from '../config/plans.js'
 import { STORE_EVENT_TYPES } from '../models/tenant/StoreEvent.js'
 import { domainPointsAtPlatform, hostLookupKeys, isValidPublicHostname, normalizeHostname, platformCnameTarget } from '../lib/hosts.js'
 import {
@@ -366,6 +366,15 @@ function themeFields(body: unknown): Record<string, unknown> {
 router.put('/theme', ...ownerOfTenant, async (req: Request, res: Response) => {
   try {
     const updates = themeFields(req.body)
+    const studioKeys = ['studioDraft', 'studioPublished', 'studioDraftRevision', 'studioPublishedVersion', 'studioPublishedAt', 'studioPublishedNote']
+    if (!planAllowsStorefrontStudio(req.tenant!.plan) && studioKeys.some((k) => updates[k] !== undefined)) {
+      res.status(403).json({
+        error: 'Storefront Studio is included on Enterprise Plus. Upgrade to customise your storefront theme.',
+        upgradeRequired: true,
+        plan: normalizePlanId(req.tenant!.plan),
+      })
+      return
+    }
     const ThemeConfig = req.tenantDb!.ThemeConfig
     const savedTheme = await ThemeConfig.findOneAndUpdate({}, { $set: updates }, { new: true, upsert: true, runValidators: true })
 
@@ -383,6 +392,14 @@ router.put('/theme', ...ownerOfTenant, async (req: Request, res: Response) => {
 // POST publish embedded Storefront Studio theme — flips live flag on the tenant
 router.post('/studio-publish', ...ownerOfTenant, async (req: Request, res: Response) => {
   try {
+    if (!planAllowsStorefrontStudio(req.tenant!.plan)) {
+      res.status(403).json({
+        error: 'Storefront Studio publishing is included on Enterprise Plus. Upgrade to customise and publish your theme.',
+        upgradeRequired: true,
+        plan: normalizePlanId(req.tenant!.plan),
+      })
+      return
+    }
     if (!isPlainObject(req.body)) throw new ValidationError('Request body must be a JSON object.')
     const theme = isPlainObject(req.body.theme) ? req.body.theme : null
     if (!theme) throw new ValidationError('theme is required.')
@@ -495,6 +512,52 @@ router.get('/orders', ...staffOfTenant, async (req: Request, res: Response) => {
     res.json(orders)
   } catch (err) {
     sendError(res, err, 'Failed to fetch orders', 'list orders')
+  }
+})
+
+/**
+ * GET shopper order history — public with email + phone that match checkout details.
+ * Logged-in buyers use this so orders stay on their account with tracking.
+ */
+router.get('/orders/mine', checkoutLimiter, async (req: Request, res: Response) => {
+  try {
+    const email = (queryString(req.query.email, 254) || '').toLowerCase()
+    const phone = queryString(req.query.phone, 30) || ''
+    if (!email || !EMAIL_PATTERN.test(email)) {
+      res.status(400).json({ error: 'A valid account email is required.' })
+      return
+    }
+    if (!phone || normalizePhone(phone).length < 10) {
+      res.status(400).json({ error: 'The phone number used at checkout is required.' })
+      return
+    }
+    const phoneNorm = normalizePhone(phone)
+    const orders = await req.tenantDb!.Order.find({ customerEmail: email })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean()
+    const mine = orders.filter((o) => normalizePhone(o.shippingAddress?.phone || '') === phoneNorm)
+    res.json(
+      mine.map((order) => ({
+        id: order.id,
+        date: order.date,
+        status: order.status,
+        courier: order.courier,
+        awb: order.awb,
+        estimatedDelivery: order.estimatedDelivery,
+        items: order.items,
+        subtotal: order.subtotal,
+        discount: order.discount,
+        shipping: order.shipping,
+        total: order.total,
+        paymentMethod: order.paymentMethod,
+        timeline: order.timeline,
+        customerEmail: order.customerEmail,
+        shippingAddress: order.shippingAddress,
+      })),
+    )
+  } catch (err) {
+    sendError(res, err, 'Failed to load your orders', 'shopper orders')
   }
 })
 

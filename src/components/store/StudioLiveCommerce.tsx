@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties, type For
 import type { CatalogProduct } from '@orvexa/theme'
 import { submitStorefrontOrder } from '@/api/storefront-analytics'
 import { storeInbox } from '@/api/store-messages'
+import { shopperAccounts } from '@/api/shopper-accounts'
+import { shopperOrders } from '@/api/shopper-orders'
+import type { TrackedOrder, UserAccount } from '@/types'
 
 type CartLine = {
   productId: number
@@ -36,7 +39,31 @@ export default function StudioLiveCommerce({ slug, tenantId, products, children 
   const [orderId, setOrderId] = useState('')
   const [toast, setToast] = useState('')
   const [contactOpen, setContactOpen] = useState(false)
+  const [user, setUser] = useState<UserAccount | null>(() => shopperAccounts.getSession(tenantId))
+  const [accountOpen, setAccountOpen] = useState(false)
+  const [myOrders, setMyOrders] = useState<TrackedOrder[]>(() =>
+    user ? shopperOrders.list(tenantId, user.email) : [],
+  )
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products])
+
+  useEffect(() => {
+    const session = shopperAccounts.getSession(tenantId)
+    setUser(session)
+    if (session?.email) setMyOrders(shopperOrders.list(tenantId, session.email))
+  }, [tenantId])
+
+  useEffect(() => {
+    if (!user?.email || !user.phone) return
+    let cancelled = false
+    void shopperOrders.fetchMine(slug, user.email, user.phone).then((remote) => {
+      if (cancelled || !remote.length) return
+      shopperOrders.replace(tenantId, user.email, remote)
+      setMyOrders(remote)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [slug, tenantId, user?.email, user?.phone])
 
   const totalMinor = cart.reduce((sum, line) => sum + line.priceMinor * line.quantity, 0)
   const count = cart.reduce((sum, line) => sum + line.quantity, 0)
@@ -90,6 +117,11 @@ export default function StudioLiveCommerce({ slug, tenantId, products, children 
         event.preventDefault()
         setStep('cart')
         setOpen(true)
+      }
+      const account = target?.closest?.('a[aria-label="Account"], a[aria-label="Account sign-in"], a[href*="/account"]')
+      if (account) {
+        event.preventDefault()
+        setAccountOpen(true)
       }
       const contactLink = target?.closest?.('a[href$="/pages/contact"], a[href$="/contact"]')
       if (contactLink && (contactLink as HTMLAnchorElement).pathname.includes('contact')) {
@@ -185,7 +217,24 @@ export default function StudioLiveCommerce({ slug, tenantId, products, children 
       setError(result.error)
       return
     }
-    setOrderId(String(result.order.id || result.order.orderId || ''))
+    const placed = result.order as TrackedOrder
+    const email = String(form.get('email') || user?.email || '').trim().toLowerCase()
+    if (email && placed?.id) {
+      const withEmail = { ...placed, customerEmail: email }
+      shopperOrders.save(tenantId, email, withEmail)
+      setMyOrders((prev) => [withEmail, ...prev.filter((o) => o.id !== withEmail.id)])
+      if (!user) {
+        const guest: UserAccount = {
+          name: String(form.get('name') || placed.shippingAddress?.name || 'Customer'),
+          email,
+          phone: String(form.get('phone') || placed.shippingAddress?.phone || ''),
+          verified: true,
+        }
+        setUser(guest)
+        shopperAccounts.setSession(tenantId, guest)
+      }
+    }
+    setOrderId(String(placed.id || result.order.orderId || ''))
     setCart([])
     setStep('done')
   }
@@ -248,9 +297,9 @@ export default function StudioLiveCommerce({ slug, tenantId, products, children 
 
             {step === 'checkout' && (
               <form style={sheet.body} onSubmit={(e) => void placeOrder(e)}>
-                <label style={sheet.label}>Full name<input name="name" required maxLength={100} style={sheet.input} /></label>
-                <label style={sheet.label}>Phone<input name="phone" required maxLength={20} inputMode="tel" style={sheet.input} /></label>
-                <label style={sheet.label}>Email<input name="email" type="email" maxLength={254} style={sheet.input} /></label>
+                <label style={sheet.label}>Full name<input name="name" required maxLength={100} defaultValue={user?.name || ''} style={sheet.input} /></label>
+                <label style={sheet.label}>Phone<input name="phone" required maxLength={20} inputMode="tel" defaultValue={user?.phone || ''} style={sheet.input} /></label>
+                <label style={sheet.label}>Email<input name="email" type="email" required maxLength={254} defaultValue={user?.email || ''} style={sheet.input} /></label>
                 <label style={sheet.label}>Address<textarea name="address" required maxLength={500} rows={2} style={sheet.textarea} /></label>
                 <div style={sheet.row}>
                   <label style={sheet.label}>City<input name="city" required maxLength={100} style={sheet.input} /></label>
@@ -273,16 +322,149 @@ export default function StudioLiveCommerce({ slug, tenantId, products, children 
 
             {step === 'done' && (
               <div style={sheet.body}>
-                <p>Thank you. Your order{orderId ? ` ${orderId}` : ''} is confirmed. The store can see it under Orders.</p>
-                <button type="button" style={sheet.primaryBtn} onClick={() => setOpen(false)}>Continue shopping</button>
+                <p>Thank you. Your order{orderId ? ` ${orderId}` : ''} is confirmed and saved to your account history.</p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button type="button" style={sheet.primaryBtn} onClick={() => { setOpen(false); setAccountOpen(true) }}>View my orders</button>
+                  <button type="button" style={sheet.ghostBtn} onClick={() => setOpen(false)}>Continue shopping</button>
+                </div>
               </div>
             )}
           </div>
         </div>
       )}
 
+      {accountOpen && (
+        <div style={sheet.scrim} role="dialog" aria-modal="true" aria-label="My account" onMouseDown={(e) => { if (e.target === e.currentTarget) setAccountOpen(false) }}>
+          <div style={sheet.panel}>
+            <header style={sheet.panelHead}>
+              <strong>{user ? `Hi, ${user.name}` : 'My account'}</strong>
+              <button type="button" style={sheet.ghostBtn} onClick={() => setAccountOpen(false)}>Close</button>
+            </header>
+            <div style={sheet.body}>
+              {user ? (
+                <>
+                  <p style={sheet.muted}>{user.email} · {user.phone || 'No phone on file'}</p>
+                  <h3 style={sheet.h2}>Order history</h3>
+                  {myOrders.length === 0 ? (
+                    <p style={sheet.muted}>No orders yet. When you check out with this email and phone, tracking stays here.</p>
+                  ) : (
+                    <ul style={sheet.list}>
+                      {myOrders.map((order) => (
+                        <li key={order.id} style={sheet.line}>
+                          <strong>{order.id}</strong>
+                          <p style={sheet.muted}>
+                            {order.status} · {order.date?.slice?.(0, 10) || order.date}
+                            {order.awb ? ` · AWB ${order.awb}` : ''}
+                            {order.courier ? ` · ${order.courier}` : ''}
+                          </p>
+                          <p style={sheet.muted}>₹{Number(order.total || 0).toLocaleString('en-IN')} · {order.paymentMethod}</p>
+                          {Array.isArray(order.timeline) && order.timeline.length > 0 && (
+                            <ol style={{ margin: '6px 0 0', paddingLeft: 18, color: '#596083', fontSize: 12 }}>
+                              {order.timeline.map((step, i) => (
+                                <li key={i}>{step.title}{step.completed ? ' ✓' : ''}</li>
+                              ))}
+                            </ol>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <button
+                    type="button"
+                    style={sheet.ghostBtn}
+                    onClick={() => {
+                      shopperAccounts.setSession(tenantId, null)
+                      setUser(null)
+                      setMyOrders([])
+                      flash('Signed out.')
+                    }}
+                  >
+                    Sign out
+                  </button>
+                </>
+              ) : (
+                <AccountSignIn
+                  tenantId={tenantId}
+                  onDone={(next) => {
+                    setUser(next)
+                    shopperAccounts.setSession(tenantId, next)
+                    setMyOrders(shopperOrders.list(tenantId, next.email))
+                    flash(`Welcome, ${next.name}`)
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && <div style={sheet.toast} role="status">{toast}</div>}
     </>
+  )
+}
+
+function AccountSignIn({
+  tenantId,
+  onDone,
+}: {
+  tenantId: string
+  onDone: (user: UserAccount) => void
+}) {
+  const [mode, setMode] = useState<'in' | 'up'>('in')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    const form = new FormData(event.currentTarget)
+    const email = String(form.get('email') || '')
+    const password = String(form.get('password') || '')
+    const name = String(form.get('name') || '')
+    const phone = String(form.get('phone') || '')
+    try {
+      if (mode === 'in') {
+        const user = await shopperAccounts.signIn(tenantId, email, password, false)
+        if (!user) {
+          setError('Email or password is incorrect.')
+          return
+        }
+        onDone(user)
+      } else {
+        const res = await shopperAccounts.register(tenantId, { name, email, phone, password }, false)
+        if (res.error || !res.user) {
+          setError(res.error || 'Could not create account.')
+          return
+        }
+        onDone(res.user)
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form style={{ display: 'grid', gap: 12 }} onSubmit={(e) => void submit(e)}>
+      <p style={{ margin: 0, color: '#596083', fontSize: 13 }}>
+        Sign in to see your order history and tracking anytime.
+      </p>
+      {mode === 'up' && (
+        <>
+          <label style={{ display: 'grid', gap: 6, fontWeight: 600, fontSize: 13 }}>Name<input name="name" required maxLength={100} style={{ minHeight: 40, padding: '0 10px', border: '1px solid #d9dcec', borderRadius: 10, font: 'inherit' }} /></label>
+          <label style={{ display: 'grid', gap: 6, fontWeight: 600, fontSize: 13 }}>Phone<input name="phone" required maxLength={20} style={{ minHeight: 40, padding: '0 10px', border: '1px solid #d9dcec', borderRadius: 10, font: 'inherit' }} /></label>
+        </>
+      )}
+      <label style={{ display: 'grid', gap: 6, fontWeight: 600, fontSize: 13 }}>Email<input name="email" type="email" required maxLength={254} style={{ minHeight: 40, padding: '0 10px', border: '1px solid #d9dcec', borderRadius: 10, font: 'inherit' }} /></label>
+      <label style={{ display: 'grid', gap: 6, fontWeight: 600, fontSize: 13 }}>Password<input name="password" type="password" required minLength={6} style={{ minHeight: 40, padding: '0 10px', border: '1px solid #d9dcec', borderRadius: 10, font: 'inherit' }} /></label>
+      {error && <p style={{ margin: 0, color: '#c92f36', fontWeight: 600 }} role="alert">{error}</p>}
+      <button type="submit" disabled={busy} style={{ minHeight: 42, padding: '0 16px', border: 0, borderRadius: 10, background: '#12163a', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+        {busy ? 'Please wait…' : mode === 'in' ? 'Sign in' : 'Create account'}
+      </button>
+      <button type="button" style={{ minHeight: 36, border: 0, background: 'transparent', color: '#3a32e6', cursor: 'pointer', fontWeight: 600 }} onClick={() => setMode(mode === 'in' ? 'up' : 'in')}>
+        {mode === 'in' ? 'Need an account? Register' : 'Already have an account? Sign in'}
+      </button>
+    </form>
   )
 }
 

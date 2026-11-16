@@ -48,3 +48,10 @@ services:
         value: Orvexa Cloud <hello@mail.orvexacloud.in>
       - key: MAIL_REPLY_TO
         value: support@orvexacloud.in
+      # Platform Razorpay (applicant / tenant subscription checkout). Override in Render dashboard for live keys.
+      - key: PLATFORM_RAZORPAY_KEY_ID
+        value: rzp_test_ThWFJUpLEfWZIZ
+      - key: PLATFORM_RAZORPAY_KEY_SECRET
+        sync: false
+      - key: PLATFORM_UPI_VPA
+        value: samfriend090@oksbi

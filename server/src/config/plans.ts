@@ -28,4 +28,9 @@ export function normalizePlanId(id: unknown): PlanId {
   return 'starter'
 }
 
+/** Storefront Studio (customise / publish themes) is Enterprise Plus only. */
+export function planAllowsStorefrontStudio(plan: unknown): boolean {
+  return normalizePlanId(plan) === 'enterprise'
+}
+
 export const PLATFORM_ROOT_DOMAIN = process.env.PLATFORM_ROOT_DOMAIN || 'orvexacloud.in'

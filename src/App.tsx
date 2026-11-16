@@ -5,6 +5,7 @@ import { useApplicationLayer, useTenant, useSwitchLayer } from './context/Tenant
 import { mockStore } from './api/mock-store'
 import { auditLogger } from './api/audit-logger'
 import { DEMO_SHOPPER, shopperAccounts } from './api/shopper-accounts'
+import { shopperOrders } from './api/shopper-orders'
 import { storeInbox } from './api/store-messages'
 import { MOCK_TENANTS } from './data/mock-tenants'
 import {
@@ -24,7 +25,8 @@ import { StoreModuleContext, applyStoreTheme, useStoreComponent, useStoreModule 
 import type { StoreModule, StoreSection } from './tenants/store-module'
 import StoreNotFound from './components/platform/StoreNotFound'
 import StudioLiveStorefront, { shouldUseStudioStorefront } from './components/store/StudioLiveStorefront'
-import { submitStorefrontOrder, trackStorefrontEvent } from './api/storefront-analytics'
+import { submitStorefrontOrder, trackStorefrontEvent, trackStorefrontOrder } from './api/storefront-analytics'
+import { normalizeTrackedOrder } from './lib/orders'
 import { storefrontUrl } from './lib/store-urls'
 import { apiClient } from './api/client'
 
@@ -3612,7 +3614,10 @@ function AccountDrawer({
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(orders[0]?.id || null)
   const [copiedAwb, setCopiedAwb] = useState<string | null>(null)
   const [lookupQuery, setLookupQuery] = useState('')
+  const [lookupPhone, setLookupPhone] = useState(user?.phone || '')
   const [lookupResult, setLookupResult] = useState<TrackedOrder | null>(null)
+  const [lookupError, setLookupError] = useState<string | null>(null)
+  const [lookupBusy, setLookupBusy] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
 
   if (!isOpen) return null
@@ -3628,12 +3633,17 @@ function AccountDrawer({
     setTimeout(() => setCopiedAwb(null), 2000)
   }
 
-  const handleSearchOrder = (e: React.FormEvent) => {
+  const handleSearchOrder = async (e: React.FormEvent) => {
     e.preventDefault()
     setHasSearched(true)
+    setLookupError(null)
+    setLookupResult(null)
     const cleaned = lookupQuery.trim().toUpperCase()
+    const phone = (lookupPhone || user?.phone || '').trim()
     const digits = cleaned.replace(/[^0-9]/g, '').slice(-10)
-    const found = cleaned
+
+    // Prefer local history first (AWB / id / phone), then the live track API.
+    const local = cleaned
       ? lookupOrders.find(
           (o) =>
             o.id.toUpperCase() === cleaned ||
@@ -3641,7 +3651,25 @@ function AccountDrawer({
             (digits.length === 10 && o.shippingAddress.phone.replace(/[^0-9]/g, '').slice(-10) === digits)
         )
       : undefined
-    setLookupResult(found || null)
+    if (local) {
+      setLookupResult(local)
+      return
+    }
+
+    if (!tenant?.slug || !cleaned || !phone) {
+      setLookupError('Enter your order id and the phone number used at checkout.')
+      return
+    }
+
+    setLookupBusy(true)
+    const remote = await trackStorefrontOrder(tenant.slug, cleaned, phone)
+    setLookupBusy(false)
+    if (!remote.ok) {
+      setLookupError(remote.error)
+      return
+    }
+    const normalized = normalizeTrackedOrder(remote.order)
+    setLookupResult(normalized)
   }
 
   return (
@@ -3935,25 +3963,37 @@ function AccountDrawer({
                 <div className="bg-stone-50 border border-black/10 p-5">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-black mb-1">Direct Courier & Order Lookup</h3>
                   <p className="text-xs text-black/60 mb-4">
-                    Enter any Order ID (e.g. <span className="font-mono font-bold text-black">{exampleOrderId}</span>) or Courier AWB number to fetch instant live tracking records.
+                    Enter your Order ID (e.g. <span className="font-mono font-bold text-black">{exampleOrderId}</span>) and the phone number used at checkout for live tracking.
                   </p>
 
-                  <form onSubmit={handleSearchOrder} className="flex gap-2">
+                  <form onSubmit={(e) => void handleSearchOrder(e)} className="space-y-2">
                     <input
                       type="text"
                       required
                       value={lookupQuery}
                       onChange={(e) => setLookupQuery(e.target.value)}
-                      placeholder={`e.g. ${exampleOrderId} or BD8912401IN`}
-                      className="flex-1 border border-black/20 bg-white p-2.5 text-xs font-mono uppercase tracking-wider outline-none focus:border-black"
+                      placeholder={`e.g. ${exampleOrderId}`}
+                      className="w-full border border-black/20 bg-white p-2.5 text-xs font-mono uppercase tracking-wider outline-none focus:border-black"
                     />
-                    <button
-                      type="submit"
-                      className="bg-black text-white text-xs font-bold uppercase tracking-widest px-5 py-2.5 hover:bg-stone-800 cursor-pointer"
-                    >
-                      TRACK →
-                    </button>
+                    <div className="flex gap-2">
+                      <input
+                        type="tel"
+                        required
+                        value={lookupPhone}
+                        onChange={(e) => setLookupPhone(e.target.value)}
+                        placeholder="Checkout phone (10 digits)"
+                        className="flex-1 border border-black/20 bg-white p-2.5 text-xs outline-none focus:border-black"
+                      />
+                      <button
+                        type="submit"
+                        disabled={lookupBusy}
+                        className="bg-black text-white text-xs font-bold uppercase tracking-widest px-5 py-2.5 hover:bg-stone-800 cursor-pointer disabled:opacity-60"
+                      >
+                        {lookupBusy ? '…' : 'TRACK →'}
+                      </button>
+                    </div>
                   </form>
+                  {lookupError && <p className="text-xs text-red-600 mt-3 font-semibold">{lookupError}</p>}
                 </div>
 
                 {hasSearched && (
@@ -5016,8 +5056,31 @@ function TenantStorefront({ tenant }: { tenant: TenantConfig }) {
     if (!user) return []
     const email = user.email.toLowerCase()
     const isDemoShopper = !isTemplateStore(activeTenant) && email === DEMO_SHOPPER.email
-    return orders.filter((o) => (o.customerEmail ? o.customerEmail.toLowerCase() === email : isDemoShopper))
+    const fromState = orders.filter((o) => (o.customerEmail ? o.customerEmail.toLowerCase() === email : isDemoShopper))
+    const fromLocal = shopperOrders.list(activeTenant.id, email)
+    const map = new Map<string, TrackedOrder>()
+    for (const o of [...fromLocal, ...fromState]) {
+      if (o?.id) map.set(o.id, o)
+    }
+    return [...map.values()].sort((a, b) => String(b.date).localeCompare(String(a.date)))
   }, [orders, user, activeTenant])
+
+  useEffect(() => {
+    if (!user?.email || !user.phone) return
+    let cancelled = false
+    void shopperOrders.fetchMine(activeTenant.slug, user.email, user.phone).then((remote) => {
+      if (cancelled || !remote.length) return
+      shopperOrders.replace(activeTenant.id, user.email, remote)
+      setOrders((prev) => {
+        const map = new Map(prev.map((o) => [o.id, o]))
+        for (const o of remote) map.set(o.id, o)
+        return [...map.values()]
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [activeTenant.id, activeTenant.slug, user?.email, user?.phone])
   const [isAuthOpen, setIsAuthOpen] = useState(false)
   const [isAccountOpen, setIsAccountOpen] = useState(false)
   const [isAboutOpen, setIsAboutOpen] = useState(false)
@@ -5127,7 +5190,8 @@ function TenantStorefront({ tenant }: { tenant: TenantConfig }) {
     const newOrder: TrackedOrder = email ? { ...placedOrder, customerEmail: email } : placedOrder
     setOrders((prev) => [newOrder, ...prev])
     mockStore.placeOrder(activeTenant.id, newOrder, customerEmail || user?.email)
-    
+    if (email) shopperOrders.save(activeTenant.id, email, newOrder)
+
     // Log audit trail event
     auditLogger.log({
       tenantSlug: activeTenant.slug,
@@ -5142,15 +5206,17 @@ function TenantStorefront({ tenant }: { tenant: TenantConfig }) {
       metadata: { orderId: newOrder.id, total: newOrder.total, itemsCount: newOrder.items?.length },
     })
 
-    if (!user) {
-      setUser({
+    if (!user && email) {
+      const guest: UserAccount = {
         name: newOrder.shippingAddress.name,
-        email: 'priya.sharma@example.com',
+        email,
         phone: newOrder.shippingAddress.phone,
         verified: true,
-      })
+      }
+      setUser(guest)
+      shopperAccounts.setSession(activeTenant.id, guest)
     }
-    showToast(`Order ${newOrder.id} confirmed! Tracking is now active.`)
+    showToast(`Order ${newOrder.id} confirmed! Tracking is now active in your account.`)
   }
 
   const handleToggleWishlist = (id: number) => {

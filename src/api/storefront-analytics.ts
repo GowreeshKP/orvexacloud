@@ -26,6 +26,29 @@ export function trackStorefrontEvent(
   fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(() => undefined)
 }
 
+/** Public order track — requires order id + checkout phone (same rules as the API). */
+export async function trackStorefrontOrder(
+  slug: string,
+  id: string,
+  phone: string,
+): Promise<{ ok: true; order: any } | { ok: false; error: string }> {
+  try {
+    const params = new URLSearchParams({ id: id.trim(), phone: phone.trim() })
+    const res = await fetch(`${API_BASE}/stores/${encodeURIComponent(slug)}/orders/track?${params}`)
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      return {
+        ok: false,
+        error: (data && typeof data.error === 'string' && data.error) || 'No order matches that id and phone number.',
+      }
+    }
+    if (!data?.id) return { ok: false, error: 'No order matches that id and phone number.' }
+    return { ok: true, order: data }
+  } catch {
+    return { ok: false, error: 'Could not reach the store. Check your connection and try again.' }
+  }
+}
+
 export async function submitStorefrontOrder(
   slug: string,
   body: {

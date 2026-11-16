@@ -9,6 +9,7 @@ import masterRoutes from './routes/masterRoutes.js'
 import storeRoutes from './routes/storeRoutes.js'
 import authRoutes from './routes/authRoutes.js'
 import publicRoutes from './routes/publicRoutes.js'
+import publicPaymentRoutes from './routes/publicPaymentRoutes.js'
 import studioWebhook from './routes/studioWebhook.js'
 import { emailConfigured } from './services/mailer.js'
 import { PLATFORM_ROOT_DOMAIN } from './config/plans.js'
@@ -236,6 +237,9 @@ export function createApp() {
   app.use(express.json({ limit: '5mb' }))
   app.use(express.urlencoded({ extended: false, limit: '100kb' }))
 
+  // Plan checkout for marketing applicants (needs JSON body; mounted after parser).
+  app.use('/api/public/payments', publicWriteLimiter, publicPaymentRoutes)
+
   // Health check
   app.get('/api/health', (_req: Request, res: Response) => {
     res.json({
@@ -245,6 +249,7 @@ export function createApp() {
       runtime: process.env.VERCEL ? 'vercel-serverless' : 'node',
       signupIntake: process.env.SIGNUP_SIGNING_SECRETS ? 'on' : 'off',
       decisionEmail: emailConfigured() ? 'on' : 'off',
+      platformPayments: 'on',
     })
   })
 

@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useMemo, useEffect, lazy, Suspense } from 'react'
+﻿import { useState, useRef, useMemo, useEffect, lazy, Suspense, type CSSProperties } from 'react'
 import {
   LayoutDashboard, Package, Tag, Users, MessageSquare,
   Store, Settings, Shield, LogOut, Bell, Search,
@@ -12,7 +12,7 @@ import { authService, DEMO_MODE, type SellerSession } from '@/api/auth'
 import { mockStore } from '@/api/mock-store'
 import { auditLogger } from '@/api/audit-logger'
 import { API_BASE, apiFetch } from '@/api/base'
-import { PLAN_CATALOG, formatPlanPrice, normalizePlanId, storeAddress } from '@/data/plans'
+import { PLAN_CATALOG, formatPlanPrice, normalizePlanId, planAllowsStorefrontStudio, storeAddress } from '@/data/plans'
 import { sellerPortalUrl, storefrontUrl, tenantPortalPath } from '@/lib/store-urls'
 import { fetchStoreAnalytics, fetchDomainConfig, saveCustomDomain } from '@/api/storefront-analytics'
 import { storeInbox, STORE_INBOX_EVENT, type NewsletterSubscriber, type StoreMessage } from '@/api/store-messages'
@@ -149,6 +149,12 @@ export default function DashboardApp() {
   }, [tenant?.id])
   const unreadOrders = allOrders.filter((o) => o.status === 'Processing').length
   const unreadMsgs = inboxMessages.filter((m) => !m.read).length
+  const canCustomiseStorefront = planAllowsStorefrontStudio(tenant?.plan)
+  const storeNavItems = STORE_NAV.filter((item) => item.id !== 'storefront' || canCustomiseStorefront)
+
+  useEffect(() => {
+    if (activeView === 'storefront' && !canCustomiseStorefront) setActiveView('overview')
+  }, [activeView, canCustomiseStorefront])
 
   const showToast = (msg: string) => {
     setToastMessage(msg)
@@ -300,7 +306,7 @@ export default function DashboardApp() {
 
           <p className="nav-group">Your store</p>
 
-          {STORE_NAV.map((item) => {
+          {storeNavItems.map((item) => {
             const isActive = activeView === item.id
             return (
               <button
@@ -315,6 +321,11 @@ export default function DashboardApp() {
               </button>
             )
           })}
+          {!canCustomiseStorefront && (
+            <p className="small muted" style={{ padding: '8px 14px 4px', lineHeight: 1.4 }}>
+              Storefront customise is on Enterprise Plus.
+            </p>
+          )}
         </nav>
 
         {/* User card */}
@@ -439,9 +450,12 @@ function DashboardOverview({ onNavigate }: { onNavigate: (view: DashboardView) =
   const ySteps = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(maxBar * f))
 
   // Setup checklist (static demo items)
+  const canStudio = planAllowsStorefrontStudio(tenant?.plan)
   const checklist = [
     { label: 'Add your first product', done: stats.orderCount > 0 || !isTemplate },
-    { label: 'Customise your storefront', done: !isTemplate },
+    ...(canStudio
+      ? [{ label: 'Customise your storefront', done: !isTemplate || Boolean(tenant?.storefrontStudioEnabled) }]
+      : [{ label: 'Upgrade to Enterprise Plus for Storefront Studio', done: false }]),
     { label: 'Set up your custom domain', done: !!tenant?.customDomain },
     { label: 'Receive your first order', done: stats.orderCount > 0 },
   ]
@@ -1132,21 +1146,56 @@ function ProductFormModal({
     onSave(finalProduct)
   }
 
+  const fieldGrid: CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: 16,
+  }
+  const fieldGrid3: CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+    gap: 16,
+  }
+  const sectionStyle: CSSProperties = {
+    background: 'var(--paper)',
+    border: '1.5px solid var(--line)',
+    borderRadius: 14,
+    padding: 18,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 14,
+    minWidth: 0,
+  }
+
   return (
     <>
       <div className="overlay" onClick={onClose} aria-hidden />
-      <div className="modal" style={{ width: 'min(720px, calc(100vw - 24px))', maxHeight: 'calc(100vh - 32px)' }} role="dialog" aria-modal="true" aria-labelledby="product-form-title">
-        <div className="drawer-head">
-          <div>
+      <div
+        className="modal product-form-modal"
+        style={{
+          width: 'min(760px, calc(100vw - 24px))',
+          maxHeight: 'calc(100vh - 32px)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="product-form-title"
+      >
+        <div className="drawer-head" style={{ flexShrink: 0 }}>
+          <div className="min-w-0">
             <p className="eyebrow">{isEditing ? 'Edit product' : 'New product'}</p>
-            <h2 id="product-form-title" className="card-title">{isEditing ? product!.name : 'Add product'}</h2>
+            <h2 id="product-form-title" className="card-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {isEditing ? product!.name : 'Add product'}
+            </h2>
           </div>
           <button type="button" className="btn btn-ghost btn-icon" onClick={onClose} aria-label="Close">
             ✕
           </button>
         </div>
 
-        <div style={{ padding: '0 24px' }}>
+        <div style={{ padding: '0 24px', flexShrink: 0 }}>
           <div className="tabs" role="tablist">
             {[
               { id: 'info' as const, label: 'Basics' },
@@ -1168,7 +1217,12 @@ function ProductFormModal({
           </div>
         </div>
 
-        <form id="product-form" onSubmit={handleSubmit} className="drawer-body" style={{ overflowY: 'auto' }}>
+        <form
+          id="product-form"
+          onSubmit={handleSubmit}
+          style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}
+        >
+          <div className="drawer-body" style={{ flex: 1, overflowY: 'auto', gap: 16 }}>
           {formError && (
             <div className="callout bad">
               <span>{formError}</span>
@@ -1176,40 +1230,38 @@ function ProductFormModal({
           )}
           {/* TAB 1: BASIC INFO */}
           {activeTab === 'info' && (
-            <div className="stack">
-              <section className="card card-pad">
-                <p className="section-title">Product</p>
-                <div className="stack" style={{ gap: 14 }}>
-                  <div className="field">
-                    <label className="label" htmlFor="product-name">Product name *</label>
-                    <input
-                      id="product-name"
-                      className="input"
-                      type="text"
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder={isTemplate ? 'e.g. Product name' : 'e.g. Sunset Chanderi Silk Maxi Dress'}
-                    />
-                  </div>
-                  <div className="field">
-                    <label className="label" htmlFor="product-desc">Description</label>
-                    <textarea
-                      id="product-desc"
-                      className="textarea"
-                      rows={3}
-                      value={desc}
-                      onChange={(e) => setDesc(e.target.value)}
-                      placeholder={isTemplate ? 'Describe your product and what makes it great...' : 'Describe your product styling, silhouette and appeal...'}
-                    />
-                  </div>
+            <div className="stack" style={{ gap: 16 }}>
+              <section style={sectionStyle}>
+                <p className="section-title" style={{ margin: 0 }}>Product</p>
+                <div className="field">
+                  <label className="label" htmlFor="product-name">Product name *</label>
+                  <input
+                    id="product-name"
+                    className="input"
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={isTemplate ? 'e.g. Product name' : 'e.g. Sunset Chanderi Silk Maxi Dress'}
+                  />
+                </div>
+                <div className="field">
+                  <label className="label" htmlFor="product-desc">Description</label>
+                  <textarea
+                    id="product-desc"
+                    className="textarea"
+                    rows={3}
+                    value={desc}
+                    onChange={(e) => setDesc(e.target.value)}
+                    placeholder={isTemplate ? 'Describe your product and what makes it great...' : 'Describe your product styling, silhouette and appeal...'}
+                  />
                 </div>
               </section>
 
-              <section className="card card-pad">
-                <p className="section-title">Pricing & category</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14 }}>
-                  <div className="field">
+              <section style={sectionStyle}>
+                <p className="section-title" style={{ margin: 0 }}>Pricing & category</p>
+                <div className="product-form-grid-3" style={fieldGrid3}>
+                  <div className="field" style={{ minWidth: 0 }}>
                     <label className="label" htmlFor="product-category">Category *</label>
                     <select
                       id="product-category"
@@ -1246,7 +1298,7 @@ function ProductFormModal({
                       </div>
                     )}
                   </div>
-                  <div className="field">
+                  <div className="field" style={{ minWidth: 0 }}>
                     <label className="label" htmlFor="product-price">Selling price (₹) *</label>
                     <input
                       id="product-price"
@@ -1259,7 +1311,7 @@ function ProductFormModal({
                       placeholder="e.g. 499"
                     />
                   </div>
-                  <div className="field">
+                  <div className="field" style={{ minWidth: 0 }}>
                     <label className="label" htmlFor="product-mrp">Compare at / MRP (₹)</label>
                     <input
                       id="product-mrp"
@@ -1274,10 +1326,10 @@ function ProductFormModal({
                 </div>
               </section>
 
-              <section className="card card-pad">
-                <p className="section-title">Inventory</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, alignItems: 'end' }}>
-                  <div className="field">
+              <section style={sectionStyle}>
+                <p className="section-title" style={{ margin: 0 }}>Inventory</p>
+                <div className="product-form-grid-2" style={{ ...fieldGrid, alignItems: 'start' }}>
+                  <div className="field" style={{ minWidth: 0 }}>
                     <label className="label" htmlFor="product-stock">Quantity in stock *</label>
                     <input
                       id="product-stock"
@@ -1291,7 +1343,7 @@ function ProductFormModal({
                       placeholder="e.g. 25"
                     />
                   </div>
-                  <div className="callout" style={{ margin: 0 }}>
+                  <div className="callout" style={{ margin: 0, alignSelf: 'stretch' }}>
                     <span>
                       {Number(stockCount) > 0
                         ? `${Number(stockCount)} available — customers can buy this product.`
@@ -1301,10 +1353,10 @@ function ProductFormModal({
                 </div>
               </section>
 
-              <section className="card card-pad">
-                <p className="section-title">Merchandising</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-                  <div className="field">
+              <section style={sectionStyle}>
+                <p className="section-title" style={{ margin: 0 }}>Merchandising</p>
+                <div className="product-form-grid-2" style={fieldGrid}>
+                  <div className="field" style={{ minWidth: 0 }}>
                     <label className="label" htmlFor="product-badge">Badge</label>
                     <select id="product-badge" className="select" value={badge} onChange={(e) => setBadge(e.target.value)}>
                       <option value="BESTSELLER">BESTSELLER</option>
@@ -1315,7 +1367,7 @@ function ProductFormModal({
                       <option value="">NO BADGE</option>
                     </select>
                   </div>
-                  <div className="field">
+                  <div className="field" style={{ minWidth: 0 }}>
                     <label className="label" htmlFor="product-tag">{labels.tag}</label>
                     <input
                       id="product-tag"
@@ -1333,9 +1385,9 @@ function ProductFormModal({
 
           {/* TAB 2: PHOTOS & GALLERY UPLOADER */}
           {activeTab === 'images' && (
-            <div className="stack">
-              <section className="card card-pad">
-                <p className="section-title">Main photo</p>
+            <div className="stack" style={{ gap: 16 }}>
+              <section style={sectionStyle}>
+                <p className="section-title" style={{ margin: 0 }}>Main photo</p>
                 <div className="row wrap" style={{ alignItems: 'flex-start', gap: 20 }}>
                   <div style={{ position: 'relative', width: 120, height: 160, borderRadius: 12, overflow: 'hidden', background: 'var(--line-soft)', border: '1.5px solid var(--line)', flexShrink: 0 }}>
                     {imgMain ? (
@@ -1377,8 +1429,8 @@ function ProductFormModal({
                 </div>
               </section>
 
-              <section className="card card-pad">
-                <p className="section-title">Gallery ({images.length})</p>
+              <section style={sectionStyle}>
+                <p className="section-title" style={{ margin: 0 }}>Gallery ({images.length})</p>
                 <div className="row wrap" style={{ gap: 10 }}>
                   {images.map((img, idx) => (
                     <div
@@ -1418,20 +1470,19 @@ function ProductFormModal({
               </section>
 
               {!isTemplate && (
-                <section className="card card-pad">
-                  <p className="section-title">Studio presets</p>
-                  <p className="card-sub" style={{ marginBottom: 12 }}>Click a photo to attach it to this product.</p>
+                <section style={sectionStyle}>
+                  <p className="section-title" style={{ margin: 0 }}>Studio presets</p>
+                  <p className="card-sub" style={{ margin: 0 }}>Click a photo to attach it to this product.</p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10 }}>
                     {PRODUCT_PHOTO_PRESETS.map((preset, i) => (
                       <button
                         key={i}
                         type="button"
-                        className="card card-pad"
                         onClick={() => {
                           setImgMain(preset.url)
                           if (!images.includes(preset.url)) setImages([preset.url, ...images])
                         }}
-                        style={{ textAlign: 'left', cursor: 'pointer', padding: 8 }}
+                        style={{ textAlign: 'left', cursor: 'pointer', padding: 8, background: '#fff', border: '1.5px solid var(--line)', borderRadius: 12 }}
                       >
                         <img src={preset.url} alt={preset.name} style={{ width: '100%', height: 88, objectFit: 'cover', borderRadius: 8, marginBottom: 6 }} />
                         <p className="cell-main" style={{ fontSize: 11 }}>{preset.name}</p>
@@ -1446,9 +1497,9 @@ function ProductFormModal({
 
           {/* TAB 3: COLORS & SIZES */}
           {activeTab === 'variants' && (
-            <div className="stack">
-              <section className="card card-pad">
-                <div className="row between" style={{ marginBottom: 12 }}>
+            <div className="stack" style={{ gap: 16 }}>
+              <section style={sectionStyle}>
+                <div className="row between">
                   <p className="section-title" style={{ margin: 0 }}>Colour swatches</p>
                   <button type="button" className="btn btn-outline btn-sm" onClick={handleAddColor}>+ Add colour</button>
                 </div>
@@ -1478,9 +1529,9 @@ function ProductFormModal({
                 </div>
               </section>
 
-              <section className="card card-pad">
-                <p className="section-title">{labels.sizes}</p>
-                {isTemplate && <p className="card-sub" style={{ marginBottom: 10 }}>Optional — leave empty for a single option.</p>}
+              <section style={sectionStyle}>
+                <p className="section-title" style={{ margin: 0 }}>{labels.sizes}</p>
+                {isTemplate && <p className="card-sub" style={{ margin: 0 }}>Optional — leave empty for a single option.</p>}
                 <div className="row wrap" style={{ gap: 8 }}>
                   {sizeOptions.map((sz) => (
                     <button
@@ -1495,7 +1546,7 @@ function ProductFormModal({
                 </div>
               </section>
 
-              <section className="card card-pad">
+              <section style={sectionStyle}>
                 <div className="field">
                   <label className="label" htmlFor="product-fit">{labels.fitNote}</label>
                   <input
@@ -1513,39 +1564,37 @@ function ProductFormModal({
 
           {/* TAB 4: FABRIC & DETAILS */}
           {activeTab === 'craft' && (
-            <div className="stack">
-              <section className="card card-pad">
-                <div className="stack" style={{ gap: 14 }}>
-                  <div className="field">
-                    <label className="label" htmlFor="product-material">
-                      {labels.material}{isTemplate ? '' : ' *'}
-                    </label>
-                    <input
-                      id="product-material"
-                      className="input"
-                      type="text"
-                      required={!isTemplate}
-                      value={fabricTech}
-                      onChange={(e) => setFabricTech(e.target.value)}
-                      placeholder={isTemplate ? `e.g. ${niche.materialLabel}` : 'e.g. 100% Pure Mul Chanderi Silk'}
-                    />
-                  </div>
-                  <div className="field">
-                    <label className="label" htmlFor="product-material-desc">{labels.materialDesc}</label>
-                    <textarea
-                      id="product-material-desc"
-                      className="textarea"
-                      rows={3}
-                      value={fabricDesc}
-                      onChange={(e) => setFabricDesc(e.target.value)}
-                      placeholder={isTemplate ? 'Describe the quality, feel or what makes it special.' : 'e.g. Breathable organic cotton pre-washed for zero shrinkages.'}
-                    />
-                  </div>
+            <div className="stack" style={{ gap: 16 }}>
+              <section style={sectionStyle}>
+                <div className="field">
+                  <label className="label" htmlFor="product-material">
+                    {labels.material}{isTemplate ? '' : ' *'}
+                  </label>
+                  <input
+                    id="product-material"
+                    className="input"
+                    type="text"
+                    required={!isTemplate}
+                    value={fabricTech}
+                    onChange={(e) => setFabricTech(e.target.value)}
+                    placeholder={isTemplate ? `e.g. ${niche.materialLabel}` : 'e.g. 100% Pure Mul Chanderi Silk'}
+                  />
+                </div>
+                <div className="field">
+                  <label className="label" htmlFor="product-material-desc">{labels.materialDesc}</label>
+                  <textarea
+                    id="product-material-desc"
+                    className="textarea"
+                    rows={3}
+                    value={fabricDesc}
+                    onChange={(e) => setFabricDesc(e.target.value)}
+                    placeholder={isTemplate ? 'Describe the quality, feel or what makes it special.' : 'e.g. Breathable organic cotton pre-washed for zero shrinkages.'}
+                  />
                 </div>
               </section>
 
               {isTemplate ? (
-                <section className="card card-pad">
+                <section style={sectionStyle}>
                   <div className="field">
                     <label className="label" htmlFor="product-highlights">Highlights (one per line)</label>
                     <textarea
@@ -1559,15 +1608,16 @@ function ProductFormModal({
                   </div>
                 </section>
               ) : (
-                <section className="card card-pad">
-                  <p className="section-title">Add-ons on product page</p>
-                  <p className="card-sub">Custom lining (+₹100) · Maternity feeding zip (+₹120) · Custom lengths (44"–50")</p>
+                <section style={sectionStyle}>
+                  <p className="section-title" style={{ margin: 0 }}>Add-ons on product page</p>
+                  <p className="card-sub" style={{ margin: 0 }}>Custom lining (+₹100) · Maternity feeding zip (+₹120) · Custom lengths (44"–50")</p>
                 </section>
               )}
             </div>
           )}
+          </div>
 
-          <div className="drawer-foot" style={{ margin: '8px -24px -4px', padding: '16px 24px' }}>
+          <div className="drawer-foot" style={{ flexShrink: 0, margin: 0 }}>
             <button type="button" className="btn btn-outline" onClick={onClose}>
               Cancel
             </button>
