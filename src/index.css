@@ -1666,19 +1666,19 @@ img {
 }
 
 .portal-view {
-  animation: portal-view-flip 0.32s var(--ease-out) both;
+  /* No fill-mode forwards/both — a lingering transform traps position:fixed dialogs inside the pane. */
+  animation: portal-view-flip 0.32s var(--ease-out);
   transform-origin: 50% 0;
 }
-/* Avoid will-change:transform here — it traps position:fixed studio modals inside the pane. */
 
 @keyframes portal-view-flip {
   from {
     opacity: 0;
-    transform: translateY(10px) rotateX(4deg);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) rotateX(0);
+    transform: translateY(0);
   }
 }
 

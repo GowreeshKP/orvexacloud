@@ -1,4 +1,5 @@
 ﻿import { useState, useRef, useMemo, useEffect, lazy, Suspense } from 'react'
+import { createPortal } from 'react-dom'
 import {
   LayoutDashboard, Package, Tag, Users, MessageSquare,
   Store, Settings, Shield, LogOut, Bell, Search,
@@ -1155,7 +1156,8 @@ function ProductFormModal({
     }
   }, [])
 
-  return (
+  // Portal to body so position:fixed is not trapped by .portal-view transform/animation.
+  return createPortal(
     <div className="product-form-shell" role="presentation">
       <button type="button" className="product-form-backdrop" onClick={onClose} aria-label="Close dialog" />
       <div
@@ -1605,7 +1607,8 @@ function ProductFormModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
