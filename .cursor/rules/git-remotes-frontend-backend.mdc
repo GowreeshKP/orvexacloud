@@ -1,0 +1,33 @@
+---
+description: Frontend vs backend Git remotes for commit and push
+alwaysApply: true
+---
+
+# Git remotes — frontend vs backend
+
+This working tree (`D:\lunar final`) has two GitHub remotes. Use them correctly on every commit/push.
+
+| Role | Remote name | GitHub repo |
+|------|-------------|-------------|
+| **Frontend** (UI / SPA / portals) | `origin` | [Multi-Tenant-Webapp-orvexacloud/D2C-Multi-tenant-webapp](https://github.com/Multi-Tenant-Webapp-orvexacloud/D2C-Multi-tenant-webapp) |
+| **Backend** (API / Render) | `orvexacloud` | [GowreeshKP/orvexacloud](https://github.com/GowreeshKP/orvexacloud) |
+
+## What counts as frontend vs backend
+
+- **Frontend**: `src/`, `public/`, `index.html`, Vite/UI config, portal CSS, dashboard/admin/storefront React code
+- **Backend**: `server/`, API routes, models, services, `render.yaml`, Express/platform payment code
+
+## Commit and push rules
+
+1. When the user asks to commit and push:
+   - **Frontend-only** changes → `git push origin HEAD` (Multi-Tenant-Webapp)
+   - **Backend-only** changes → `git push orvexacloud HEAD`
+   - **Mixed** frontend + backend in one commit → push **both** `origin` and `orvexacloud`
+2. Prefer splitting into separate commits when frontend and backend changes are unrelated, then push each to the matching remote.
+3. Never assume a single remote is enough for production: Render deploys from **orvexacloud**; the Multi-Tenant-Webapp repo is the frontend org copy.
+4. Marketing site is a **separate** repo under `marketing-site-orvexatechcloud/` (`Multi-Tenant-Webapp-orvexacloud/marketing-site-orvexacloud-`). Commit/push that repo on its own `origin`, not via these remotes.
+
+## Reminder
+
+- Frontend org: **Multi-Tenant-Webapp-orvexacloud**
+- Backend repo: **orvexacloud**
