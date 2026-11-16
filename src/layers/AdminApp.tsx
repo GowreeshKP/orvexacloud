@@ -1398,7 +1398,7 @@ function BillingManager() {
       <div className="card card-pad">
         <p className="section-title">Platform Razorpay (tenant subscriptions)</p>
         <p className="card-sub" style={{ marginBottom: 14 }}>
-          Applicants register free. After you approve a store, the tenant pays Starter / Growth Pro from their dashboard with these keys. No signup auto-pay.
+          Applicants register free (Starter, Growth Pro, or Enterprise Plus). After you approve a store, Starter / Growth Pro tenants pay from their dashboard with these keys. Enterprise Plus is custom-priced. No signup auto-pay.
           {payMeta.mode ? ` Mode: ${payMeta.mode}.` : ''}
           {payMeta.source ? ` Source: ${payMeta.source}.` : ''}
         </p>

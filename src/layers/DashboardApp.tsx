@@ -1147,17 +1147,24 @@ function ProductFormModal({
     onSave(finalProduct)
   }
 
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
   return (
     <>
       <div className="overlay" onClick={onClose} aria-hidden />
       <div
         className="modal product-form-modal"
-        style={{ display: 'flex', flexDirection: 'column' }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="product-form-title"
       >
-        <div className="drawer-head" style={{ flexShrink: 0, background: '#fff' }}>
+        <div className="drawer-head">
           <div className="min-w-0">
             <p className="eyebrow">{isEditing ? 'Edit product' : 'New product'}</p>
             <h2 id="product-form-title" className="card-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -1169,7 +1176,7 @@ function ProductFormModal({
           </button>
         </div>
 
-        <div style={{ padding: '0 20px', flexShrink: 0, background: '#fff' }}>
+        <div className="product-form-tabs">
           <div className="tabs" role="tablist">
             {[
               { id: 'info' as const, label: 'Basics' },
@@ -1191,12 +1198,8 @@ function ProductFormModal({
           </div>
         </div>
 
-        <form
-          id="product-form"
-          onSubmit={handleSubmit}
-          style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}
-        >
-          <div className="drawer-body" style={{ flex: 1, overflowY: 'auto' }}>
+        <form id="product-form" onSubmit={handleSubmit}>
+          <div className="drawer-body">
           {formError && (
             <div className="callout bad">
               <span>{formError}</span>
@@ -1592,7 +1595,7 @@ function ProductFormModal({
           )}
           </div>
 
-          <div className="drawer-foot" style={{ flexShrink: 0, margin: 0 }}>
+          <div className="drawer-foot">
             <button type="button" className="btn btn-outline" onClick={onClose}>
               Cancel
             </button>
@@ -2369,6 +2372,11 @@ function TenantSubscriptionBilling({
               Paid through {billing.nextBillingDate.slice(0, 10)}. Next renewal is manual from this dashboard.
             </p>
           )}
+          {paymentState === 'custom' && (
+            <p className="text-xs text-indigo-700 mt-1">
+              Enterprise Plus is custom-priced. Storefront Studio customise is included. Contact Orvexa for your quote and renewal.
+            </p>
+          )}
           {typeof total === 'number' && total > 0 && needsPayment && (
             <p className="text-xs text-black/55 mt-2">
               Due now: ₹{total.toLocaleString('en-IN')} (₹{(amountExTax || 0).toLocaleString('en-IN')} + ₹{(tax || 0).toLocaleString('en-IN')} GST)
@@ -2379,12 +2387,14 @@ function TenantSubscriptionBilling({
           className={`text-xs font-bold uppercase tracking-wider px-3.5 py-1.5 rounded-full ${
             paymentState === 'paid'
               ? 'bg-emerald-50 text-emerald-700'
+              : paymentState === 'custom'
+                ? 'bg-indigo-50 text-indigo-700'
               : paymentState === 'trial'
                 ? 'bg-blue-50 text-blue-700'
                 : 'bg-red-50 text-red-700'
           }`}
         >
-          {paymentState === 'paid' ? 'paid' : paymentState}
+          {paymentState === 'paid' ? 'paid' : paymentState === 'custom' ? 'enterprise' : paymentState}
         </span>
       </div>
 
