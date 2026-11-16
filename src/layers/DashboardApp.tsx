@@ -1156,10 +1156,10 @@ function ProductFormModal({
   }, [])
 
   return (
-    <>
-      <div className="overlay" onClick={onClose} aria-hidden />
+    <div className="product-form-shell" role="presentation">
+      <button type="button" className="product-form-backdrop" onClick={onClose} aria-label="Close dialog" />
       <div
-        className="modal product-form-modal"
+        className="product-form-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="product-form-title"
@@ -1605,7 +1605,7 @@ function ProductFormModal({
           </div>
         </form>
       </div>
-    </>
+    </div>
   )
 }
 
