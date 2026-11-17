@@ -19,5 +19,9 @@
   // ],
   "vars": {
     "RENDER_API_ORIGIN": "https://orvexa-api-nskw.onrender.com"
+  },
+  // Keep the free Render API warm — spin-down starts after ~15m idle.
+  "triggers": {
+    "crons": ["*/2 * * * *"]
   }
 }

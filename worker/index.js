@@ -25,6 +25,32 @@ export default {
     }
     return env.ASSETS.fetch(request)
   },
+
+  /**
+   * Cron every 2 minutes (see wrangler.jsonc triggers.crons).
+   * Hits Render directly — app /api/health is answered at the edge and would NOT wake the free dyno.
+   */
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil(keepRenderAlive(env))
+  },
+}
+
+async function keepRenderAlive(env) {
+  const origin = String(env.RENDER_API_ORIGIN || DEFAULT_ORIGIN).replace(/\/+$/, '')
+  const url = `${origin}/api/health`
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'user-agent': 'orvexa-render-keepalive/1.0',
+        accept: 'application/json',
+        'cache-control': 'no-cache',
+      },
+    })
+    console.log(`[keepalive] ${res.status} ${url}`)
+  } catch (err) {
+    console.warn('[keepalive] failed', err && err.message ? err.message : err)
+  }
 }
 
 /** /t/{slug}[/dashboard] → production portals (skipped when marketing already proxies /{slug}). */
