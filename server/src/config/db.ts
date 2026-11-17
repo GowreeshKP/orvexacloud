@@ -3,6 +3,7 @@
 // Uses module-level caching so connections survive across warm serverless invocations.
 
 import mongoose, { type Connection } from 'mongoose'
+import crypto from 'crypto'
 import dotenv from 'dotenv'
 import dns from 'dns'
 
@@ -104,6 +105,30 @@ function tenantBaseHostUri(): string {
   return match ? match[1] : raw.replace(/\/orvexa_tenant_$/i, '').replace(/\/$/, '')
 }
 
+/**
+ * MongoDB/Atlas DB names max out at 38 bytes. Prefix `orvexa_tenant_` is 14 bytes,
+ * so the slug portion must be ≤ 24. Short slugs stay stable; long ones get a truncated
+ * + hashed suffix so approved tenants with long addresses still get a working catalog DB.
+ */
+export function tenantDatabaseName(tenantSlug: string): string {
+  const prefix = 'orvexa_tenant_'
+  const maxTotal = 38
+  const maxSlug = maxTotal - prefix.length
+  const cleaned = String(tenantSlug || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'store'
+
+  if (Buffer.byteLength(prefix + cleaned, 'utf8') <= maxTotal) {
+    return prefix + cleaned
+  }
+
+  const hash = crypto.createHash('sha1').update(String(tenantSlug).toLowerCase()).digest('hex').slice(0, 6)
+  const budget = maxSlug - hash.length - 1
+  const head = cleaned.slice(0, Math.max(4, budget))
+  return `${prefix}${head}_${hash}`.slice(0, maxTotal)
+}
+
 export async function getTenantConnection(tenantSlug: string, customMongoUri?: string): Promise<Connection> {
   const cacheKey = customMongoUri ? `custom_${tenantSlug}` : tenantSlug
 
@@ -113,8 +138,7 @@ export async function getTenantConnection(tenantSlug: string, customMongoUri?: s
   }
 
   const custom = customMongoUri?.trim()
-  // Keep historical names (`orvexa_tenant_{slug}` incl. hyphens) so existing catalogs stay reachable.
-  const dbName = `orvexa_tenant_${tenantSlug}`
+  const dbName = tenantDatabaseName(tenantSlug)
   const connectionUri = custom || tenantBaseHostUri()
   const hasDbPath = Boolean(custom) && /^mongodb(?:\+srv)?:\/\/[^/]+\/[^/?]+/.test(connectionUri)
 
