@@ -497,6 +497,12 @@ class MockPlatformStore {
     this.persist()
   }
 
+  /** Replace the full catalog for a tenant (API is source of truth). */
+  setProducts(tenantId: string, products: Product[]): void {
+    this.getDB(tenantId).products = Array.isArray(products) ? [...products] : []
+    this.persist()
+  }
+
   updateProduct(tenantId: string, productId: number, data: Partial<Product>): void {
     const db = this.getDB(tenantId)
     const idx = db.products.findIndex((p) => p.id === productId)

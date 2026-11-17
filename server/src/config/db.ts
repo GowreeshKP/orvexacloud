@@ -97,6 +97,13 @@ const tenantConnectionPool = new Map<string, Connection>()
  * Get or create an isolated MongoDB connection for a specific tenant store.
  * Supports Bring-Your-Own-Database (custom Mongo URI) or platform multi-db provisioning.
  */
+function tenantBaseHostUri(): string {
+  // Prefer host-only URI + dbName option so long/hyphenated slugs do not break path parsing.
+  const raw = (TENANT_BASE_URI || '').trim()
+  const match = raw.match(/^(mongodb(?:\+srv)?:\/\/[^/?]+)/i)
+  return match ? match[1] : raw.replace(/\/orvexa_tenant_$/i, '').replace(/\/$/, '')
+}
+
 export async function getTenantConnection(tenantSlug: string, customMongoUri?: string): Promise<Connection> {
   const cacheKey = customMongoUri ? `custom_${tenantSlug}` : tenantSlug
 
@@ -105,13 +112,15 @@ export async function getTenantConnection(tenantSlug: string, customMongoUri?: s
     return existing
   }
 
-  const connectionUri = customMongoUri?.trim() || `${TENANT_BASE_URI}${tenantSlug}`
-  // Atlas URIs often omit the database path, which would otherwise land data in "test".
-  const hasDbPath = /^mongodb(?:\+srv)?:\/\/[^/]+\/[^/?]+/.test(connectionUri)
+  const custom = customMongoUri?.trim()
+  // Keep historical names (`orvexa_tenant_{slug}` incl. hyphens) so existing catalogs stay reachable.
+  const dbName = `orvexa_tenant_${tenantSlug}`
+  const connectionUri = custom || tenantBaseHostUri()
+  const hasDbPath = Boolean(custom) && /^mongodb(?:\+srv)?:\/\/[^/]+\/[^/?]+/.test(connectionUri)
 
   try {
     const tenantConn = mongoose.createConnection(connectionUri, {
-      ...(hasDbPath ? {} : { dbName: `orvexa_tenant_${tenantSlug}` }),
+      ...(hasDbPath ? {} : { dbName }),
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
       maxPoolSize: 5,

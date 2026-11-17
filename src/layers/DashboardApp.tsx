@@ -14,7 +14,7 @@ import { mockStore } from '@/api/mock-store'
 import { auditLogger } from '@/api/audit-logger'
 import { API_BASE, apiFetch } from '@/api/base'
 import { PLAN_CATALOG, formatPlanPrice, normalizePlanId, planAllowsStorefrontStudio, storeAddress } from '@/data/plans'
-import { sellerPortalUrl, storefrontUrl, tenantPortalPath } from '@/lib/store-urls'
+import { sellerPortalUrl, storefrontUrl } from '@/lib/store-urls'
 import { fetchStoreAnalytics, fetchDomainConfig, saveCustomDomain } from '@/api/storefront-analytics'
 import { fetchTenantBilling, payTenantSubscription, type TenantBillingSummary } from '@/api/tenant-billing'
 import { storeInbox, STORE_INBOX_EVENT, type NewsletterSubscriber, type StoreMessage } from '@/api/store-messages'
@@ -380,7 +380,7 @@ export default function DashboardApp() {
 
           <div className="right row" style={{ gap: 8 }}>
             <a
-              href={tenantPortalPath(tenant?.slug || '')}
+              href={storefrontUrl(tenant?.slug || '', tenant?.customDomainVerified ? tenant.customDomain : undefined)}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-outline btn-sm"
@@ -754,7 +754,7 @@ function ProductManager({ onToast }: { onToast: (msg: string) => void }) {
     setShowModal(true)
   }
 
-  const handleDuplicate = (product: Product) => {
+  const handleDuplicate = async (product: Product) => {
     const nextId = Math.max(0, ...products.map((p) => p.id)) + 1
     const duplicated: Product = {
       ...product,
@@ -763,14 +763,21 @@ function ProductManager({ onToast }: { onToast: (msg: string) => void }) {
       rating: 5.0,
       reviewsCount: 0,
     }
-    addProduct(duplicated)
-    onToast(`Duplicated "${product.name}" as a new product!`)
+    try {
+      await addProduct(duplicated)
+      onToast(`Duplicated "${product.name}" — live on your storefront.`)
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : 'Could not duplicate product on the live store.')
+    }
   }
 
-  const handleDelete = (id: number, name: string) => {
-    if (window.confirm(`Are you sure you want to delete "${name}" from your store?`)) {
-      deleteProduct(id)
-      onToast(`Deleted "${name}".`)
+  const handleDelete = async (id: number, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete "${name}" from your store?`)) return
+    try {
+      await deleteProduct(id)
+      onToast(`Deleted "${name}" from your live store.`)
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : `Could not delete "${name}".`)
     }
   }
 
@@ -918,15 +925,19 @@ function ProductManager({ onToast }: { onToast: (msg: string) => void }) {
           categories={storeCategories}
           onAddCategory={handleAddCategory}
           onClose={() => setShowModal(false)}
-          onSave={(savedProduct) => {
-            if (editingProduct) {
-              updateProduct(savedProduct.id, savedProduct)
-              onToast(`Updated product "${savedProduct.name}"!`)
-            } else {
-              addProduct(savedProduct)
-              onToast(`Added new product "${savedProduct.name}" to your store!`)
+          onSave={async (savedProduct) => {
+            try {
+              if (editingProduct) {
+                await updateProduct(savedProduct.id, savedProduct)
+                onToast(`Updated "${savedProduct.name}" — live on your storefront.`)
+              } else {
+                await addProduct(savedProduct)
+                onToast(`Published "${savedProduct.name}" to your storefront.`)
+              }
+              setShowModal(false)
+            } catch (err) {
+              onToast(err instanceof Error ? err.message : 'Could not save product to your live store.')
             }
-            setShowModal(false)
           }}
           nextId={products.length > 0 ? Math.max(...products.map((p) => p.id)) + 1 : 1}
         />
@@ -952,10 +963,11 @@ function ProductFormModal({
   categories: StoreCategory[]
   onAddCategory: (name: string) => string | null
   onClose: () => void
-  onSave: (p: Product) => void
+  onSave: (p: Product) => void | Promise<void>
   nextId: number
 }) {
   const isEditing = !!product
+  const [saving, setSaving] = useState(false)
   const isTemplate = isTemplateStore(tenant)
   const niche = getNichePreset(tenant?.storeType)
   const sizeOptions = isTemplate ? niche.sizeOptions : ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', 'Free Size']
@@ -1037,22 +1049,55 @@ function ProductFormModal({
     setNewCategoryName('')
   }
 
-  // Handle local image file upload
+  // Compress photos so POST /products stays under the API ~1MB inline-image limit.
+  const readImageAsDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onerror = () => reject(new Error('Could not read that image file.'))
+      reader.onload = () => {
+        const raw = String(reader.result || '')
+        if (!raw.startsWith('data:image/')) {
+          reject(new Error('Only image files can be uploaded.'))
+          return
+        }
+        const img = new Image()
+        img.onerror = () => resolve(raw)
+        img.onload = () => {
+          const maxSide = 1200
+          const scale = Math.min(1, maxSide / Math.max(img.width, img.height))
+          const w = Math.max(1, Math.round(img.width * scale))
+          const h = Math.max(1, Math.round(img.height * scale))
+          const canvas = document.createElement('canvas')
+          canvas.width = w
+          canvas.height = h
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            resolve(raw)
+            return
+          }
+          ctx.drawImage(img, 0, 0, w, h)
+          let quality = 0.82
+          let out = canvas.toDataURL('image/jpeg', quality)
+          while (out.length > 1_200_000 && quality > 0.45) {
+            quality -= 0.1
+            out = canvas.toDataURL('image/jpeg', quality)
+          }
+          resolve(out)
+        }
+        img.src = raw
+      }
+      reader.readAsDataURL(file)
+    })
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
-    if (files && files[0]) {
-      const reader = new FileReader()
-      reader.onload = (uploadEvent) => {
-        const resultUrl = uploadEvent.target?.result as string
-        if (resultUrl) {
-          setImgMain(resultUrl)
-          if (!images.includes(resultUrl)) {
-            setImages([resultUrl, ...images])
-          }
-        }
-      }
-      reader.readAsDataURL(files[0])
-    }
+    if (!files?.[0]) return
+    void readImageAsDataUrl(files[0])
+      .then((resultUrl) => {
+        setImgMain(resultUrl)
+        setImages((prev) => (prev.includes(resultUrl) ? prev : [resultUrl, ...prev]))
+      })
+      .catch((err) => setFormError(err instanceof Error ? err.message : 'Image upload failed.'))
   }
 
   const handleAddGalleryImage = (url: string) => {
@@ -1085,8 +1130,9 @@ function ProductFormModal({
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (saving) return
     if (!name || !price) {
       setFormError('Product name and price are required.')
       setActiveTab('info')
@@ -1145,7 +1191,14 @@ function ProductFormModal({
       sizes: sizes.length > 0 ? sizes : isTemplate ? [] : ['S', 'M', 'L', 'XL'],
     }
 
-    onSave(finalProduct)
+    setSaving(true)
+    try {
+      await onSave(finalProduct)
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Could not save product.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   useEffect(() => {
@@ -1598,11 +1651,11 @@ function ProductFormModal({
           </div>
 
           <div className="drawer-foot">
-            <button type="button" className="btn btn-outline" onClick={onClose}>
+            <button type="button" className="btn btn-outline" onClick={onClose} disabled={saving}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              {isEditing ? 'Save changes' : 'Publish product'}
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? 'Saving…' : isEditing ? 'Save changes' : 'Publish product'}
             </button>
           </div>
         </form>
@@ -3445,7 +3498,12 @@ Owner: ${tenant.ownerName}
           </div>
           <div>
             <p className="text-black/40 text-xs mb-1">Platform storefront</p>
-            <a href={tenantPortalPath(tenant.slug)} className="font-mono font-bold text-xs bg-stone-100 p-2 rounded text-amber-900 border border-black/5 block hover:underline">
+            <a
+              href={storefrontUrl(tenant.slug, tenant.customDomainVerified ? tenant.customDomain : undefined)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono font-bold text-xs bg-stone-100 p-2 rounded text-amber-900 border border-black/5 block hover:underline"
+            >
               {storeAddress(tenant.slug)}
             </a>
           </div>

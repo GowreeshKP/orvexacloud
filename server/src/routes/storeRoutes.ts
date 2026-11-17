@@ -69,7 +69,11 @@ function sendError(res: Response, err: unknown, fallback: string, context: strin
     return
   }
   console.error(`[Store API] ${context}:`, err)
-  res.status(500).json({ error: fallback })
+  const detail = err instanceof Error ? err.message : typeof err === 'string' ? err : ''
+  res.status(500).json({
+    error: fallback,
+    ...(detail && detail !== fallback ? { detail: detail.slice(0, 240) } : {}),
+  })
 }
 
 // ====================================================================
@@ -101,7 +105,7 @@ router.get('/products', async (req: Request, res: Response) => {
     const { limit, skip } = pagination(req.query, 200, 500)
     const sort = PRODUCT_SORTS[queryString(req.query.sort) || 'default'] || PRODUCT_SORTS.default
     const [products, total] = await Promise.all([
-      req.tenantDb!.Product.find(filter).sort(sort).skip(skip).limit(limit),
+      req.tenantDb!.Product.find(filter).sort(sort).skip(skip).limit(limit).lean(),
       req.tenantDb!.Product.countDocuments(filter),
     ])
     res.setHeader('X-Total-Count', String(total))

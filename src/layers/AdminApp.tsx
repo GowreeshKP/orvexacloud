@@ -525,7 +525,7 @@ function PlatformOverview({
                   <div className="row">
                     <span className="money">{formatPlanPrice(t.subscription?.pricePerMonth ?? PLAN_CATALOG[normalizePlanId(t.plan)].pricePerMonth)}</span>
                     <a href={storefrontUrl(t.slug)} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm">
-                      Open
+                      View store
                     </a>
                   </div>
                 </div>

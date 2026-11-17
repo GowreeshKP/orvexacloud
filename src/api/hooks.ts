@@ -151,58 +151,53 @@ export function useDashboardStats(): { stats: DashboardStats | null; loading: bo
 
 export function useDashboardProducts(): {
   products: Product[]
-  addProduct: (p: Product) => void
-  updateProduct: (id: number, data: Partial<Product>) => void
-  deleteProduct: (id: number) => void
-  refresh: () => void
+  addProduct: (p: Product) => Promise<Product>
+  updateProduct: (id: number, data: Partial<Product>) => Promise<Product>
+  deleteProduct: (id: number) => Promise<void>
+  refresh: () => Promise<void>
 } {
   const { tenant } = useTenant()
   const [products, setProducts] = useState<Product[]>([])
 
-  const refresh = useCallback(() => {
+  const refresh = useCallback(async () => {
     if (!tenant) return
-    setProducts([...mockStore.getProducts(tenant.id)])
-    void apiClient.getProducts(tenant.slug).then((list) => {
-      if (!Array.isArray(list)) return
-      // Mirror API catalog into the local tenant DB so storefront + dashboard stay aligned.
-      const dbProducts = mockStore.getProducts(tenant.id)
-      const byId = new Map(dbProducts.map((p) => [p.id, p]))
-      for (const p of list) {
-        const normalized = {
-          ...p,
-          originalPrice: p.originalPrice ?? p.mrp,
-          stockCount: p.stockCount ?? 0,
-        }
-        if (byId.has(p.id)) mockStore.updateProduct(tenant.id, p.id, normalized)
-        else mockStore.addProduct(tenant.id, normalized)
-      }
+    const list = await apiClient.getProducts(tenant.slug)
+    if (!Array.isArray(list)) {
       setProducts([...mockStore.getProducts(tenant.id)])
-    })
+      return
+    }
+    const normalized = list.map((p) => ({
+      ...p,
+      originalPrice: p.originalPrice ?? p.mrp,
+      stockCount: p.stockCount ?? 0,
+    }))
+    // API catalog is source of truth — do not keep orphan local-only rows.
+    mockStore.setProducts(tenant.id, normalized)
+    setProducts([...normalized])
   }, [tenant])
 
   useEffect(() => {
-    refresh()
+    void refresh()
   }, [refresh])
 
-  const addProduct = useCallback((product: Product) => {
-    if (!tenant) return
-    mockStore.addProduct(tenant.id, product)
-    setProducts([...mockStore.getProducts(tenant.id)])
-    void apiClient.addProduct(tenant.slug, product).then(() => refresh())
+  const addProduct = useCallback(async (product: Product) => {
+    if (!tenant) throw new Error('Store is not loaded.')
+    const saved = await apiClient.addProduct(tenant.slug, product)
+    await refresh()
+    return saved
   }, [tenant, refresh])
 
-  const updateProduct = useCallback((id: number, data: Partial<Product>) => {
-    if (!tenant) return
-    mockStore.updateProduct(tenant.id, id, data)
-    setProducts([...mockStore.getProducts(tenant.id)])
-    void apiClient.updateProduct(tenant.slug, id, data).then(() => refresh())
+  const updateProduct = useCallback(async (id: number, data: Partial<Product>) => {
+    if (!tenant) throw new Error('Store is not loaded.')
+    const saved = await apiClient.updateProduct(tenant.slug, id, data)
+    await refresh()
+    return saved
   }, [tenant, refresh])
 
-  const deleteProduct = useCallback((id: number) => {
-    if (!tenant) return
-    mockStore.deleteProduct(tenant.id, id)
-    setProducts([...mockStore.getProducts(tenant.id)])
-    void apiClient.deleteProduct(tenant.slug, id).then(() => refresh())
+  const deleteProduct = useCallback(async (id: number) => {
+    if (!tenant) throw new Error('Store is not loaded.')
+    await apiClient.deleteProduct(tenant.slug, id)
+    await refresh()
   }, [tenant, refresh])
 
   return { products, addProduct, updateProduct, deleteProduct, refresh }

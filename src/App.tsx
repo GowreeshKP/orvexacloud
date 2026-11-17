@@ -5033,11 +5033,15 @@ function TenantStorefront({ tenant }: { tenant: TenantConfig }) {
   const tenantOrders = useMemo(() => mockStore.getOrders(activeTenant.id), [activeTenant.id])
 
   useEffect(() => {
-    const local = mockStore.getProducts(activeTenant.id)
-    setTenantProducts(local)
+    let cancelled = false
+    // Show local cache immediately, then replace with the live API catalog (including empty).
+    setTenantProducts(mockStore.getProducts(activeTenant.id))
     apiClient.getProducts(activeTenant.slug).then((list) => {
-      if (Array.isArray(list) && list.length) setTenantProducts(list)
+      if (cancelled || !Array.isArray(list)) return
+      setTenantProducts(list)
+      mockStore.setProducts(activeTenant.id, list)
     }).catch(() => undefined)
+    return () => { cancelled = true }
   }, [activeTenant.id, activeTenant.slug])
 
   const [showAnnouncement, setShowAnnouncement] = useState(true)

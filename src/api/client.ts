@@ -49,10 +49,13 @@ class ApiClient {
         try {
           const body = await res.json()
           if (body?.error) detail = String(body.error)
+          else if (body?.detail) detail = String(body.detail)
         } catch {
           /* ignore */
         }
-        throw new Error(`API error ${res.status}: ${detail}`)
+        const err = new Error(detail || `API error ${res.status}`)
+        ;(err as Error & { status?: number }).status = res.status
+        throw err
       }
 
       return await res.json()
@@ -61,7 +64,8 @@ class ApiClient {
         await new Promise((r) => setTimeout(r, 700 * (attempt + 1)))
         return this.request<T>(endpoint, options, attempt + 1)
       }
-      // Backend not running or endpoint failed; return null to trigger mockStore fallback
+      // Mutations must surface the real error; GETs may fall back to mock in callers.
+      if (options.method && options.method !== 'GET') throw error
       console.warn('[api]', endpoint, error)
       return null
     }
@@ -79,46 +83,68 @@ class ApiClient {
     if (data && Array.isArray(data)) {
       return data
     }
-    const tenant = mockStore.getTenantBySlug(tenantSlug)
-    return tenant ? mockStore.getProducts(tenant.id) : []
+    // Only fall back to local mock when the API is unreachable (dev / offline).
+    if (import.meta.env.DEV) {
+      const tenant = mockStore.getTenantBySlug(tenantSlug)
+      return tenant ? mockStore.getProducts(tenant.id) : []
+    }
+    return []
   }
 
   async addProduct(tenantSlug: string, product: Omit<Product, 'id'> & { id?: number }): Promise<Product> {
     const data = await this.request<Product>(`/stores/${tenantSlug}/products`, {
       method: 'POST',
-      body: JSON.stringify(product),
+      body: JSON.stringify(compactPayload({
+        ...product,
+        originalPrice: product.originalPrice ?? product.mrp,
+        mrp: product.mrp ?? product.originalPrice,
+        imgMain: sanitizeImageUrl(product.imgMain) ?? '',
+        images: Array.isArray(product.images)
+          ? product.images.map((img) => sanitizeImageUrl(img)).filter((v): v is string => Boolean(v))
+          : undefined,
+      })),
     })
 
-    const tenant = mockStore.getTenantBySlug(tenantSlug)
-    const fullProduct: Product = data || {
-      ...product,
-      id: product.id || Date.now(),
+    if (!data) {
+      throw new Error('Could not save this product to your live store. Check your connection and try a smaller photo.')
     }
+
+    const tenant = mockStore.getTenantBySlug(tenantSlug)
     if (tenant) {
-      // Prefer the server document; replace any optimistic local copy with the same client id.
       const local = mockStore.getProducts(tenant.id)
-      if (product.id && local.some((p) => p.id === product.id) && fullProduct.id !== product.id) {
+      if (product.id && local.some((p) => p.id === product.id) && data.id !== product.id) {
         mockStore.deleteProduct(tenant.id, product.id)
       }
-      if (!mockStore.getProducts(tenant.id).some((p) => p.id === fullProduct.id)) {
-        mockStore.addProduct(tenant.id, fullProduct)
+      if (!mockStore.getProducts(tenant.id).some((p) => p.id === data.id)) {
+        mockStore.addProduct(tenant.id, data)
       } else {
-        mockStore.updateProduct(tenant.id, fullProduct.id, fullProduct)
+        mockStore.updateProduct(tenant.id, data.id, data)
       }
     }
-    return fullProduct
+    return data
   }
 
-  async updateProduct(tenantSlug: string, id: number, updates: Partial<Product>): Promise<Product | null> {
+  async updateProduct(tenantSlug: string, id: number, updates: Partial<Product>): Promise<Product> {
     const data = await this.request<Product>(`/stores/${tenantSlug}/products/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(updates),
+      body: JSON.stringify(compactPayload({
+        ...updates,
+        originalPrice: updates.originalPrice ?? updates.mrp,
+        mrp: updates.mrp ?? updates.originalPrice,
+        imgMain: sanitizeImageUrl(updates.imgMain),
+        images: Array.isArray(updates.images)
+          ? updates.images.map((img) => sanitizeImageUrl(img)).filter((v): v is string => Boolean(v))
+          : undefined,
+      })),
     })
+
+    if (!data) {
+      throw new Error('Could not update this product on your live store. Try again with a smaller photo.')
+    }
 
     const tenant = mockStore.getTenantBySlug(tenantSlug)
     if (tenant) {
-      mockStore.updateProduct(tenant.id, id, updates)
-      return data || (mockStore.getProducts(tenant.id).find((p) => p.id === id) || null)
+      mockStore.updateProduct(tenant.id, id, data)
     }
     return data
   }
@@ -128,11 +154,15 @@ class ApiClient {
       method: 'DELETE',
     })
 
+    if (!data?.success) {
+      throw new Error('Could not delete this product from your live store.')
+    }
+
     const tenant = mockStore.getTenantBySlug(tenantSlug)
     if (tenant) {
       mockStore.deleteProduct(tenant.id, id)
     }
-    return data?.success ?? true
+    return true
   }
 
   // --- THEME & HERO PICTURE CUSTOMIZATION ---
